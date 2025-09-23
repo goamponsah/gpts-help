@@ -5,6 +5,14 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Debug environment variables immediately
+console.log('=== ENVIRONMENT VARIABLES DEBUG ===');
+console.log('OPENAI_API_KEY exists:', !!process.env.OPENAI_API_KEY);
+console.log('Key length:', process.env.OPENAI_API_KEY ? process.env.OPENAI_API_KEY.length : 0);
+console.log('Key starts with:', process.env.OPENAI_API_KEY ? process.env.OPENAI_API_KEY.substring(0, 10) + '...' : 'N/A');
+console.log('All env vars:', Object.keys(process.env));
+console.log('===================================');
+
 // Middleware
 app.use(express.json());
 app.use(express.static('public'));
@@ -18,53 +26,58 @@ app.use((req, res, next) => {
     next();
 });
 
-// DEBUG: Check all environment variables
-console.log('🔍 Environment Variables Check:');
-console.log('OPENAI_API_KEY exists:', !!process.env.OPENAI_API_KEY);
-console.log('All env vars:', Object.keys(process.env));
-
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-
-// Simple test
+// Test endpoint with detailed debug info
 app.get('/api/test', (req, res) => {
     res.json({ 
         message: 'API is working!', 
-        apiKeyExists: !!OPENAI_API_KEY,
-        keyLength: OPENAI_API_KEY ? OPENAI_API_KEY.length : 0,
+        apiKeyExists: !!process.env.OPENAI_API_KEY,
+        keyLength: process.env.OPENAI_API_KEY ? process.env.OPENAI_API_KEY.length : 0,
+        keyPrefix: process.env.OPENAI_API_KEY ? process.env.OPENAI_API_KEY.substring(0, 10) + '...' : 'N/A',
+        allEnvVars: Object.keys(process.env),
         timestamp: new Date() 
     });
 });
 
-// Chat endpoint
+// Chat endpoint - using process.env directly
 app.post('/api/chat', async (req, res) => {
     try {
-        console.log('📝 Request received');
+        console.log('🔍 Incoming chat request');
+        console.log('🔑 API Key check:', process.env.OPENAI_API_KEY ? `Exists (${process.env.OPENAI_API_KEY.length} chars)` : 'MISSING');
         
-        if (!OPENAI_API_KEY) {
+        if (!process.env.OPENAI_API_KEY) {
             return res.json({ 
-                response: '❌ OPENAI_API_KEY is missing or empty. Check Railway Variables tab.',
+                response: '❌ OPENAI_API_KEY is missing from process.env. Check Railway Variables spelling and redeploy.',
                 debug: {
-                    keyExists: !!OPENAI_API_KEY,
-                    keyLength: OPENAI_API_KEY ? OPENAI_API_KEY.length : 0
+                    keyExists: false,
+                    allAvailableVars: Object.keys(process.env)
                 }
             });
         }
 
-        const { message, gptType } = req.body;
+        const { message, gptType = 'math' } = req.body;
         
-        // Test with real OpenAI API
+        console.log('🤖 Calling OpenAI API...');
+        
+        // Call OpenAI API directly using process.env
         const openaiResponse = await axios.post('https://api.openai.com/v1/chat/completions', {
             model: 'gpt-3.5-turbo',
             messages: [
-                { role: 'system', content: `You are a helpful ${gptType} assistant.` },
+                { 
+                    role: 'system', 
+                    content: gptType === 'math' 
+                        ? 'You are a helpful math tutor. Explain concepts step by step.'
+                        : 'You are a content creation assistant. Help write engaging content.'
+                },
                 { role: 'user', content: message }
             ],
-            max_tokens: 150
+            max_tokens: 500,
+            temperature: 0.7
         }, {
             headers: {
-                'Authorization': `Bearer ${OPENAI_API_KEY}`,
+                'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
                 'Content-Type': 'application/json'
-            }
+            },
+            timeout: 10000
         });
 
         res.json({
@@ -73,15 +86,23 @@ app.post('/api/chat', async (req, res) => {
         });
 
     } catch (error) {
-        console.error('OpenAI API Error:', error.response?.data || error.message);
-        res.json({ 
-            response: '⚠️ API connection issue: ' + (error.response?.data?.error?.message || error.message),
-            error: true
-        });
+        console.error('💥 API Error:', error.response?.data || error.message);
+        
+        if (error.response?.status === 401) {
+            res.json({ 
+                response: '❌ Invalid OpenAI API Key. Please check the key in Railway Variables.',
+                error: 'Authentication failed'
+            });
+        } else {
+            res.json({ 
+                response: '⚠️ Temporary issue: ' + (error.response?.data?.error?.message || error.message),
+                error: true
+            });
+        }
     }
 });
 
 app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
-    console.log(`🔑 API Key Status: ${OPENAI_API_KEY ? '✅ Loaded' : '❌ Missing'}`);
+    console.log(`📊 Test URL: https://gpts-help-production.up.railway.app/api/test`);
 });
