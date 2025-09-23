@@ -10,9 +10,9 @@ app.use(express.json());
 app.use(express.static('public'));
 
 // ===== CONFIGURATION - UPDATE THESE WITH YOUR KEYS =====
-const OPENAI_API_KEY = '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';
-const PAYSTACK_PUBLIC_KEY = 'pk_test_4bcc297acdf79ad54decf3f3c7a2e94703543d37';
-const PAYSTACK_SECRET_KEY = 'sk_test_f6c54b87136dd1a221fe464f1e83e7141364029f';
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const PAYSTACK_PUBLIC_KEY = process.env.PAYSTACK_PUBLIC_KEY;
+const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 // ======================================================
 
 // In-memory user storage (use a real database in production)
@@ -135,3 +135,4 @@ app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log(`Open http://localhost:${PORT} to view your website`);
 });
+
