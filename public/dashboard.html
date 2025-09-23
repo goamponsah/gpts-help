@@ -28,52 +28,75 @@
     </div>
 
     <script>
-        let currentGPT = 'math';
+let currentGPT = 'math';
+const API_BASE_URL = 'https://gpts-help-production.up.railway.app';
+
+async function sendMessage() {
+    const input = document.getElementById('messageInput');
+    const message = input.value.trim();
+    if (!message) return;
+
+    // Add user message to chat
+    const chatContainer = document.getElementById('chatContainer');
+    chatContainer.innerHTML += `<div class="message user-message">${message}</div>`;
+    
+    input.value = '';
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+
+    // Show typing indicator
+    chatContainer.innerHTML += `<div class="message ai-message">Thinking...</div>`;
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+
+    try {
+        console.log('Sending request to:', API_BASE_URL + '/api/chat');
         
-        function selectGPT(gptType) {
-            currentGPT = gptType;
-            document.getElementById('chatContainer').innerHTML = 
-                `<div class="message ai-message">Now chatting with ${gptType} GPT. How can I help you?</div>`;
-        }
-
-        async function sendMessage() {
-            const input = document.getElementById('messageInput');
-            const message = input.value.trim();
-            if (!message) return;
-
-            // Add user message to chat
-            const chatContainer = document.getElementById('chatContainer');
-            chatContainer.innerHTML += `<div class="message user-message">${message}</div>`;
-            
-            input.value = '';
-            chatContainer.scrollTop = chatContainer.scrollHeight;
-
-            try {
-                const response = await fetch('https://gpts-help-production.up.railway.app', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        message: message, 
-                        gptType: currentGPT,
-                        userId: 'demo-user' 
-                    })
-                });
-
-                const data = await response.json();
-                chatContainer.innerHTML += `<div class="message ai-message">${data.response}</div>`;
-                chatContainer.scrollTop = chatContainer.scrollHeight;
-
-            } catch (error) {
-                console.error('Error:', error);
-                chatContainer.innerHTML += `<div class="message ai-message">Sorry, I encountered an error. Please try again.</div>`;
-            }
-        }
-
-        // Enter key to send message
-        document.getElementById('messageInput').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') sendMessage();
+        const response = await fetch(API_BASE_URL + '/api/chat', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
+            },
+            body: JSON.stringify({ 
+                message: message, 
+                gptType: currentGPT,
+                userId: 'test-user' 
+            })
         });
-    </script>
+
+        console.log('Response status:', response.status);
+        
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log('Response data:', data);
+        
+        // Remove "Thinking..." message and add actual response
+        chatContainer.innerHTML = chatContainer.innerHTML.replace('<div class="message ai-message">Thinking...</div>', '');
+        chatContainer.innerHTML += `<div class="message ai-message">${data.response || data.error || 'No response'}</div>`;
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+
+    } catch (error) {
+        console.error('Error:', error);
+        chatContainer.innerHTML = chatContainer.innerHTML.replace('<div class="message ai-message">Thinking...</div>', '');
+        chatContainer.innerHTML += `<div class="message ai-message">Error: ${error.message}. Check browser console for details.</div>`;
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+}
+
+function selectGPT(gptType) {
+    currentGPT = gptType;
+    document.getElementById('chatContainer').innerHTML = 
+        `<div class="message ai-message">Now chatting with ${gptType} GPT. How can I help you?</div>`;
+}
+
+// Enter key support
+document.getElementById('messageInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') sendMessage();
+});
+</script>
 </body>
 
 </html>
+
