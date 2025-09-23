@@ -49,7 +49,7 @@
             chatContainer.scrollTop = chatContainer.scrollHeight;
 
             try {
-                const response = await fetch('/api/chat', {
+                const response = await fetch('https://gpts-help-production.up.railway.app', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ 
@@ -75,4 +75,5 @@
         });
     </script>
 </body>
+
 </html>
