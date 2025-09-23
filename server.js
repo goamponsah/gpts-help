@@ -7,29 +7,37 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// IMPORTANT: Don't hardcode your key. Railway will inject process.env.OPENAI_API_KEY
-const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Use your OpenAI key from environment variables (set in Railway dashboard)
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 app.post("/api/ask", async (req, res) => {
   try {
     const { prompt } = req.body || {};
-    if (!prompt) return res.status(400).json({ error: "Missing prompt" });
+    if (!prompt) {
+      return res.status(400).json({ error: "Missing prompt" });
+    }
 
-    // Use the modern Responses API
-    const resp = await client.responses.create({
-      model: "gpt-4.1-mini",
-      input: prompt
+    // Call OpenAI Responses API
+    const response = await client.responses.create({
+      model: "gpt-4.1-mini", // you can also use gpt-4.1 or gpt-3.5 if preferred
+      input: prompt,
     });
 
-    // output_text is a helper that concatenates the response
-    res.json({ output: resp.output_text });
+    // Send back concatenated text output
+    res.json({ output: response.output_text });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message || "Server error" });
+    console.error("OpenAI API Error:", err.response?.data || err.message);
+    res
+      .status(500)
+      .json({ error: err.response?.data || err.message || "Server error" });
   }
 });
 
-// Railway gives you PORT via env var
+// Railway assigns a PORT env var automatically
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`API listening on ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`✅ API listening on port ${PORT}`);
+});
 
