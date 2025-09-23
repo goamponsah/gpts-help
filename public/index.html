@@ -139,6 +139,23 @@
         }
     </style>
 </head>
+    <script>
+function showAuth() {
+    document.getElementById('homepage').style.display = 'none';
+    document.getElementById('auth-container').style.display = 'block';
+}
+
+function showHomepage() {
+    document.getElementById('auth-container').style.display = 'none';
+    document.getElementById('homepage').style.display = 'block';
+}
+
+function processPayment() {
+    // For now, just show a message
+    alert('Payment system would open here. After payment, you would access the GPTs.');
+    // In the full version, this would open Paystack
+}
+</script>
 <body>
     <div class="container">
         <header>
@@ -202,3 +219,4 @@
 </body>
 
 </html>
+
