@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>GPTs Help - Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; }
+        .gpt-selector { display: flex; gap: 10px; margin-bottom: 20px; }
+        .gpt-btn { padding: 10px 20px; border: none; background: #4e54c8; color: white; border-radius: 5px; cursor: pointer; }
+        .chat-container { border: 1px solid #ddd; padding: 20px; border-radius: 5px; min-height: 400px; }
+        .message { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .user-message { background: #e3f2fd; text-align: right; }
+        .ai-message { background: #f5f5f5; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>GPTs Help Dashboard</h1>
+        <div class="gpt-selector">
+            <button class="gpt-btn" onclick="selectGPT('math')">Math GPT</button>
+            <button class="gpt-btn" onclick="selectGPT('content')">Content GPT</button>
+        </div>
+        <div class="chat-container" id="chatContainer">
+            <div class="message ai-message">Welcome! Which GPT would you like to use?</div>
+        </div>
+        <input type="text" id="messageInput" placeholder="Type your message..." style="width: 100%; padding: 10px; margin-top: 10px;">
+        <button onclick="sendMessage()" style="width: 100%; padding: 10px; margin-top: 10px;">Send</button>
+    </div>
+
+    <script>
+        let currentGPT = 'math';
+        
+        function selectGPT(gptType) {
+            currentGPT = gptType;
+            document.getElementById('chatContainer').innerHTML = 
+                `<div class="message ai-message">Now chatting with ${gptType} GPT. How can I help you?</div>`;
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            if (!message) return;
+
+            // Add user message to chat
+            const chatContainer = document.getElementById('chatContainer');
+            chatContainer.innerHTML += `<div class="message user-message">${message}</div>`;
+            
+            input.value = '';
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            try {
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        message: message, 
+                        gptType: currentGPT,
+                        userId: 'demo-user' 
+                    })
+                });
+
+                const data = await response.json();
+                chatContainer.innerHTML += `<div class="message ai-message">${data.response}</div>`;
+                chatContainer.scrollTop = chatContainer.scrollHeight;
+
+            } catch (error) {
+                console.error('Error:', error);
+                chatContainer.innerHTML += `<div class="message ai-message">Sorry, I encountered an error. Please try again.</div>`;
+            }
+        }
+
+        // Enter key to send message
+        document.getElementById('messageInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') sendMessage();
+        });
+    </script>
+</body>
+</html>
