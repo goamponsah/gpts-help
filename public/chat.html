@@ -4,6 +4,7 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GPTs Help — Chat</title>
+
   <style>
     :root{
       --bg:#0f172a; --bg-light:#111827; --text:#e5e7eb; --muted:#9ca3af;
@@ -18,7 +19,7 @@
       overflow:hidden; /* panes handle their own scrolling */
     }
 
-    /* Sidebar (fixed) */
+    /* Sidebar (fixed so it never moves) */
     .sidebar{
       width:var(--side-width);
       position:fixed; left:0; top:0; height:100dvh; z-index:10;
@@ -30,6 +31,8 @@
     .btn.gray{background:#374151}
     .search{margin:10px 12px}
     .search input{width:100%; padding:10px; border-radius:10px; border:1px solid var(--border); background:#0b1220; color:var(--text)}
+
+    /* Only the list scrolls; bottom stays pinned */
     .convlist{flex:1; overflow:auto; padding:6px}
     .conv{display:flex; gap:10px; align-items:center; padding:10px 12px; border-radius:10px; cursor:pointer}
     .conv:hover{background:#111a33}
@@ -37,11 +40,15 @@
     .conv .title{flex:1; font-size:.95rem; line-height:1.2}
     .conv .time{color:var(--muted); font-size:.8rem}
     .conv .del{opacity:.65; border:none; background:transparent; color:var(--muted); cursor:pointer}
-    .side-bottom{padding:12px; border-top:1px solid var(--border); background:var(--bg); display:flex; gap:8px}
+
+    .side-bottom{
+      padding:12px; border-top:1px solid var(--border); background:var(--bg);
+      display:flex; gap:8px;
+    }
     .side-bottom .mini{flex:1}
     .side-bottom .mini button{width:100%}
 
-    /* Main pane */
+    /* Main pane offset to the right of fixed sidebar */
     .main{
       margin-left:var(--side-width);
       height:100dvh; display:flex; flex-direction:column; min-width:0;
@@ -83,7 +90,7 @@
     .muted{color:var(--muted); font-size:.9rem}
     .hide{display:none}
 
-    /* Floating sign-out for mobile (when sidebar is hidden) */
+    /* Floating sign-out for mobile (when sidebar hidden) */
     .floating-signout{
       position:fixed; left:12px; bottom:12px; z-index:20;
       display:none;
@@ -97,10 +104,38 @@
       .floating-signout{display:inline-flex}
       .bubble{max-width:90%}
     }
+
+    /* Markdown polish */
+    .bubble h1,.bubble h2,.bubble h3 { margin: 8px 0 6px; line-height: 1.25; }
+    .bubble pre { background:#0b1220; border:1px solid #1f2937; padding:10px; border-radius:10px; overflow:auto; }
+    .bubble code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    .bubble ul,.bubble ol{ padding-left: 1.25rem; }
+    .bubble p { margin: 6px 0; }
   </style>
+
+  <!-- Markdown + sanitization -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.5/dist/purify.min.js"></script>
+  <script>
+    marked.setOptions({ gfm: true, breaks: true });
+    window.renderMarkdown = function (md) {
+      const html = marked.parse(md || "");
+      return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+    };
+  </script>
+
+  <!-- MathJax for \( \) and \[ \] -->
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['\\(','\\)'], ['$', '$']], displayMath: [['\\[','\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" defer></script>
 </head>
+
 <body>
-  <!-- Sidebar -->
+  <!-- Sidebar (fixed) -->
   <aside class="sidebar">
     <div class="side-top">
       <button id="newChat" class="btn">+ New chat</button>
@@ -156,10 +191,25 @@
     const API_BASE = 'https://gpts-help-production.up.railway.app';
     const $ = s => document.querySelector(s);
     const h = s => { $('#hint').textContent = s || ''; };
+
+    // Render chat rows (Markdown for bot; literal for user)
     const addRow = (role, text) => {
       const r = document.createElement('div'); r.className = `row ${role}`;
-      const b = document.createElement('div'); b.className = 'bubble'; b.textContent = text;
-      r.appendChild(b); const t = $('#transcript'); t.appendChild(r); t.scrollTop = t.scrollHeight;
+      const b = document.createElement('div'); b.className = 'bubble';
+
+      if (role === 'bot' && window.renderMarkdown) {
+        b.innerHTML = window.renderMarkdown(text);
+      } else {
+        b.textContent = text;
+      }
+
+      r.appendChild(b);
+      const t = $('#transcript'); t.appendChild(r); t.scrollTop = t.scrollHeight;
+
+      // typeset math only for bot messages
+      if (role === 'bot' && window.MathJax && MathJax.typesetPromise) {
+        MathJax.typesetPromise([b]).catch(() => {});
+      }
     };
 
     // session
@@ -276,6 +326,7 @@
       const msgs = await getMessages(getEmail(), id);
       msgs.forEach(m => addRow(m.role, m.content));
       await refreshSidebar();
+      document.querySelector('.composer')?.scrollIntoView({ block:'end' });
     }
 
     async function newChat(){
@@ -285,7 +336,6 @@
       $('#transcript').innerHTML = '';
       addRow('bot', 'New chat started. Ask me anything, or attach a photo of a problem!');
       await refreshSidebar();
-      // Make sure composer is in view
       document.querySelector('.composer')?.scrollIntoView({ block:'end' });
     }
 
@@ -296,7 +346,10 @@
       const status = $('#status');
       let convId = getActiveId();
 
-      if(!convId){ const c = await createConversation(email, msg ? msg.slice(0,40) : 'New chat'); convId = c.id; setActiveId(convId); await refreshSidebar(); }
+      if(!convId){
+        const c = await createConversation(email, msg ? msg.slice(0,40) : 'New chat');
+        convId = c.id; setActiveId(convId); await refreshSidebar();
+      }
 
       // user bubble
       if (selectedFile) addRow('user', msg ? `📷 ${msg}` : '📷 Photo sent');
@@ -321,14 +374,15 @@
       }finally{
         status.textContent = '';
         if (selectedFile){ selectedFile=null; if(previewUrl) URL.revokeObjectURL(previewUrl); $('#thumbs').classList.add('hide'); $('#file').value=''; }
-        // keep composer visible
         document.querySelector('.composer')?.scrollIntoView({ block:'end' });
       }
     }
 
     // events
     $('#send').onclick = send;
-    $('#message').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
+    $('#message').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+    });
     $('#q').oninput = refreshSidebar;
     $('#newChat').onclick = newChat;
     $('#toAccount').onclick = () => location.href = 'index.html';
@@ -336,7 +390,7 @@
     function doSignout(){ localStorage.removeItem('gpts_email'); location.href = 'index.html'; }
     $('#signout').onclick = doSignout; $('#floatingSignout').onclick = doSignout;
 
-    // Keep composer visible on viewport changes (mobile keyboards)
+    // Keep composer visible on mobile keyboard show/hide
     if (window.visualViewport) {
       const vv = window.visualViewport;
       const onVV = () => document.querySelector('.composer')?.scrollIntoView({ block:'end' });
@@ -356,7 +410,6 @@
       if(active){ await openConversation(active); }
       else { addRow('bot', 'Welcome back! Pick a chat on the left or start a new one.'); }
       h('Tip: The input stays pinned at the bottom. Press Enter to send.');
-      // ensure composer visible at first load
       document.querySelector('.composer')?.scrollIntoView({ block:'end' });
     })();
   </script>
