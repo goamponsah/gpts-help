@@ -6,28 +6,22 @@
   <title>GPTs Help — Chat</title>
   <style>
     :root{
-      --bg:#0f172a;         /* sidebar bg (slate-900) */
-      --bg-light:#111827;   /* header bg (gray-900) */
-      --text:#e5e7eb;       /* text (gray-200) */
-      --muted:#9ca3af;      /* gray-400 */
-      --accent:#6366f1;     /* indigo-500 */
-      --border:#1f2937;     /* gray-800 */
-      --main:#0b1220;       /* main area bg */
-      --bubble:#0f172a;     /* bot bubble */
-      --user:#1f2937;       /* user bubble */
+      --bg:#0f172a; --bg-light:#111827; --text:#e5e7eb; --muted:#9ca3af;
+      --accent:#6366f1; --border:#1f2937; --main:#0b1220; --bubble:#0f172a; --user:#1f2937;
       --side-width: 280px;
     }
     *{margin:0;padding:0;box-sizing:border-box}
     body{
       font-family:system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif;
       background:var(--main);color:var(--text);
-      height:100vh;overflow:hidden; /* prevent page scroll; panes handle their own */
+      height:100dvh; /* dynamic vh fixes mobile browser chrome */
+      overflow:hidden; /* panes handle their own scrolling */
     }
 
-    /* Sidebar (fixed so it never moves) */
+    /* Sidebar (fixed) */
     .sidebar{
       width:var(--side-width);
-      position:fixed; left:0; top:0; height:100vh; z-index:10;
+      position:fixed; left:0; top:0; height:100dvh; z-index:10;
       background:var(--bg); border-right:1px solid var(--border);
       display:flex; flex-direction:column;
     }
@@ -36,8 +30,6 @@
     .btn.gray{background:#374151}
     .search{margin:10px 12px}
     .search input{width:100%; padding:10px; border-radius:10px; border:1px solid var(--border); background:#0b1220; color:var(--text)}
-
-    /* Only the list scrolls; bottom area stays pinned */
     .convlist{flex:1; overflow:auto; padding:6px}
     .conv{display:flex; gap:10px; align-items:center; padding:10px 12px; border-radius:10px; cursor:pointer}
     .conv:hover{background:#111a33}
@@ -45,19 +37,14 @@
     .conv .title{flex:1; font-size:.95rem; line-height:1.2}
     .conv .time{color:var(--muted); font-size:.8rem}
     .conv .del{opacity:.65; border:none; background:transparent; color:var(--muted); cursor:pointer}
-
-    /* Pinned bottom area inside fixed sidebar */
-    .side-bottom{
-      padding:12px; border-top:1px solid var(--border);
-      background:var(--bg); display:flex; gap:8px;
-    }
+    .side-bottom{padding:12px; border-top:1px solid var(--border); background:var(--bg); display:flex; gap:8px}
     .side-bottom .mini{flex:1}
     .side-bottom .mini button{width:100%}
 
-    /* Main pane shifted to the right of the fixed sidebar */
+    /* Main pane */
     .main{
       margin-left:var(--side-width);
-      height:100vh; display:flex; flex-direction:column;
+      height:100dvh; display:flex; flex-direction:column; min-width:0;
     }
     .topbar{
       background:var(--bg-light); border-bottom:1px solid var(--border);
@@ -66,15 +53,30 @@
     .topbar .left{display:flex; gap:10px; align-items:center}
     .pill{border:1px solid var(--border); border-radius:999px; padding:6px 10px; color:var(--muted); background:#0b1220}
 
-    .wrap{flex:1; display:flex; flex-direction:column; max-width:1000px; margin:0 auto; width:100%}
-    .transcript{flex:1; overflow:auto; padding:18px}
+    .wrap{
+      flex:1; display:flex; flex-direction:column; max-width:1000px; margin:0 auto; width:100%;
+      min-height:0; /* allow children to flex/scroll correctly */
+    }
+    .transcript{
+      flex:1; overflow:auto; padding:18px; scroll-behavior:smooth;
+    }
     .row{display:flex; margin:10px 0}
     .bubble{max-width:70%; white-space:pre-wrap; word-wrap:break-word; padding:14px; border-radius:14px; border:1px solid var(--border)}
     .bot .bubble{background:var(--bubble)}
     .user .bubble{background:var(--user)}
 
-    .composer{border-top:1px solid var(--border); padding:12px 16px; display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:end; background:#0f1528}
-    textarea{padding:12px; border:1px solid var(--border); border-radius:12px; min-height:54px; max-height:200px; resize:vertical; background:#0b1220; color:var(--text)}
+    /* STICKY composer: always visible at bottom */
+    .composer{
+      position:sticky; bottom:0; z-index:5;
+      border-top:1px solid var(--border);
+      padding:12px 16px calc(12px + env(safe-area-inset-bottom));
+      display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:end;
+      background:rgba(15,21,40,.92); backdrop-filter: blur(6px);
+    }
+    textarea{
+      padding:12px; border:1px solid var(--border); border-radius:12px;
+      min-height:54px; max-height:200px; resize:vertical; background:#0b1220; color:var(--text);
+    }
     .attach{border:1px dashed var(--border); background:#0b1220; color:var(--muted)}
     .thumbs{display:flex; gap:8px; flex-wrap:wrap; margin-top:6px}
     .thumbs img{height:54px;width:54px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
@@ -84,7 +86,7 @@
     /* Floating sign-out for mobile (when sidebar is hidden) */
     .floating-signout{
       position:fixed; left:12px; bottom:12px; z-index:20;
-      display:none; /* hidden on desktop */
+      display:none;
       background:#374151; color:#fff; border:none; border-radius:10px; padding:10px 12px; font-weight:700; cursor:pointer;
       box-shadow:0 8px 20px rgba(0,0,0,.25);
     }
@@ -98,7 +100,7 @@
   </style>
 </head>
 <body>
-  <!-- Sidebar (fixed) -->
+  <!-- Sidebar -->
   <aside class="sidebar">
     <div class="side-top">
       <button id="newChat" class="btn">+ New chat</button>
@@ -113,7 +115,7 @@
     </div>
   </aside>
 
-  <!-- Floating signout for mobile -->
+  <!-- Mobile floating signout -->
   <button id="floatingSignout" class="floating-signout">Sign out</button>
 
   <!-- Main -->
@@ -135,6 +137,7 @@
     <div class="wrap">
       <div id="transcript" class="transcript"></div>
 
+      <!-- STICKY composer -->
       <div class="composer">
         <div>
           <input id="file" class="hide" type="file" accept="image/*" capture="environment">
@@ -144,6 +147,7 @@
         <textarea id="message" placeholder="Message Math GPT… (Enter = send, Shift+Enter = newline)"></textarea>
         <button class="btn" id="send">Send</button>
       </div>
+
       <div id="hint" class="muted" style="padding:6px 16px"></div>
     </div>
   </main>
@@ -164,7 +168,7 @@
     const getActiveId = () => localStorage.getItem('gpts_active_conversation') || '';
 
     // sidebar state
-    let conversations = []; // [{id,title,updated_at}]
+    let conversations = [];
     let filtered = [];
 
     // thumbnails
@@ -233,7 +237,7 @@
       return data;
     }
 
-    // Render sidebar
+    // Sidebar rendering
     function renderList(list){
       const c = $('#convlist'); c.innerHTML = '';
       const active = getActiveId();
@@ -281,6 +285,8 @@
       $('#transcript').innerHTML = '';
       addRow('bot', 'New chat started. Ask me anything, or attach a photo of a problem!');
       await refreshSidebar();
+      // Make sure composer is in view
+      document.querySelector('.composer')?.scrollIntoView({ block:'end' });
     }
 
     async function send(){
@@ -309,34 +315,34 @@
           setActiveId(data.conversationId); convId = data.conversationId;
         }
         addRow('bot', data.response || '(No response)');
-
-        // tidy
-        if (selectedFile){ selectedFile=null; if(previewUrl) URL.revokeObjectURL(previewUrl); $('#thumbs').classList.add('hide'); $('#file').value=''; }
         await refreshSidebar();
       }catch(e){
         addRow('bot', 'Error: ' + e.message);
       }finally{
         status.textContent = '';
+        if (selectedFile){ selectedFile=null; if(previewUrl) URL.revokeObjectURL(previewUrl); $('#thumbs').classList.add('hide'); $('#file').value=''; }
+        // keep composer visible
+        document.querySelector('.composer')?.scrollIntoView({ block:'end' });
       }
     }
 
     // events
     $('#send').onclick = send;
-    $('#message').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
-    });
+    $('#message').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
     $('#q').oninput = refreshSidebar;
     $('#newChat').onclick = newChat;
     $('#toAccount').onclick = () => location.href = 'index.html';
 
-    function doSignout(){
-      localStorage.removeItem('gpts_email');
-      location.href = 'index.html';
-    }
-    $('#signout').onclick = doSignout;          // sidebar button
-    $('#floatingSignout').onclick = doSignout;  // mobile floating button
+    function doSignout(){ localStorage.removeItem('gpts_email'); location.href = 'index.html'; }
+    $('#signout').onclick = doSignout; $('#floatingSignout').onclick = doSignout;
 
-    // boot
+    // Keep composer visible on viewport changes (mobile keyboards)
+    if (window.visualViewport) {
+      const vv = window.visualViewport;
+      const onVV = () => document.querySelector('.composer')?.scrollIntoView({ block:'end' });
+      vv.addEventListener('resize', onVV); vv.addEventListener('scroll', onVV);
+    }
+
     (async function init(){
       const email = getEmail();
       if(!email){ location.href='index.html'; return; }
@@ -348,10 +354,10 @@
       await refreshSidebar();
       const active = getActiveId();
       if(active){ await openConversation(active); }
-      else {
-        addRow('bot', 'Welcome back! Pick a chat on the left or start a new one.');
-      }
-      h('Tip: Attach a photo to solve by picture, or just type your question.');
+      else { addRow('bot', 'Welcome back! Pick a chat on the left or start a new one.'); }
+      h('Tip: The input stays pinned at the bottom. Press Enter to send.');
+      // ensure composer visible at first load
+      document.querySelector('.composer')?.scrollIntoView({ block:'end' });
     })();
   </script>
 </body>
