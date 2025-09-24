@@ -3,6 +3,13 @@ const axios = require('axios');
 const path = require('path');
 
 const app = express();
+// Enable CORS
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', '*');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    next();
+});
 const PORT = process.env.PORT || 3000;
 
 // Middleware
@@ -135,4 +142,5 @@ app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
     console.log(`Open http://localhost:${PORT} to view your website`);
 });
+
 
