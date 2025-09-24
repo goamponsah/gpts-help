@@ -3,6 +3,7 @@ const express = require('express');
 const axios = require('axios');
 const path = require('path');
 const crypto = require('crypto');
+const { Pool } = require('pg');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -10,25 +11,122 @@ const PORT = process.env.PORT || 3000;
 // ===== ENV / CONFIG =====
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const OPENAI_MODEL   = process.env.OPENAI_MODEL || 'gpt-4o'; // set 'gpt-4.1' on Railway if you prefer
-const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
+
+const PAYSTACK_SECRET_KEY  = process.env.PAYSTACK_SECRET_KEY;
 const PAYSTACK_CALLBACK_URL =
   process.env.PAYSTACK_CALLBACK_URL ||
   'https://gpts-help-production.up.railway.app/payment-success';
 
-// *** NEW: choose a currency your Paystack account supports ***
+// Use a currency your Paystack account supports (most test accounts: NGN or GHS)
 const PAYSTACK_CURRENCY = (process.env.PAYSTACK_CURRENCY || 'GHS').toUpperCase();
-// Common valid values: 'NGN' (Nigeria), 'GHS' (Ghana). 'USD' is only if enabled on your account.
+const PAYSTACK_IS_TEST  = (PAYSTACK_SECRET_KEY || '').startsWith('sk_test_');
 
-const PAYSTACK_IS_TEST = (PAYSTACK_SECRET_KEY || '').startsWith('sk_test_');
+// ===== DATABASE (PostgreSQL) =====
+const DATABASE_URL = process.env.DATABASE_URL;
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  // Railway PG often requires SSL=false for internal; for external, keep SSL true but skip cert
+  ssl: process.env.PGSSL === 'false' ? false : { rejectUnauthorized: false },
+  max: 10,
+});
+
+async function dbQuery(text, params) {
+  const client = await pool.connect();
+  try {
+    const res = await client.query(text, params);
+    return res;
+  } finally {
+    client.release();
+  }
+}
+
+async function initDb() {
+  await dbQuery(`
+    CREATE TABLE IF NOT EXISTS users (
+      email TEXT PRIMARY KEY,
+      subscribed BOOLEAN NOT NULL DEFAULT false,
+      subscription_date TIMESTAMPTZ,
+      plan TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+
+  await dbQuery(`
+    CREATE TABLE IF NOT EXISTS payments (
+      id BIGSERIAL PRIMARY KEY,
+      email TEXT NOT NULL,
+      reference TEXT,
+      amount_minor INTEGER,
+      currency TEXT,
+      status TEXT,  -- 'initialized' | 'success' | 'failed' | 'abandoned' ...
+      raw JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+
+  await dbQuery(`CREATE INDEX IF NOT EXISTS payments_email_idx ON payments(email);`);
+  await dbQuery(`CREATE INDEX IF NOT EXISTS payments_reference_idx ON payments(reference);`);
+  console.log('[db] schema ready');
+}
+
+async function getUser(email) {
+  const { rows } = await dbQuery(`SELECT email, subscribed, subscription_date, plan FROM users WHERE email=$1`, [email]);
+  return rows[0] || null;
+}
+
+async function upsertUserSubscribed(email, plan = 'monthly', date = new Date()) {
+  await dbQuery(
+    `INSERT INTO users(email, subscribed, subscription_date, plan, created_at, updated_at)
+     VALUES($1, true, $2, $3, now(), now())
+     ON CONFLICT (email)
+     DO UPDATE SET subscribed = EXCLUDED.subscribed,
+                   subscription_date = EXCLUDED.subscription_date,
+                   plan = EXCLUDED.plan,
+                   updated_at = now()`,
+    [email, date, plan]
+  );
+}
+
+async function touchUser(email) {
+  await dbQuery(
+    `INSERT INTO users(email, subscribed, created_at, updated_at)
+     VALUES($1, false, now(), now())
+     ON CONFLICT (email) DO UPDATE SET updated_at = now()`,
+    [email]
+  );
+}
+
+async function createPaymentInit({ email, reference, amountMinor, currency, raw }) {
+  await dbQuery(
+    `INSERT INTO payments(email, reference, amount_minor, currency, status, raw, created_at, updated_at)
+     VALUES($1, $2, $3, $4, 'initialized', $5, now(), now())`,
+    [email, reference, amountMinor, currency, raw || {}]
+  );
+}
+
+async function markPaymentStatus(reference, status, raw) {
+  await dbQuery(
+    `UPDATE payments SET status=$2, raw=$3, updated_at=now() WHERE reference=$1`,
+    [reference, status, raw || {}]
+  );
+}
 
 // ===== STARTUP CHECKS =====
-if (!OPENAI_API_KEY) console.warn('[warn] OPENAI_API_KEY is not set.');
-if (!PAYSTACK_SECRET_KEY) console.warn('[warn] PAYSTACK_SECRET_KEY is not set. Payments will fail.');
-console.log('[info] Using OpenAI model:', OPENAI_MODEL, '| Paystack currency:', PAYSTACK_CURRENCY, '| Test mode:', PAYSTACK_IS_TEST);
+(async () => {
+  if (!OPENAI_API_KEY) console.warn('[warn] OPENAI_API_KEY is not set.');
+  if (!PAYSTACK_SECRET_KEY) console.warn('[warn] PAYSTACK_SECRET_KEY is not set. Payments will fail.');
+  if (!DATABASE_URL) console.warn('[warn] DATABASE_URL is not set. DB will fail.');
+  console.log('[info] Using OpenAI model:', OPENAI_MODEL, '| Paystack currency:', PAYSTACK_CURRENCY, '| Test mode:', PAYSTACK_IS_TEST);
 
-// ===== IN-MEMORY STORAGE (use a DB in prod) =====
-let users = {};          // { [email]: { subscribed: boolean, subscriptionDate: Date } }
-let subscriptions = {};  // { [email]: { active: boolean, plan: string } }
+  // init DB
+  try {
+    await initDb();
+  } catch (e) {
+    console.error('[db] init error:', e.message);
+  }
+})();
 
 // ===== CORS (incl. preflight) =====
 app.use((req, res, next) => {
@@ -43,7 +141,7 @@ app.use((req, res, next) => {
  * Paystack webhook MUST use RAW body for signature verification.
  * Register BEFORE express.json().
  */
-app.post('/api/paystack-webhook', express.raw({ type: '*/*' }), (req, res) => {
+app.post('/api/paystack-webhook', express.raw({ type: '*/*' }), async (req, res) => {
   try {
     const signature = req.headers['x-paystack-signature'];
     if (!signature || !PAYSTACK_SECRET_KEY) {
@@ -55,14 +153,20 @@ app.post('/api/paystack-webhook', express.raw({ type: '*/*' }), (req, res) => {
     if (signature !== expected) return res.status(401).send('Invalid signature');
 
     const event = JSON.parse(req.body.toString('utf8'));
-    if (event?.event === 'charge.success') {
-      const email = event?.data?.customer?.email || event?.data?.customer_email;
-      if (email) {
-        users[email] = { subscribed: true, subscriptionDate: new Date() };
-        subscriptions[email] = { active: true, plan: 'monthly' };
-        console.log(`[paystack] Subscription activated for: ${email}`);
-      }
+
+    // Persist event outcome
+    const ref = event?.data?.reference;
+    const email = event?.data?.customer?.email || event?.data?.customer_email;
+
+    if (ref) {
+      await markPaymentStatus(ref, event?.event || 'unknown', event);
     }
+
+    if (event?.event === 'charge.success' && email) {
+      await upsertUserSubscribed(email, 'monthly', new Date());
+      console.log(`[paystack] Subscription activated for: ${email}`);
+    }
+
     return res.status(200).send('OK');
   } catch (err) {
     console.error('Webhook error:', err);
@@ -156,7 +260,6 @@ function safeApiError(res, err, fallbackMsg) {
   const status = err?.response?.status || 500;
   const data = err?.response?.data;
   console.error('[server error]', { status, message: err?.message, data: data?.error || data });
-  // Expose detail in response so FE can show the exact reason (useful in TEST)
   return res.status(500).json({
     error: fallbackMsg,
     detail: data?.message || data?.error?.message || err?.message || 'Unknown error'
@@ -179,24 +282,32 @@ app.get('/payment-success', (req, res) => {
   `);
 });
 
-// Config endpoint so FE knows test mode & currency
-app.get('/api/config', (req, res) => {
+// Config for FE
+app.get('/api/config', async (req, res) => {
+  // DB connectivity probe
+  let dbOk = true;
+  try { await dbQuery('SELECT 1'); } catch { dbOk = false; }
   res.json({
     paystackTestMode: PAYSTACK_IS_TEST,
     currencyDefault: PAYSTACK_CURRENCY,
     currencySymbol: currencySymbol(PAYSTACK_CURRENCY),
-    model: OPENAI_MODEL
+    model: OPENAI_MODEL,
+    db: dbOk
   });
 });
 
 // Health + ping
-app.get('/api/health', (req, res) => {
-  res.json({ ok: true, hasOpenAI: !!OPENAI_API_KEY, model: OPENAI_MODEL, time: new Date().toISOString() });
+app.get('/api/health', async (req, res) => {
+  let dbOk = true;
+  try { await dbQuery('SELECT 1'); } catch { dbOk = false; }
+  res.json({ ok: true, hasOpenAI: !!OPENAI_API_KEY, model: OPENAI_MODEL, db: dbOk, time: new Date().toISOString() });
 });
+
 app.get('/api/ping-openai', async (req, res) => {
   try {
     const r = await axios.post('https://api.openai.com/v1/chat/completions', {
-      model: OPENAI_MODEL, messages: [{ role: 'user', content: 'Say OK' }]
+      model: OPENAI_MODEL,
+      messages: [{ role: 'user', content: 'Say OK' }]
     }, {
       headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
       timeout: 20000
@@ -208,16 +319,19 @@ app.get('/api/ping-openai', async (req, res) => {
   }
 });
 
-// Debug login (testing only)
-app.post('/api/debug-login', (req, res) => {
+// Debug login (testing only) → writes to DB
+app.post('/api/debug-login', async (req, res) => {
   const { email } = req.body || {};
   if (!email) return res.status(400).json({ error: 'email required' });
-  users[email] = { subscribed: true, subscriptionDate: new Date() };
-  subscriptions[email] = { active: true, plan: 'monthly' };
-  res.json({ ok: true });
+  try {
+    await upsertUserSubscribed(email, 'monthly', new Date());
+    return res.json({ ok: true });
+  } catch (e) {
+    return safeApiError(res, e, 'Debug login failed');
+  }
 });
 
-// Chat
+// Chat → checks subscription in DB
 app.post('/api/chat', async (req, res) => {
   try {
     const { message, gptType = 'math', userId } = req.body;
@@ -229,7 +343,10 @@ app.post('/api/chat', async (req, res) => {
     }
 
     const email = userId;
-    if (!email || !users[email]?.subscribed) return res.status(401).json({ error: 'User not authenticated or not subscribed' });
+    if (!email) return res.status(401).json({ error: 'User not authenticated or not subscribed' });
+
+    const user = await getUser(email);
+    if (!user || !user.subscribed) return res.status(401).json({ error: 'User not authenticated or not subscribed' });
 
     const ai = await axios.post('https://api.openai.com/v1/chat/completions', {
       model: OPENAI_MODEL,
@@ -250,14 +367,14 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
-// Paystack init (now forces server-side currency to avoid FE mismatches)
+// Paystack init → records init in DB
 app.post('/api/create-subscription', async (req, res) => {
   try {
-    const { email, amount } = req.body; // currency taken from server config
+    const { email, amount } = req.body; // currency decided server-side
     if (!email || amount == null) return res.status(400).json({ error: 'email and amount are required' });
     if (!PAYSTACK_SECRET_KEY) return res.status(500).json({ error: 'Server missing PAYSTACK_SECRET_KEY' });
 
-    const minorUnits = Math.round(Number(amount) * 100); // kobo/pesewas/cents
+    const minorUnits = Math.round(Number(amount) * 100);
     if (!Number.isFinite(minorUnits) || minorUnits <= 0) {
       return res.status(400).json({ error: 'amount must be a positive number' });
     }
@@ -265,7 +382,7 @@ app.post('/api/create-subscription', async (req, res) => {
     const response = await axios.post('https://api.paystack.co/transaction/initialize', {
       email,
       amount: minorUnits,
-      currency: PAYSTACK_CURRENCY, // <— IMPORTANT: use supported currency
+      currency: PAYSTACK_CURRENCY,
       callback_url: PAYSTACK_CALLBACK_URL,
       metadata: { plan: 'monthly' }
     }, {
@@ -273,17 +390,34 @@ app.post('/api/create-subscription', async (req, res) => {
       timeout: 30000
     });
 
-    users[email] = users[email] || { subscribed: false };
-    return res.json({ authorization_url: response.data?.data?.authorization_url });
+    const authUrl = response.data?.data?.authorization_url;
+    const ref     = response.data?.data?.reference;
+
+    await touchUser(email); // ensure user row exists
+    if (ref) {
+      await createPaymentInit({
+        email,
+        reference: ref,
+        amountMinor: minorUnits,
+        currency: PAYSTACK_CURRENCY,
+        raw: response.data?.data || {}
+      });
+    }
+
+    return res.json({ authorization_url: authUrl });
   } catch (err) {
     return safeApiError(res, err, 'Payment initialization failed');
   }
 });
 
-// Subscription check
-app.get('/api/user/:email', (req, res) => {
-  const user = users[req.params.email];
-  res.json({ subscribed: !!user?.subscribed });
+// Subscription check → reads from DB
+app.get('/api/user/:email', async (req, res) => {
+  try {
+    const user = await getUser(req.params.email);
+    res.json({ subscribed: !!user?.subscribed });
+  } catch (e) {
+    res.json({ subscribed: false });
+  }
 });
 
 // ===== START =====
