@@ -141,7 +141,7 @@ app.get('/api/ping-openai', async (req, res) => {
     const r = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
-        model: 'gpt-4o', // if "model not found", try 'gpt-4o-mini'
+        model: 'OPENAI_MODEL', // if "model not found", try 'gpt-4o-mini'
         messages: [{ role: 'user', content: 'Say ok' }]
       },
       {
@@ -194,7 +194,7 @@ app.post('/api/chat', async (req, res) => {
     const ai = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
-        model: 'gpt-4o', // switch to 'gpt-4o-mini' if your account lacks access
+        model: 'OPENAI_MODEL', // switch to 'gpt-4o-mini' if your account lacks access
         messages: [
           { role: 'system', content: gptInstructions[gptType] },
           { role: 'user', content: message }
@@ -275,4 +275,5 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Open http://localhost:${PORT}`);
 });
+
 
