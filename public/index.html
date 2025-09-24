@@ -35,9 +35,29 @@
     .field input,.field select,.field textarea{width:100%;padding:12px;border:1px solid #e5e7eb;border-radius:8px;font-size:1rem}
     .muted{color:#666;font-size:.9rem}
     .hidden{display:none}
-    pre{background:#f6f6f6;padding:12px;border-radius:8px;white-space:pre-wrap}
     .split{display:grid;gap:20px;grid-template-columns:1fr}
     @media (min-width:900px){.split{grid-template-columns:1fr 1fr}}
+
+    /* === ChatGPT-like layout === */
+    .chat-shell{display:flex;flex-direction:column;gap:10px}
+    .transcript{
+      height:420px; /* adjust as you like */
+      overflow:auto;
+      background:#f6f6f6;
+      border:1px solid #e5e7eb;
+      border-radius:12px;
+      padding:12px;
+    }
+    .composer{display:flex;gap:10px;align-items:flex-end}
+    .composer textarea{resize:vertical;min-height:48px;max-height:200px;flex:1}
+    .message{display:flex;margin:8px 0}
+    .bubble{
+      padding:10px 12px;border-radius:12px;max-width:80%;
+      white-space:pre-wrap;word-wrap:break-word
+    }
+    .message.user{justify-content:flex-end}
+    .message.user .bubble{background:#e0e7ff}
+    .message.bot .bubble{background:#fff;border:1px solid #e5e7eb}
   </style>
 </head>
 <body>
@@ -89,11 +109,11 @@
         </div>
         <div class="split">
           <button class="btn" id="btn-subscribe">$9.99/month — Subscribe</button>
-          <button class="btn secondary" id="btn-check-access" title="If you've paid already, or after returning from Paystack">I’ve Paid — Refresh Access</button>
+          <button class="btn secondary" id="btn-check-access">I’ve Paid — Refresh Access</button>
         </div>
         <p class="muted">7-day money-back guarantee</p>
         <hr/>
-        <button class="btn secondary" id="btn-debug-login" title="Testing only (marks email as subscribed without paying)">Debug Login (Testing)</button>
+        <button class="btn secondary" id="btn-debug-login">Debug Login (Testing)</button>
         <small class="muted">For testing only — remove this button in production.</small>
       </div>
     </div>
@@ -115,16 +135,20 @@
                 <option value="content">Content GPT</option>
               </select>
             </div>
-            <div class="field">
-              <label for="message">Your message</label>
-              <textarea id="message" rows="6" placeholder="Explain Pythagoras simply"></textarea>
+
+            <!-- ChatGPT-style area -->
+            <div class="chat-shell">
+              <div id="transcript" class="transcript"></div>
+              <div class="composer">
+                <textarea id="message" rows="3" placeholder="Write your message... (Shift+Enter = newline)"></textarea>
+                <button class="btn" id="btn-send">Send</button>
+              </div>
             </div>
-            <button class="btn" id="btn-send">Send</button>
+
             <div id="status" class="muted"></div>
-            <h3>Response</h3>
-            <pre id="out">(no response yet)</pre>
           </div>
         </div>
+
         <div class="card">
           <h2>Account</h2>
           <div class="stack" style="margin-top:12px">
@@ -139,8 +163,6 @@
 
   <script>
     const API_BASE = 'https://gpts-help-production.up.railway.app';
-    // If your Paystack account supports USD (price shows $9.99), we pass USD.
-    // If you prefer Ghana Cedi, change amount/label and set currency:'GHS'.
     const PLAN = { amount: 9.99, currency: 'USD' };
 
     // ---------- UI helpers ----------
@@ -150,6 +172,19 @@
     function getEmail(){ return localStorage.getItem('gpts_email') || ''; }
     function signOut(){ localStorage.removeItem('gpts_email'); $('#nav-login').classList.remove('hidden'); $('#nav-dashboard').classList.add('hidden'); $('#nav-logout').classList.add('hidden'); show('homepage'); }
     function setNavForLoggedIn(email){ $('#nav-login').classList.add('hidden'); $('#nav-dashboard').classList.remove('hidden'); $('#nav-logout').classList.remove('hidden'); $('#dash-email').value = email; }
+
+    // Chat helpers
+    function addMessage(role, text){
+      const row = document.createElement('div');
+      row.className = `message ${role}`;
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.textContent = text;
+      row.appendChild(bubble);
+      const t = $('#transcript');
+      t.appendChild(row);
+      t.scrollTop = t.scrollHeight; // auto-scroll
+    }
 
     // ---------- API calls ----------
     async function checkSubscription(email){
@@ -166,8 +201,7 @@
       const data = await r.json();
       if(!r.ok) throw new Error(data.error || 'Failed to initialize payment');
       if(!data.authorization_url) throw new Error('No authorization URL returned');
-      // Redirect to Paystack
-      window.location.href = data.authorization_url;
+      window.location.href = data.authorization_url; // Paystack
     }
 
     async function debugLogin(email){
@@ -239,23 +273,35 @@
       }
     };
 
-    $('#btn-send').onclick = async () => {
+    async function sendMessage(){
       const email = getEmail();
       const gptType = $('#gptType').value;
       const message = $('#message').value.trim();
-      const out = $('#out'), status = $('#status');
+      const status = $('#status');
       if(!email) return alert('Not signed in.');
-      if(!message) return alert('Type a message.');
-      status.textContent = 'Thinking…'; out.textContent = '';
+      if(!message) return;
+      // show user bubble immediately
+      addMessage('user', message);
+      $('#message').value = '';
+      status.textContent = 'Thinking…';
       try{
         const reply = await askGPT(email, gptType, message);
-        out.textContent = reply;
+        addMessage('bot', reply);
       }catch(e){
-        out.textContent = 'Error: ' + e.message;
+        addMessage('bot', 'Error: ' + e.message);
       }finally{
         status.textContent = '';
       }
-    };
+    }
+
+    $('#btn-send').onclick = sendMessage;
+    // Enter to send (Shift+Enter for newline)
+    $('#message').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
 
     $('#btn-refresh-sub').onclick = async () => {
       const email = getEmail();
@@ -276,14 +322,13 @@
     (async function init(){
       const saved = getEmail();
       if(saved) $('#email').value = saved;
-      // If user already subscribed, go straight to dashboard
       if(saved){
         const sub = await checkSubscription(saved);
         if(sub.subscribed){ setNavForLoggedIn(saved); show('dashboard'); refreshSubUI(saved); return; }
       }
-      // Default: show homepage
       show('homepage');
     })();
   </script>
 </body>
 </html>
+
