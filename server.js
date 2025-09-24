@@ -9,18 +9,22 @@ const PORT = process.env.PORT || 3000;
 
 // ===== ENV / CONFIG =====
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const OPENAI_MODEL   = process.env.OPENAI_MODEL || 'gpt-4o'; // set 'gpt-4.1' on Railway to pin GPT-4.1
+const OPENAI_MODEL   = process.env.OPENAI_MODEL || 'gpt-4o'; // set 'gpt-4.1' on Railway if you prefer
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 const PAYSTACK_CALLBACK_URL =
   process.env.PAYSTACK_CALLBACK_URL ||
   'https://gpts-help-production.up.railway.app/payment-success';
 
-const PAYSTACK_IS_TEST = (PAYSTACK_SECRET_KEY || '').startsWith('sk_test');
+// *** NEW: choose a currency your Paystack account supports ***
+const PAYSTACK_CURRENCY = (process.env.PAYSTACK_CURRENCY || 'GHS').toUpperCase();
+// Common valid values: 'NGN' (Nigeria), 'GHS' (Ghana). 'USD' is only if enabled on your account.
+
+const PAYSTACK_IS_TEST = (PAYSTACK_SECRET_KEY || '').startsWith('sk_test_');
 
 // ===== STARTUP CHECKS =====
 if (!OPENAI_API_KEY) console.warn('[warn] OPENAI_API_KEY is not set.');
 if (!PAYSTACK_SECRET_KEY) console.warn('[warn] PAYSTACK_SECRET_KEY is not set. Payments will fail.');
-console.log('[info] Using OpenAI model:', OPENAI_MODEL);
+console.log('[info] Using OpenAI model:', OPENAI_MODEL, '| Paystack currency:', PAYSTACK_CURRENCY, '| Test mode:', PAYSTACK_IS_TEST);
 
 // ===== IN-MEMORY STORAGE (use a DB in prod) =====
 let users = {};          // { [email]: { subscribed: boolean, subscriptionDate: Date } }
@@ -28,7 +32,7 @@ let subscriptions = {};  // { [email]: { active: boolean, plan: string } }
 
 // ===== CORS (incl. preflight) =====
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*'); // lock to your FE origin in prod
+  res.header('Access-Control-Allow-Origin', '*'); // tighten to your FE origin in prod
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
@@ -139,13 +143,23 @@ Your response should be:
 };
 
 // ===== HELPERS =====
+function currencySymbol(code) {
+  switch ((code || '').toUpperCase()) {
+    case 'NGN': return '₦';
+    case 'GHS': return 'GH₵';
+    case 'USD': return '$';
+    case 'ZAR': return 'R';
+    default: return code || '';
+  }
+}
 function safeApiError(res, err, fallbackMsg) {
   const status = err?.response?.status || 500;
   const data = err?.response?.data;
   console.error('[server error]', { status, message: err?.message, data: data?.error || data });
+  // Expose detail in response so FE can show the exact reason (useful in TEST)
   return res.status(500).json({
     error: fallbackMsg,
-    detail: data?.error?.message || err?.message || 'Unknown error'
+    detail: data?.message || data?.error?.message || err?.message || 'Unknown error'
   });
 }
 
@@ -165,21 +179,24 @@ app.get('/payment-success', (req, res) => {
   `);
 });
 
-// Small config endpoint so FE can show Test Cards panel automatically
+// Config endpoint so FE knows test mode & currency
 app.get('/api/config', (req, res) => {
-  res.json({ paystackTestMode: PAYSTACK_IS_TEST, currencyDefault: 'USD', model: OPENAI_MODEL });
+  res.json({
+    paystackTestMode: PAYSTACK_IS_TEST,
+    currencyDefault: PAYSTACK_CURRENCY,
+    currencySymbol: currencySymbol(PAYSTACK_CURRENCY),
+    model: OPENAI_MODEL
+  });
 });
 
 // Health + ping
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, hasOpenAI: !!OPENAI_API_KEY, model: OPENAI_MODEL, time: new Date().toISOString() });
 });
-
 app.get('/api/ping-openai', async (req, res) => {
   try {
     const r = await axios.post('https://api.openai.com/v1/chat/completions', {
-      model: OPENAI_MODEL,
-      messages: [{ role: 'user', content: 'Say OK' }]
+      model: OPENAI_MODEL, messages: [{ role: 'user', content: 'Say OK' }]
     }, {
       headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
       timeout: 20000
@@ -233,18 +250,24 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
-// Paystack init
+// Paystack init (now forces server-side currency to avoid FE mismatches)
 app.post('/api/create-subscription', async (req, res) => {
   try {
-    const { email, amount, currency = 'USD' } = req.body;
+    const { email, amount } = req.body; // currency taken from server config
     if (!email || amount == null) return res.status(400).json({ error: 'email and amount are required' });
     if (!PAYSTACK_SECRET_KEY) return res.status(500).json({ error: 'Server missing PAYSTACK_SECRET_KEY' });
 
-    const minorUnits = Math.round(Number(amount) * 100);
-    if (!Number.isFinite(minorUnits) || minorUnits <= 0) return res.status(400).json({ error: 'amount must be a positive number' });
+    const minorUnits = Math.round(Number(amount) * 100); // kobo/pesewas/cents
+    if (!Number.isFinite(minorUnits) || minorUnits <= 0) {
+      return res.status(400).json({ error: 'amount must be a positive number' });
+    }
 
     const response = await axios.post('https://api.paystack.co/transaction/initialize', {
-      email, amount: minorUnits, currency, callback_url: PAYSTACK_CALLBACK_URL, metadata: { plan: 'monthly' }
+      email,
+      amount: minorUnits,
+      currency: PAYSTACK_CURRENCY, // <— IMPORTANT: use supported currency
+      callback_url: PAYSTACK_CALLBACK_URL,
+      metadata: { plan: 'monthly' }
     }, {
       headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`, 'Content-Type': 'application/json' },
       timeout: 30000
