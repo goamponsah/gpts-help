@@ -205,18 +205,47 @@ function processPayment() {
     </div>
 
     <script>
-        function showAuth() {
-            document.getElementById('homepage').classList.add('hidden');
-            document.getElementById('auth-container').classList.remove('hidden');
-        }
+function showAuth() {
+    document.getElementById('homepage').classList.add('hidden');
+    document.getElementById('auth-container').classList.remove('hidden');
+}
 
-        function processPayment() {
-            // Simulate payment processing
-            alert('Payment gateway would open here. After successful payment, you would get access.');
-            // In real implementation: window.location.href = 'dashboard.html';
+function showHomepage() {
+    document.getElementById('auth-container').classList.add('hidden');
+    document.getElementById('homepage').classList.remove('hidden');
+}
+
+async function processPayment() {
+    const email = prompt('Please enter your email to subscribe:');
+    if (!email) return;
+    
+    try {
+        const response = await fetch('/api/subscribe', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ email: email })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            // Store user email in localStorage for dashboard access
+            localStorage.setItem('userEmail', email);
+            alert('Subscription successful! Redirecting to dashboard...');
+            window.location.href = '/dashboard';
+        } else {
+            alert('Subscription failed. Please try again.');
         }
-    </script>
+    } catch (error) {
+        console.error('Error:', error);
+        alert('Subscription error. Please try again.');
+    }
+}
+</script>
 </body>
 
 </html>
+
 
