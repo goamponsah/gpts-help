@@ -1,3 +1,4 @@
+// server.js
 const express = require('express');
 const axios = require('axios');
 const path = require('path');
@@ -6,41 +7,75 @@ const crypto = require('crypto');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ===== CONFIGURATION - UPDATE THESE WITH YOUR KEYS =====
+// ===== ENV / CONFIG =====
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const PAYSTACK_PUBLIC_KEY = process.env.PAYSTACK_PUBLIC_KEY;
+const PAYSTACK_PUBLIC_KEY = process.env.PAYSTACK_PUBLIC_KEY; // optional, used client-side
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
-const PAYSTACK_CALLBACK_URL = process.env.PAYSTACK_CALLBACK_URL || 'https://yourdomain.com/payment-success';
-// ======================================================
+const PAYSTACK_CALLBACK_URL =
+  process.env.PAYSTACK_CALLBACK_URL ||
+  'https://gpts-help-production.up.railway.app/payment-success';
 
-// ---- Basic startup checks ----
-if (!OPENAI_API_KEY) {
-  console.warn('[warn] OPENAI_API_KEY is not set. /api/chat will fail.');
-}
-if (!PAYSTACK_SECRET_KEY) {
-  console.warn('[warn] PAYSTACK_SECRET_KEY is not set. Payments will fail.');
-}
+// ===== STARTUP CHECKS =====
+if (!OPENAI_API_KEY) console.warn('[warn] OPENAI_API_KEY is not set.');
+if (!PAYSTACK_SECRET_KEY) console.warn('[warn] PAYSTACK_SECRET_KEY is not set. Payments will fail.');
 
-// CORS (incl. preflight)
+// ===== CORS (incl. preflight) =====
+// Tighten Access-Control-Allow-Origin to your front-end origin in production
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Origin', '*'); // e.g. 'https://your-frontend.com'
+  res.header(
+    'Access-Control-Allow-Headers',
+    'Origin, X-Requested-With, Content-Type, Accept, Authorization'
+  );
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
 
-// JSON body for normal routes
-app.use(express.json());
-
-// Static
-app.use(express.static('public'));
-
-// In-memory user storage (email is our canonical key)
+/**
+ * IMPORTANT: Paystack webhook must use RAW body for signature verification.
+ * Register BEFORE app.use(express.json()) so JSON parser doesn't alter bytes.
+ */
 let users = {};          // { [email]: { subscribed: boolean, subscriptionDate: Date } }
 let subscriptions = {};  // { [email]: { active: boolean, plan: string } }
 
-// GPT Instructions
+app.post('/api/paystack-webhook', express.raw({ type: '*/*' }), (req, res) => {
+  try {
+    const signature = req.headers['x-paystack-signature'];
+    if (!signature || !PAYSTACK_SECRET_KEY) {
+      return res.status(400).send('Missing signature or server key');
+    }
+
+    const hmac = crypto.createHmac('sha512', PAYSTACK_SECRET_KEY);
+    hmac.update(req.body);
+    const expected = hmac.digest('hex');
+    if (signature !== expected) {
+      return res.status(401).send('Invalid signature');
+    }
+
+    const event = JSON.parse(req.body.toString('utf8'));
+
+    if (event?.event === 'charge.success') {
+      const email = event?.data?.customer?.email || event?.data?.customer_email;
+      if (email) {
+        users[email] = { subscribed: true, subscriptionDate: new Date() };
+        subscriptions[email] = { active: true, plan: 'monthly' };
+        console.log(`[paystack] Subscription activated for: ${email}`);
+      }
+    }
+
+    return res.status(200).send('OK');
+  } catch (err) {
+    console.error('Webhook error:', err);
+    return res.status(400).send('Webhook error');
+  }
+});
+
+// ===== NORMAL MIDDLEWARE (after webhook) =====
+app.use(express.json());
+app.use(express.static('public')); // ensure /public exists or remove
+
+// ===== GPT INSTRUCTIONS =====
 const gptInstructions = {
   math: `You are Math GPT, a patient and helpful AI math tutor. Your role is to help users understand mathematical concepts, not just provide answers. Always:
 1. Provide step-by-step explanations
@@ -56,19 +91,14 @@ const gptInstructions = {
 5. Help with brainstorming and idea generation`
 };
 
-// Home
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-// ---- Helper: standard error payload without leaking secrets ----
+// ===== HELPERS =====
 function safeApiError(res, err, fallbackMsg) {
   const status = err?.response?.status || 500;
   const data = err?.response?.data;
   console.error('[server error]', {
     status,
     message: err?.message,
-    openai: data?.error || data, // may include OpenAI message
+    data: data?.error || data
   });
   return res.status(500).json({
     error: fallbackMsg,
@@ -76,33 +106,94 @@ function safeApiError(res, err, fallbackMsg) {
   });
 }
 
-// ---- Chat endpoint ----
+// ===== ROUTES =====
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// Simple success page (callback after Paystack payment)
+app.get('/payment-success', (req, res) => {
+  res.type('html').send(`
+    <!doctype html>
+    <html>
+      <head><meta charset="utf-8"><title>Payment Success</title></head>
+      <body style="font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 40px;">
+        <h1>Payment Successful</h1>
+        <p>Thank you! Your payment was successful. You can now return to the app.</p>
+      </body>
+    </html>
+  `);
+});
+
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({
+    ok: true,
+    hasOpenAI: !!OPENAI_API_KEY,
+    time: new Date().toISOString()
+  });
+});
+
+// Quick probe to verify OpenAI key/model from Railway
+app.get('/api/ping-openai', async (req, res) => {
+  try {
+    const r = await axios.post(
+      'https://api.openai.com/v1/chat/completions',
+      {
+        model: 'gpt-4o', // if "model not found", try 'gpt-4o-mini'
+        messages: [{ role: 'user', content: 'Say ok' }]
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 20000
+      }
+    );
+    res.json({ ok: true, text: r.data?.choices?.[0]?.message?.content || '' });
+  } catch (e) {
+    console.error('ping-openai error:', e?.response?.status, e?.response?.data || e?.message);
+    res.status(500).json({ ok: false });
+  }
+});
+
+// Temporary debug login to mark a user as subscribed (remove in production)
+app.post('/api/debug-login', (req, res) => {
+  const { email } = req.body || {};
+  if (!email) return res.status(400).json({ error: 'email required' });
+  users[email] = { subscribed: true, subscriptionDate: new Date() };
+  subscriptions[email] = { active: true, plan: 'monthly' };
+  res.json({ ok: true });
+});
+
+// OpenAI chat endpoint
 app.post('/api/chat', async (req, res) => {
   try {
     const { message, gptType = 'math', userId } = req.body;
 
-    // Validate request
-    if (typeof message !== 'string' || message.trim().length === 0) {
-      return res.status(400).json({ error: 'Message must be a non-empty string' });
-    }
-    if (!gptInstructions[gptType]) {
-      return res.status(400).json({ error: `Invalid gptType. Use one of: ${Object.keys(gptInstructions).join(', ')}` });
-    }
     if (!OPENAI_API_KEY) {
       return res.status(500).json({ error: 'Server missing OPENAI_API_KEY' });
     }
+    if (typeof message !== 'string' || !message.trim()) {
+      return res.status(400).json({ error: 'Message must be a non-empty string' });
+    }
+    if (!gptInstructions[gptType]) {
+      return res
+        .status(400)
+        .json({ error: `Invalid gptType. Use one of: ${Object.keys(gptInstructions).join(', ')}` });
+    }
 
-    // Use email as canonical id everywhere
-    const email = userId; // if your frontend sends email as userId, keep this; otherwise rename on the client
-    if (!users[email]?.subscribed) {
+    // Canonical user key is email; treat userId as email
+    const email = userId;
+    if (!email || !users[email]?.subscribed) {
       return res.status(401).json({ error: 'User not authenticated or not subscribed' });
     }
 
-    // OpenAI call
     const ai = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
-        model: 'gpt-4o',
+        model: 'gpt-4o', // switch to 'gpt-4o-mini' if your account lacks access
         messages: [
           { role: 'system', content: gptInstructions[gptType] },
           { role: 'user', content: message }
@@ -128,20 +219,20 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
-// ---- Create subscription (Paystack) ----
+// Paystack payment initialization
 app.post('/api/create-subscription', async (req, res) => {
   try {
     const { email, amount, currency = 'GHS' } = req.body;
 
-    if (!email || !amount) {
+    if (!email || amount == null) {
       return res.status(400).json({ error: 'email and amount are required' });
     }
     if (!PAYSTACK_SECRET_KEY) {
       return res.status(500).json({ error: 'Server missing PAYSTACK_SECRET_KEY' });
     }
 
-    const koboLike = Math.round(Number(amount) * 100);
-    if (!Number.isFinite(koboLike) || koboLike <= 0) {
+    const minorUnits = Math.round(Number(amount) * 100); // pesewas (GHS) / kobo (NGN)
+    if (!Number.isFinite(minorUnits) || minorUnits <= 0) {
       return res.status(400).json({ error: 'amount must be a positive number' });
     }
 
@@ -149,7 +240,7 @@ app.post('/api/create-subscription', async (req, res) => {
       'https://api.paystack.co/transaction/initialize',
       {
         email,
-        amount: koboLike,
+        amount: minorUnits,
         currency, // 'GHS' for Ghana, 'NGN' for Nigeria, 'USD' if enabled on your account
         callback_url: PAYSTACK_CALLBACK_URL,
         metadata: { plan: 'monthly' }
@@ -163,7 +254,7 @@ app.post('/api/create-subscription', async (req, res) => {
       }
     );
 
-    // Pre-create user record (not yet subscribed)
+    // Pre-create user record (not subscribed yet)
     users[email] = users[email] || { subscribed: false };
 
     return res.json({ authorization_url: response.data?.data?.authorization_url });
@@ -172,51 +263,13 @@ app.post('/api/create-subscription', async (req, res) => {
   }
 });
 
-// ---- Webhook: need raw body for signature verification ----
-app.post('/api/paystack-webhook',
-  express.raw({ type: '*/*' }), // raw body
-  (req, res) => {
-    try {
-      const signature = req.headers['x-paystack-signature'];
-      if (!signature || !PAYSTACK_SECRET_KEY) {
-        return res.status(400).send('Missing signature or server key');
-      }
-
-      // Verify signature
-      const hmac = crypto.createHmac('sha512', PAYSTACK_SECRET_KEY);
-      hmac.update(req.body);
-      const expected = hmac.digest('hex');
-      if (signature !== expected) {
-        return res.status(401).send('Invalid signature');
-      }
-
-      // Now parse the raw body as JSON
-      const event = JSON.parse(req.body.toString('utf8'));
-
-      if (event?.event === 'charge.success') {
-        const email = event?.data?.customer?.email || event?.data?.customer_email;
-        if (email) {
-          users[email] = { subscribed: true, subscriptionDate: new Date() };
-          subscriptions[email] = { active: true, plan: 'monthly' };
-          console.log(`Subscription activated for: ${email}`);
-        }
-      }
-
-      return res.status(200).send('OK');
-    } catch (err) {
-      console.error('Webhook error:', err);
-      return res.status(400).send('Webhook error');
-    }
-  }
-);
-
-// ---- User auth check ----
+// Simple user subscription check
 app.get('/api/user/:email', (req, res) => {
   const user = users[req.params.email];
   res.json({ subscribed: !!user?.subscribed });
 });
 
-// ---- Start server ----
+// ===== START SERVER =====
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Open http://localhost:${PORT}`);
