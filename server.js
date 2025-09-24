@@ -8,9 +8,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ===== ENV / CONFIG =====
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const PAYSTACK_PUBLIC_KEY = process.env.PAYSTACK_PUBLIC_KEY; // optional, used client-side
+const OPENAI_MODEL   = process.env.OPENAI_MODEL || 'gpt-4o'; // set to 'gpt-4.1' in Railway to pin to GPT-4.1
+const PAYSTACK_PUBLIC_KEY = process.env.PAYSTACK_PUBLIC_KEY; // optional, for client use
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 const PAYSTACK_CALLBACK_URL =
   process.env.PAYSTACK_CALLBACK_URL ||
@@ -19,9 +19,14 @@ const PAYSTACK_CALLBACK_URL =
 // ===== STARTUP CHECKS =====
 if (!OPENAI_API_KEY) console.warn('[warn] OPENAI_API_KEY is not set.');
 if (!PAYSTACK_SECRET_KEY) console.warn('[warn] PAYSTACK_SECRET_KEY is not set. Payments will fail.');
+console.log('[info] Using OpenAI model:', OPENAI_MODEL);
+
+// ===== IN-MEMORY STORAGE (use a DB in prod) =====
+let users = {};          // { [email]: { subscribed: boolean, subscriptionDate: Date } }
+let subscriptions = {};  // { [email]: { active: boolean, plan: string } }
 
 // ===== CORS (incl. preflight) =====
-// Tighten Access-Control-Allow-Origin to your front-end origin in production
+// Tighten Access-Control-Allow-Origin to your frontend origin for production
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*'); // e.g. 'https://your-frontend.com'
   res.header(
@@ -37,9 +42,6 @@ app.use((req, res, next) => {
  * IMPORTANT: Paystack webhook must use RAW body for signature verification.
  * Register BEFORE app.use(express.json()) so JSON parser doesn't alter bytes.
  */
-let users = {};          // { [email]: { subscribed: boolean, subscriptionDate: Date } }
-let subscriptions = {};  // { [email]: { active: boolean, plan: string } }
-
 app.post('/api/paystack-webhook', express.raw({ type: '*/*' }), (req, res) => {
   try {
     const signature = req.headers['x-paystack-signature'];
@@ -55,7 +57,6 @@ app.post('/api/paystack-webhook', express.raw({ type: '*/*' }), (req, res) => {
     }
 
     const event = JSON.parse(req.body.toString('utf8'));
-
     if (event?.event === 'charge.success') {
       const email = event?.data?.customer?.email || event?.data?.customer_email;
       if (email) {
@@ -131,18 +132,19 @@ app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
     hasOpenAI: !!OPENAI_API_KEY,
+    model: OPENAI_MODEL,
     time: new Date().toISOString()
   });
 });
 
-// Quick probe to verify OpenAI key/model from Railway
+// Quick probe to verify OpenAI key/model from the server
 app.get('/api/ping-openai', async (req, res) => {
   try {
     const r = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
-        model: 'OPENAI_MODEL', // if "model not found", try 'gpt-4o-mini'
-        messages: [{ role: 'user', content: 'Say ok' }]
+        model: OPENAI_MODEL,
+        messages: [{ role: 'user', content: 'Say OK' }]
       },
       {
         headers: {
@@ -194,7 +196,7 @@ app.post('/api/chat', async (req, res) => {
     const ai = await axios.post(
       'https://api.openai.com/v1/chat/completions',
       {
-        model: 'OPENAI_MODEL', // switch to 'gpt-4o-mini' if your account lacks access
+        model: OPENAI_MODEL,
         messages: [
           { role: 'system', content: gptInstructions[gptType] },
           { role: 'user', content: message }
@@ -213,7 +215,8 @@ app.post('/api/chat', async (req, res) => {
 
     return res.json({
       response: ai.data?.choices?.[0]?.message?.content ?? '',
-      usage: ai.data?.usage
+      usage: ai.data?.usage,
+      model: OPENAI_MODEL
     });
   } catch (err) {
     return safeApiError(res, err, 'Failed to get response from AI');
@@ -223,8 +226,7 @@ app.post('/api/chat', async (req, res) => {
 // Paystack payment initialization
 app.post('/api/create-subscription', async (req, res) => {
   try {
-    const { email, amount, currency = 'GHS' } = req.body;
-
+    const { email, amount, currency = 'USD' } = req.body; // change to 'GHS' if billing in Ghana
     if (!email || amount == null) {
       return res.status(400).json({ error: 'email and amount are required' });
     }
@@ -232,7 +234,7 @@ app.post('/api/create-subscription', async (req, res) => {
       return res.status(500).json({ error: 'Server missing PAYSTACK_SECRET_KEY' });
     }
 
-    const minorUnits = Math.round(Number(amount) * 100); // pesewas (GHS) / kobo (NGN)
+    const minorUnits = Math.round(Number(amount) * 100); // cents/USD, pesewas/GHS, kobo/NGN
     if (!Number.isFinite(minorUnits) || minorUnits <= 0) {
       return res.status(400).json({ error: 'amount must be a positive number' });
     }
@@ -275,5 +277,3 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Open http://localhost:${PORT}`);
 });
-
-
