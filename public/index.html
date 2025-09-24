@@ -28,6 +28,11 @@
     .field input{width:100%;padding:12px;border-radius:10px;border:1px solid #e5e7eb}
     .muted{color:#666;font-size:.9rem}
     .hidden{display:none}
+    .badge{display:inline-block;font-size:.8rem;font-weight:800;padding:4px 8px;border-radius:8px;background:#111;color:#fff}
+    .badge.test{background:#8b5cf6}
+    code{background:#f3f4f6;padding:2px 6px;border-radius:6px}
+    table{width:100%;border-collapse:collapse;margin-top:10px}
+    th,td{padding:8px;border-bottom:1px solid #eee;font-size:.95rem}
   </style>
 </head>
 <body>
@@ -63,7 +68,7 @@
     </section>
 
     <section class="card" id="account" style="max-width:520px;margin:28px auto 0;">
-      <h2>Subscribe / Sign In</h2>
+      <h2>Subscribe / Sign In <span id="mode-badge" class="badge hidden"></span></h2>
       <p class="muted">Use your email to subscribe and unlock chat.</p>
       <div class="stack" style="margin-top:12px">
         <div class="field">
@@ -84,6 +89,25 @@
         <div id="sub-status" class="muted" style="margin-top:6px">Status: (not checked)</div>
       </div>
     </section>
+
+    <!-- TEST CARDS (auto-visible when using sk_test...) -->
+    <section id="test-cards" class="card hidden" style="max-width:900px;margin:16px auto 0;">
+      <h2>Paystack Test Cards <span class="badge test">TEST MODE</span></h2>
+      <p class="muted">Use these only with test keys. Expiry can be <strong>any future date</strong>. (From Paystack docs)</p>
+      <table>
+        <thead><tr><th>Scenario</th><th>Card Number</th><th>CVV</th><th>Expiry</th><th>PIN / Notes</th></tr></thead>
+        <tbody>
+          <tr><td>Successful Payment (no extra validation)</td><td><code>4084 0840 8408 4081</code></td><td><code>408</code></td><td>Any future</td><td>—</td></tr>
+          <tr><td>Successful (PIN validation)</td><td><code>5078 5078 5078 5078 12</code></td><td><code>081</code></td><td>Any future</td><td>PIN <code>1111</code></td></tr>
+          <tr><td>Successful (PIN + OTP)</td><td><code>5060 6666 6666 6666 666</code></td><td><code>123</code></td><td>Any future</td><td>PIN <code>1234</code>, OTP <code>123456</code></td></tr>
+          <tr><td>Declined (simulate bank error)</td><td><code>4084 0800 0000 5408</code></td><td><code>001</code></td><td>Any future</td><td>—</td></tr>
+          <tr><td>Insufficient Funds</td><td><code>4084 0800 0067 0037</code></td><td><code>787</code></td><td>Any future</td><td>—</td></tr>
+        </tbody>
+      </table>
+      <p class="muted" style="margin-top:8px">
+        Enter these on the Paystack Checkout page after clicking <em>Subscribe</em>.
+      </p>
+    </section>
   </div>
 
   <script>
@@ -93,7 +117,6 @@
     const $ = s => document.querySelector(s);
     const saveEmail = e => localStorage.setItem('gpts_email', e);
     const getEmail = () => localStorage.getItem('gpts_email') || '';
-    const signedIn = () => !!getEmail();
 
     async function checkSubscription(email){
       if(!email) return { subscribed:false };
@@ -118,7 +141,6 @@
       if(!r.ok) throw new Error('Debug failed');
       return r.json();
     }
-
     async function goChatIfAllowed(){
       const email = getEmail() || $('#email').value.trim();
       if(!email){ alert('Enter your email first.'); $('#email').focus(); return; }
@@ -128,7 +150,7 @@
       else { $('#sub-status').textContent = 'Status: NOT ACTIVE'; alert('No active subscription yet. If you just paid, click “Refresh Access”.'); }
     }
 
-    // Nav actions
+    // Nav
     $('#nav-chat').onclick = goChatIfAllowed;
     $('#nav-signout').onclick = () => { localStorage.removeItem('gpts_email'); $('#nav-signout').classList.add('hidden'); alert('Signed out.'); };
     $('#cta-get-started').onclick = () => $('#email').focus();
@@ -141,7 +163,6 @@
       catch(e){ alert(e.message); }
       finally{ $('#btn-subscribe').disabled = false; }
     };
-
     $('#btn-refresh').onclick = async () => {
       const email = $('#email').value.trim() || getEmail(); if(!email) return alert('Enter your email.');
       saveEmail(email);
@@ -149,19 +170,26 @@
       $('#sub-status').textContent = sub.subscribed ? 'Status: ACTIVE' : 'Status: NOT ACTIVE';
       if(sub.subscribed){ $('#nav-signout').classList.remove('hidden'); alert('Access active—click Chat to start.'); }
     };
-
     $('#btn-debug').onclick = async () => {
       const email = $('#email').value.trim(); if(!email) return alert('Enter your email.'); saveEmail(email);
       try{ await debugLogin(email); $('#sub-status').textContent = 'Status: ACTIVE (debug)'; $('#nav-signout').classList.remove('hidden'); alert('Marked subscribed for testing. Click Chat.'); }
       catch(e){ alert('Debug failed: '+e.message); }
     };
-
     $('#btn-go-chat').onclick = goChatIfAllowed;
 
-    // Init
+    // Init: load config, show TEST panel if using sk_test...
     (async function init(){
       const saved = getEmail();
       if(saved){ $('#email').value = saved; $('#nav-signout').classList.remove('hidden'); const sub=await checkSubscription(saved); $('#sub-status').textContent = sub.subscribed?'Status: ACTIVE':'Status: NOT ACTIVE'; }
+      try {
+        const cfg = await fetch(`${API_BASE}/api/config`).then(r => r.json());
+        if (cfg?.paystackTestMode) {
+          document.getElementById('test-cards').classList.remove('hidden');
+          const badge = document.getElementById('mode-badge');
+          badge.textContent = 'TEST MODE';
+          badge.classList.remove('hidden');
+        }
+      } catch {}
     })();
   </script>
 </body>
