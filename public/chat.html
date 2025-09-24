@@ -2,135 +2,245 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device=device-width, initial-scale=1">
   <title>GPTs Help — Chat</title>
   <style>
-    :root{--primary:#4e54c8;--secondary:#6a11cb}
-    *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif}
-    body{background:#f7f7fb;color:#111}
-    header{background:linear-gradient(135deg,var(--secondary),var(--primary));padding:16px 20px;color:#fff;display:flex;justify-content:space-between;align-items:center}
-    header .logo{font-weight:800}
-    header .nav a, header .nav button{color:#fff;text-decoration:none;border:none;background:none;font-weight:700;margin-left:16px;cursor:pointer}
-    .wrap{max-width:900px;margin:18px auto;padding:0 16px}
-    .card{background:#fff;border-radius:16px;box-shadow:0 8px 22px rgba(0,0,0,.12);padding:18px}
-    .topbar{display:grid;gap:10px;grid-template-columns:1fr 1fr}
-    .field label{font-weight:700;margin-bottom:6px;display:block}
-    select,input{width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px}
-    .chat{display:flex;flex-direction:column;height:70vh;margin-top:14px}
-    .transcript{flex:1;overflow:auto;background:#f5f7ff;border:1px solid #e5e7eb;border-radius:12px;padding:12px}
-    .message{display:flex;margin:8px 0}
-    .bubble{padding:10px 12px;border-radius:12px;max-width:80%;white-space:pre-wrap;word-wrap:break-word}
-    .user{justify-content:flex-end}.user .bubble{background:#e0e7ff}
-    .bot .bubble{background:#fff;border:1px solid #e5e7eb}
-    .composer{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:end;margin-top:10px}
-    textarea{padding:12px;border:1px solid #e5e7eb;border-radius:12px;min-height:54px;max-height:200px;resize:vertical}
-    .btn{background:#4e54c8;color:#fff;border:none;border-radius:10px;padding:12px 14px;font-weight:800;cursor:pointer}
-    .muted{color:#666;font-size:.9rem;margin-top:6px}
-    .thumbs{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap}
-    .thumbs img{height:64px;width:64px;object-fit:cover;border-radius:8px;border:1px solid #e5e7eb}
+    :root{
+      --bg:#0f172a;         /* sidebar bg (slate-900) */
+      --bg-light:#111827;   /* header bg (gray-900) */
+      --panel:#111827;      /* sidebar item hover */
+      --text:#e5e7eb;       /* text (gray-200) */
+      --muted:#9ca3af;      /* gray-400 */
+      --accent:#6366f1;     /* indigo-500 */
+      --border:#1f2937;     /* gray-800 */
+      --main:#0b1220;       /* main area bg */
+      --bubble:#0f172a;     /* bot bubble */
+      --user:#1f2937;       /* user bubble */
+    }
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif;background:var(--main);color:var(--text);height:100vh;display:flex}
+    /* Layout */
+    .sidebar{
+      width:280px; background:var(--bg); border-right:1px solid var(--border);
+      display:flex; flex-direction:column; height:100vh; position:sticky; top:0;
+    }
+    .side-top{padding:12px; border-bottom:1px solid var(--border); background:var(--bg-light); display:flex; gap:8px}
+    .btn{background:var(--accent); color:#fff; border:none; border-radius:10px; padding:10px 12px; font-weight:700; cursor:pointer}
+    .btn.gray{background:#374151}
+    .search{margin:10px 12px}
+    .search input{width:100%; padding:10px; border-radius:10px; border:1px solid var(--border); background:#0b1220; color:var(--text)}
+    .convlist{flex:1; overflow:auto; padding:6px}
+    .conv{display:flex; gap:10px; align-items:center; padding:10px 12px; border-radius:10px; cursor:pointer}
+    .conv:hover{background:var(--panel)}
+    .conv.active{background:#1b2540}
+    .conv .title{flex:1; font-size:.95rem; line-height:1.2}
+    .conv .time{color:var(--muted); font-size:.8rem}
+    .conv .del{opacity:.6; border:none; background:transparent; color:var(--muted); cursor:pointer}
+    .side-bottom{padding:12px; border-top:1px solid var(--border); display:flex; gap:8px}
+    .side-bottom .mini{flex:1}
+    .side-bottom .mini button{width:100%}
+    /* Main */
+    .main{flex:1; display:flex; flex-direction:column; height:100vh}
+    .topbar{background:var(--bg-light); border-bottom:1px solid var(--border); padding:12px 16px; display:flex; justify-content:space-between; align-items:center}
+    .topbar .left{display:flex; gap:10px; align-items:center}
+    .pill{border:1px solid var(--border); border-radius:999px; padding:6px 10px; color:var(--muted); background:#0b1220}
+    .wrap{flex:1; display:flex; flex-direction:column; max-width:1000px; margin:0 auto; width:100%}
+    .transcript{flex:1; overflow:auto; padding:18px}
+    .row{display:flex; margin:10px 0}
+    .bubble{max-width:70%; white-space:pre-wrap; word-wrap:break-word; padding:14px; border-radius:14px; border:1px solid var(--border)}
+    .bot .bubble{background:var(--bubble)}
+    .user .bubble{background:var(--user)}
+    .composer{border-top:1px solid var(--border); padding:12px 16px; display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:end; background:var(--bg)}
+    textarea{padding:12px; border:1px solid var(--border); border-radius:12px; min-height:54px; max-height:200px; resize:vertical; background:#0b1220; color:var(--text)}
+    .attach{border:1px dashed var(--border); background:#0b1220; color:var(--muted)}
+    .thumbs{display:flex; gap:8px; flex-wrap:wrap; margin-top:6px}
+    .thumbs img{height:54px;width:54px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
+    .muted{color:var(--muted); font-size:.9rem}
     .hide{display:none}
+    @media (max-width:900px){ .sidebar{display:none} .bubble{max-width:90%} }
   </style>
 </head>
 <body>
-  <header>
-    <div class="logo">GPTs Help — Chat</div>
-    <div class="nav">
-      <a href="index.html">Account</a>
-      <button id="signout">Sign Out</button>
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="side-top">
+      <button id="newChat" class="btn">+ New chat</button>
+      <button id="toAccount" class="btn gray">Account</button>
     </div>
-  </header>
+    <div class="search">
+      <input id="q" placeholder="Search chats…">
+    </div>
+    <div id="convlist" class="convlist"></div>
+    <div class="side-bottom">
+      <div class="mini"><button id="signout" class="btn gray">Sign out</button></div>
+    </div>
+  </aside>
 
-  <div class="wrap">
-    <div class="card">
-      <div class="topbar">
-        <div class="field">
-          <label>Signed in as</label>
-          <input id="email" type="email" disabled>
-        </div>
-        <div class="field">
-          <label>Assistant</label>
-          <select id="gptType">
-            <option value="math">Math GPT</option>
-            <option value="content">Content GPT</option>
-          </select>
-        </div>
+  <!-- Main -->
+  <main class="main">
+    <div class="topbar">
+      <div class="left">
+        <div class="pill" id="emailPill">—</div>
+        <div class="pill"><span id="model">Math GPT</span></div>
+        <div class="pill" id="status"></div>
       </div>
-
-      <div class="chat">
-        <div id="transcript" class="transcript"></div>
-
-        <!-- Composer -->
-        <div class="composer">
-          <div>
-            <input id="file" class="hide" type="file" accept="image/*">
-            <button class="btn" id="attach">Attach Photo</button>
-            <div id="thumbs" class="thumbs hide"></div>
-          </div>
-          <textarea id="message" placeholder="Type your attempt or instructions (optional). Enter = send, Shift+Enter = newline"></textarea>
-          <button class="btn" id="send">Send</button>
-        </div>
-        <div id="status" class="muted"></div>
+      <div class="left">
+        <select id="gptType" class="pill" style="background:#0b1220;color:var(--text);border:1px solid var(--border)">
+          <option value="math">Math GPT</option>
+          <option value="content">Content GPT</option>
+        </select>
       </div>
     </div>
-  </div>
+
+    <div class="wrap">
+      <div id="transcript" class="transcript"></div>
+
+      <div class="composer">
+        <div>
+          <input id="file" class="hide" type="file" accept="image/*" capture="environment">
+          <button class="btn attach" id="attach">Attach Photo</button>
+          <div id="thumbs" class="thumbs hide"></div>
+        </div>
+        <textarea id="message" placeholder="Message Math GPT… (Enter = send, Shift+Enter = newline)"></textarea>
+        <button class="btn" id="send">Send</button>
+      </div>
+      <div id="hint" class="muted" style="padding:6px 16px"></div>
+    </div>
+  </main>
 
   <script>
     const API_BASE = 'https://gpts-help-production.up.railway.app';
     const $ = s => document.querySelector(s);
-
-    const getEmail = () => localStorage.getItem('gpts_email') || '';
-    const addMessage = (role,text) => {
-      const row=document.createElement('div'); row.className=`message ${role}`;
-      const bubble=document.createElement('div'); bubble.className='bubble'; bubble.textContent=text;
-      row.appendChild(bubble); const t=$('#transcript'); t.appendChild(row); t.scrollTop=t.scrollHeight;
+    const h = s => { $('#hint').textContent = s || ''; };
+    const addRow = (role, text) => {
+      const r = document.createElement('div'); r.className = `row ${role}`;
+      const b = document.createElement('div'); b.className = 'bubble'; b.textContent = text;
+      r.appendChild(b); const t = $('#transcript'); t.appendChild(r); t.scrollTop = t.scrollHeight;
     };
 
-    async function checkSubscription(email){
-      const r = await fetch(`${API_BASE}/api/user/${encodeURIComponent(email)}`);
-      return r.ok ? r.json() : { subscribed:false };
-    }
-    async function askText(email, gptType, message){
-      const r = await fetch(`${API_BASE}/api/chat`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ userId: email, gptType, message })
-      });
-      const data = await r.json();
-      if(!r.ok) throw new Error(data.error || 'Chat failed');
-      return data.response || '(No response)';
-    }
-    async function askPhoto(email, gptType, file, attempt){
-      const fd = new FormData();
-      fd.append('userId', email);
-      fd.append('gptType', gptType);
-      if (attempt) fd.append('attempt', attempt);
-      fd.append('image', file);
-      const r = await fetch(`${API_BASE}/api/photo-solve`, { method:'POST', body: fd });
-      const data = await r.json();
-      if(!r.ok) throw new Error(data.error || 'Photo solve failed');
-      return data.response || '(No response)';
-    }
+    // session
+    const getEmail = () => localStorage.getItem('gpts_email') || '';
+    const setActiveId = id => localStorage.setItem('gpts_active_conversation', id || '');
+    const getActiveId = () => localStorage.getItem('gpts_active_conversation') || '';
 
-    // Attach & preview
+    // sidebar state
+    let conversations = []; // [{id,title,updated_at}]
+    let filtered = [];
+
+    // thumbnails
     let selectedFile = null; let previewUrl = null;
     $('#attach').onclick = () => $('#file').click();
     $('#file').onchange = () => {
       const f = $('#file').files[0];
-      if(!f) { selectedFile=null; $('#thumbs').classList.add('hide'); return; }
+      if(!f){ selectedFile=null; $('#thumbs').classList.add('hide'); return; }
       if(!/^image\//.test(f.type)){ alert('Please select an image.'); return; }
       selectedFile = f;
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      if(previewUrl) URL.revokeObjectURL(previewUrl);
       previewUrl = URL.createObjectURL(f);
       $('#thumbs').innerHTML = `<img src="${previewUrl}" alt="preview">`;
       $('#thumbs').classList.remove('hide');
     };
 
-    async function guardAccess(){
+    // API
+    async function checkSubscription(email){
+      const r = await fetch(`${API_BASE}/api/user/${encodeURIComponent(email)}`);
+      return r.ok ? r.json() : { subscribed:false };
+    }
+    async function listConversations(email){
+      const r = await fetch(`${API_BASE}/api/conversations?userId=${encodeURIComponent(email)}`);
+      if(!r.ok) throw new Error('Failed to load conversations');
+      return r.json();
+    }
+    async function createConversation(email, title='New chat'){
+      const r = await fetch(`${API_BASE}/api/conversations`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ userId: email, title })
+      });
+      const d = await r.json(); if(!r.ok) throw new Error(d.error || 'Failed to create');
+      return d;
+    }
+    async function deleteConversation(email, id){
+      const r = await fetch(`${API_BASE}/api/conversations/${id}`, {
+        method:'DELETE', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ userId: email })
+      });
+      return r.ok;
+    }
+    async function getMessages(email, id){
+      const r = await fetch(`${API_BASE}/api/conversations/${id}?userId=${encodeURIComponent(email)}`);
+      const d = await r.json(); if(!r.ok) throw new Error(d.error || 'Failed to load messages');
+      return d.messages || [];
+    }
+    async function askText(email, gptType, message, conversationId){
+      const r = await fetch(`${API_BASE}/api/chat`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ userId: email, gptType, message, conversationId })
+      });
+      const data = await r.json();
+      if(!r.ok) throw new Error(data.error || 'Chat failed');
+      return data;
+    }
+    async function askPhoto(email, gptType, file, attempt, conversationId){
+      const fd = new FormData();
+      fd.append('userId', email);
+      fd.append('gptType', gptType);
+      if (attempt) fd.append('attempt', attempt);
+      if (conversationId) fd.append('conversationId', conversationId);
+      fd.append('image', file);
+      const r = await fetch(`${API_BASE}/api/photo-solve`, { method:'POST', body: fd });
+      const data = await r.json();
+      if(!r.ok) throw new Error(data.error || 'Photo solve failed');
+      return data;
+    }
+
+    // Render sidebar
+    function renderList(list){
+      const c = $('#convlist'); c.innerHTML = '';
+      const active = getActiveId();
+      list.forEach(item => {
+        const row = document.createElement('div'); row.className = 'conv' + (String(item.id)===String(active) ? ' active':'');
+        row.onclick = () => openConversation(item.id);
+        const title = document.createElement('div'); title.className = 'title'; title.textContent = item.title || 'Untitled';
+        const time  = document.createElement('div'); time.className = 'time'; time.textContent = new Date(item.updated_at).toLocaleString();
+        const del   = document.createElement('button'); del.className = 'del'; del.textContent = '✕';
+        del.onclick = async (e) => {
+          e.stopPropagation();
+          if(!confirm('Delete this chat?')) return;
+          const ok = await deleteConversation(getEmail(), item.id);
+          if(ok){
+            if(String(active)===String(item.id)) setActiveId('');
+            await refreshSidebar();
+            if(!getActiveId()) { await newChat(); }
+          }
+        };
+        row.appendChild(title); row.appendChild(time); row.appendChild(del);
+        c.appendChild(row);
+      });
+    }
+
+    async function refreshSidebar(){
       const email = getEmail();
-      if(!email){ window.location.href='index.html'; return null; }
-      $('#email').value = email;
-      const sub = await checkSubscription(email);
-      if(!sub.subscribed){ window.location.href='index.html'; return null; }
-      return email;
+      conversations = await listConversations(email);
+      const q = $('#q').value.trim().toLowerCase();
+      filtered = q ? conversations.filter(x => (x.title||'').toLowerCase().includes(q)) : conversations;
+      renderList(filtered);
+    }
+
+    async function openConversation(id){
+      setActiveId(id);
+      $('#transcript').innerHTML = '';
+      const msgs = await getMessages(getEmail(), id);
+      msgs.forEach(m => addRow(m.role, m.content));
+      await refreshSidebar();
+    }
+
+    async function newChat(){
+      const email = getEmail();
+      const conv = await createConversation(email, 'New chat');
+      setActiveId(conv.id);
+      $('#transcript').innerHTML = '';
+      addRow('bot', 'New chat started. Ask me anything, or attach a photo of a problem!');
+      await refreshSidebar();
     }
 
     async function send(){
@@ -138,42 +248,64 @@
       const gptType = $('#gptType').value;
       const msg = $('#message').value.trim();
       const status = $('#status');
+      let convId = getActiveId();
 
-      // Show user bubble
-      if (selectedFile) {
-        addMessage('user', msg ? `📷 Photo + note: ${msg}` : '📷 Photo sent');
-      } else if (msg) {
-        addMessage('user', msg);
-      } else {
-        return; // nothing to send
-      }
+      if(!convId){ const c = await createConversation(email, msg ? msg.slice(0,40) : 'New chat'); convId = c.id; setActiveId(convId); await refreshSidebar(); }
+
+      // user bubble
+      if (selectedFile) addRow('user', msg ? `📷 ${msg}` : '📷 Photo sent');
+      else if (msg) addRow('user', msg);
+      else return;
 
       $('#message').value = '';
       status.textContent = 'Thinking…';
+
       try{
-        const reply = selectedFile
-          ? await askPhoto(email, gptType, selectedFile, msg)
-          : await askText(email, gptType, msg);
-        addMessage('bot', reply);
+        const data = selectedFile
+          ? await askPhoto(email, gptType, selectedFile, msg, convId)
+          : await askText(email, gptType, msg, convId);
+
+        if (data.conversationId && String(data.conversationId) !== String(convId)) {
+          setActiveId(data.conversationId); convId = data.conversationId;
+        }
+        addRow('bot', data.response || '(No response)');
+
+        // tidy
+        if (selectedFile){ selectedFile=null; if(previewUrl) URL.revokeObjectURL(previewUrl); $('#thumbs').classList.add('hide'); $('#file').value=''; }
+        await refreshSidebar();
       }catch(e){
-        addMessage('bot', 'Error: ' + e.message);
+        addRow('bot', 'Error: ' + e.message);
       }finally{
         status.textContent = '';
-        // clear selection
-        if (selectedFile){ selectedFile=null; if(previewUrl) URL.revokeObjectURL(previewUrl); $('#thumbs').classList.add('hide'); $('#file').value=''; }
       }
     }
 
+    // events
     $('#send').onclick = send;
     $('#message').addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
     });
-    $('#signout').onclick = () => { localStorage.removeItem('gpts_email'); window.location.href = 'index.html'; };
+    $('#q').oninput = refreshSidebar;
+    $('#newChat').onclick = newChat;
+    $('#toAccount').onclick = () => location.href = 'index.html';
+    $('#signout').onclick = () => { localStorage.removeItem('gpts_email'); location.href = 'index.html'; };
 
+    // boot
     (async function init(){
-      const email = await guardAccess();
-      if(!email) return;
-      addMessage('bot', 'Hi! You can now attach a photo of a math problem. I’ll extract it, solve step-by-step (with LaTeX), and list common mistakes. If you tried it already, type your attempt in the box before sending.');
+      const email = getEmail();
+      if(!email){ location.href='index.html'; return; }
+      $('#emailPill').textContent = email;
+
+      const sub = await checkSubscription(email);
+      if(!sub.subscribed){ location.href='index.html'; return; }
+
+      await refreshSidebar();
+      const active = getActiveId();
+      if(active){ await openConversation(active); }
+      else {
+        addRow('bot', 'Welcome back! Pick a chat on the left or start a new one.');
+      }
+      h('Tip: Attach a photo to solve by picture, or just type your question.');
     })();
   </script>
 </body>
