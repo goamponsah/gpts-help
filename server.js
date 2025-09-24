@@ -8,6 +8,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // ===== ENV / CONFIG =====
+const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const PAYSTACK_PUBLIC_KEY = process.env.PAYSTACK_PUBLIC_KEY; // optional, used client-side
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
@@ -274,3 +275,4 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Open http://localhost:${PORT}`);
 });
+
