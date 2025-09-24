@@ -1,248 +1,101 @@
+
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPTs Help - AI Tools Suite</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <title>GPTs Help - Dashboard</title>
     <style>
-        :root {
-            --primary: #4e54c8;
-            --primary-dark: #3a3eb3;
-            --secondary: #6a11cb;
-            --accent-1: #FF6B6B;
-            --accent-2: #4ECDC4;
-            --light: #f8f9fa;
-            --dark: #343a40;
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        
-        body {
-            background: linear-gradient(135deg, var(--secondary) 0%, var(--primary) 100%);
-            color: var(--dark);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 20px 0;
-            margin-bottom: 30px;
-        }
-        
-        .logo {
-            font-size: 1.8rem;
-            font-weight: 700;
-            color: white;
-        }
-        
-        .nav-buttons a {
-            color: white;
-            text-decoration: none;
-            margin-left: 20px;
-            font-weight: 500;
-        }
-        
-        .hero {
-            text-align: center;
-            color: white;
-            margin-bottom: 50px;
-        }
-        
-        .hero h1 {
-            font-size: 3rem;
-            margin-bottom: 20px;
-        }
-        
-        .price-tag {
-            background: white;
-            color: var(--primary);
-            display: inline-block;
-            padding: 15px 30px;
-            border-radius: 50px;
-            font-size: 1.5rem;
-            font-weight: 700;
-            margin: 20px 0;
-        }
-        
-        .gpt-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 25px;
-            margin-bottom: 50px;
-        }
-        
-        .gpt-card {
-            background: white;
-            border-radius: 15px;
-            overflow: hidden;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s;
-        }
-        
-        .gpt-card:hover {
-            transform: translateY(-5px);
-        }
-        
-        .gpt-icon {
-            height: 120px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 2.5rem;
-        }
-        
-        .math-gpt { background: linear-gradient(135deg, #4e54c8 0%, #6a11cb 100%); color: white; }
-        .content-gpt { background: linear-gradient(135deg, #4ECDC4 0%, #6de0d9 100%); color: white; }
-        
-        .gpt-content {
-            padding: 20px;
-        }
-        
-        .subscribe-btn {
-            background: var(--primary);
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            border-radius: 8px;
-            font-size: 1.2rem;
-            font-weight: 600;
-            cursor: pointer;
-            width: 100%;
-            margin-top: 10px;
-        }
-        
-        .auth-container {
-            background: white;
-            padding: 40px;
-            border-radius: 15px;
-            max-width: 400px;
-            margin: 50px auto;
-            text-align: center;
-        }
-        
-        .hidden {
-            display: none;
-        }
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 10px; }
+        .gpt-selector { display: flex; gap: 10px; margin-bottom: 20px; }
+        .gpt-btn { padding: 10px 20px; border: none; background: #4e54c8; color: white; border-radius: 5px; cursor: pointer; }
+        .chat-container { border: 1px solid #ddd; padding: 20px; border-radius: 5px; min-height: 400px; }
+        .message { margin: 10px 0; padding: 10px; border-radius: 5px; }
+        .user-message { background: #e3f2fd; text-align: right; }
+        .ai-message { background: #f5f5f5; }
     </style>
 </head>
-    <script>
-function showAuth() {
-    document.getElementById('homepage').style.display = 'none';
-    document.getElementById('auth-container').style.display = 'block';
-}
-
-function showHomepage() {
-    document.getElementById('auth-container').style.display = 'none';
-    document.getElementById('homepage').style.display = 'block';
-}
-
-function processPayment() {
-    // For now, just show a message
-    alert('Payment system would open here. After payment, you would access the GPTs.');
-    // In the full version, this would open Paystack
-}
-</script>
 <body>
     <div class="container">
-        <header>
-            <div class="logo">GPTs Help</div>
-            <div class="nav-buttons">
-                <button onclick="showAuth()" style="background: none; border: none; color: white; font-weight: 500; margin-left: 20px; cursor: pointer;">Log In</button>
-            </div>
-        </header>
-
-        <div id="homepage">
-            <section class="hero">
-                <h1>One Subscription. All AI Tools.</h1>
-                <p>Get unlimited access to our suite of specialized AI assistants</p>
-                <div class="price-tag">$9.99 / month</div>
-                <button class="subscribe-btn" onclick="showAuth()">Get Started</button>
-            </section>
-
-            <div class="gpt-grid">
-                <div class="gpt-card">
-                    <div class="gpt-icon math-gpt">
-                        <i class="fas fa-square-root-alt"></i>
-                    </div>
-                    <div class="gpt-content">
-                        <h3>Math GPT</h3>
-                        <p>Your patient AI math tutor. Get step-by-step guidance from arithmetic to calculus.</p>
-                    </div>
-                </div>
-
-                <div class="gpt-card">
-                    <div class="gpt-icon content-gpt">
-                        <i class="fas fa-pen-fancy"></i>
-                    </div>
-                    <div class="gpt-content">
-                        <h3>Content GPT</h3>
-                        <p>Your AI content creation partner for blogs, social media, and business content.</p>
-                    </div>
-                </div>
-            </div>
+        <h1>GPTs Help Dashboard</h1>
+        <div class="gpt-selector">
+            <button class="gpt-btn" onclick="selectGPT('math')">Math GPT</button>
+            <button class="gpt-btn" onclick="selectGPT('content')">Content GPT</button>
         </div>
-
-        <div id="auth-container" class="auth-container hidden">
-            <h2>Subscribe to GPTs Help</h2>
-            <p>Get unlimited access to all AI tools</p>
-            <button class="subscribe-btn" onclick="processPayment()">Subscribe Now - $9.99/month</button>
-            <p style="margin-top: 15px; font-size: 0.9rem; color: #666;">7-day money-back guarantee</p>
+        <div class="chat-container" id="chatContainer">
+            <div class="message ai-message">Welcome! Which GPT would you like to use?</div>
         </div>
+        <input type="text" id="messageInput" placeholder="Type your message..." style="width: 100%; padding: 10px; margin-top: 10px;">
+        <button onclick="sendMessage()" style="width: 100%; padding: 10px; margin-top: 10px;">Send</button>
     </div>
 
     <script>
-function showAuth() {
-    document.getElementById('homepage').classList.add('hidden');
-    document.getElementById('auth-container').classList.remove('hidden');
-}
+let currentGPT = 'math';
+const API_BASE_URL = 'https://gpts-help-production.up.railway.app';
 
-function showHomepage() {
-    document.getElementById('auth-container').classList.add('hidden');
-    document.getElementById('homepage').classList.remove('hidden');
-}
+async function sendMessage() {
+    const input = document.getElementById('messageInput');
+    const message = input.value.trim();
+    if (!message) return;
 
-async function processPayment() {
-    const email = prompt('Please enter your email to subscribe:');
-    if (!email) return;
+    // Add user message to chat
+    const chatContainer = document.getElementById('chatContainer');
+    chatContainer.innerHTML += `<div class="message user-message">${message}</div>`;
     
+    input.value = '';
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+
+    // Show typing indicator
+    chatContainer.innerHTML += `<div class="message ai-message">Thinking...</div>`;
+    chatContainer.scrollTop = chatContainer.scrollHeight;
+
     try {
-        const response = await fetch('/api/subscribe', {
+        console.log('Sending request to:', 'https://gpts-help-production.up.railway.app/api/chat');
+        
+        const response = await fetch('https://gpts-help-production.up.railway.app/api/chat', {
             method: 'POST',
-            headers: {
+            headers: { 
                 'Content-Type': 'application/json',
+                'Accept': 'application/json'
             },
-            body: JSON.stringify({ email: email })
+            body: JSON.stringify({ 
+                message: message, 
+                gptType: currentGPT,
+                userId: 'test-user' 
+            })
         });
+
+        console.log('Response status:', response.status);
         
-        const result = await response.json();
-        
-        if (result.success) {
-            // Store user email in localStorage for dashboard access
-            localStorage.setItem('userEmail', email);
-            alert('Subscription successful! Redirecting to dashboard...');
-            window.location.href = '/dashboard';
-        } else {
-            alert('Subscription failed. Please try again.');
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
         }
+
+        const data = await response.json();
+        console.log('Response data:', data);
+        
+        // Remove "Thinking..." message and add actual response
+        chatContainer.innerHTML = chatContainer.innerHTML.replace('<div class="message ai-message">Thinking...</div>', '');
+        chatContainer.innerHTML += `<div class="message ai-message">${data.response || data.error || 'No response'}</div>`;
+        chatContainer.scrollTop = chatContainer.scrollHeight;
+
     } catch (error) {
         console.error('Error:', error);
-        alert('Subscription error. Please try again.');
+        chatContainer.innerHTML = chatContainer.innerHTML.replace('<div class="message ai-message">Thinking...</div>', '');
+        chatContainer.innerHTML += `<div class="message ai-message">Error: ${error.message}. Check browser console for details.</div>`;
+        chatContainer.scrollTop = chatContainer.scrollHeight;
     }
 }
+
+function selectGPT(gptType) {
+    currentGPT = gptType;
+    document.getElementById('chatContainer').innerHTML = 
+        `<div class="message ai-message">Now chatting with ${gptType} GPT. How can I help you?</div>`;
+}
+
+// Enter key support
+document.getElementById('messageInput').addEventListener('keypress', function(e) {
+    if (e.key === 'Enter') sendMessage();
+});
 </script>
 </body>
 
