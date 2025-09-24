@@ -33,6 +33,7 @@
     code{background:#f3f4f6;padding:2px 6px;border-radius:6px}
     table{width:100%;border-collapse:collapse;margin-top:10px}
     th,td{padding:8px;border-bottom:1px solid #eee;font-size:.95rem}
+    #err { color:#b91c1c; margin-top:8px; white-space:pre-wrap; }
   </style>
 </head>
 <body>
@@ -48,7 +49,7 @@
     <section class="hero">
       <h1>One Subscription. All AI Tools.</h1>
       <p>Unlimited access to specialized AI assistants</p>
-      <div class="price">$9.99 / month</div>
+      <div class="price" id="price">$9.99 / month</div>
       <div class="center" style="margin-top:14px;">
         <button class="btn" id="cta-get-started">Get Started</button>
       </div>
@@ -76,9 +77,10 @@
           <input id="email" type="email" placeholder="you@example.com">
         </div>
         <div class="stack" style="grid-template-columns:1fr 1fr">
-          <button class="btn" id="btn-subscribe">$9.99/month — Subscribe</button>
+          <button class="btn" id="btn-subscribe">Subscribe</button>
           <button class="btn secondary" id="btn-refresh">I’ve Paid — Refresh Access</button>
         </div>
+        <div id="err"></div>
         <p class="muted">7-day money-back guarantee</p>
         <hr/>
         <div class="stack" style="grid-template-columns:1fr 1fr">
@@ -93,7 +95,7 @@
     <!-- TEST CARDS (auto-visible when using sk_test...) -->
     <section id="test-cards" class="card hidden" style="max-width:900px;margin:16px auto 0;">
       <h2>Paystack Test Cards <span class="badge test">TEST MODE</span></h2>
-      <p class="muted">Use these only with test keys. Expiry can be <strong>any future date</strong>. (From Paystack docs)</p>
+      <p class="muted">Use these only with test keys. Expiry can be <strong>any future date</strong>.</p>
       <table>
         <thead><tr><th>Scenario</th><th>Card Number</th><th>CVV</th><th>Expiry</th><th>PIN / Notes</th></tr></thead>
         <tbody>
@@ -112,11 +114,34 @@
 
   <script>
     const API_BASE = 'https://gpts-help-production.up.railway.app';
-    const PLAN = { amount: 9.99, currency: 'USD' };
-
     const $ = s => document.querySelector(s);
+
     const saveEmail = e => localStorage.setItem('gpts_email', e);
     const getEmail = () => localStorage.getItem('gpts_email') || '';
+
+    // Will be set from /api/config
+    let PLAN = { amount: 9.99, currency: 'GHS', symbol: 'GH₵' };
+
+    function fmtPrice(a, sym){ return `${sym}${a.toFixed(2)} / month`; }
+
+    async function loadConfig() {
+      try {
+        const cfg = await fetch(`${API_BASE}/api/config`).then(r => r.json());
+        PLAN.currency = (cfg.currencyDefault || 'GHS').toUpperCase();
+        PLAN.symbol   = cfg.currencySymbol || (PLAN.currency === 'NGN' ? '₦' : PLAN.currency === 'USD' ? '$' : 'GH₵');
+        // (Keep amount 9.99 for test; adjust per currency if desired)
+        document.getElementById('price').textContent = fmtPrice(PLAN.amount, PLAN.symbol);
+        // Show TEST mode panel
+        if (cfg.paystackTestMode) {
+          document.getElementById('test-cards').classList.remove('hidden');
+          const badge = document.getElementById('mode-badge');
+          badge.textContent = 'TEST MODE';
+          badge.classList.remove('hidden');
+        }
+      } catch {}
+      // Update button text
+      document.getElementById('btn-subscribe').textContent = `${fmtPrice(PLAN.amount, PLAN.symbol).replace(' / month','')} — Subscribe`;
+    }
 
     async function checkSubscription(email){
       if(!email) return { subscribed:false };
@@ -126,10 +151,11 @@
     async function createSubscription(email){
       const r = await fetch(`${API_BASE}/api/create-subscription`, {
         method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ email, amount: PLAN.amount, currency: PLAN.currency })
+        // server decides currency; we only send amount
+        body: JSON.stringify({ email, amount: PLAN.amount })
       });
       const data = await r.json();
-      if(!r.ok) throw new Error(data.error || 'Payment init failed');
+      if(!r.ok) throw new Error((data.error || 'Payment init failed') + (data.detail ? `\nDetail: ${data.detail}` : ''));
       if(!data.authorization_url) throw new Error('No Paystack URL returned');
       window.location.href = data.authorization_url;
     }
@@ -157,10 +183,11 @@
 
     // Account actions
     $('#btn-subscribe').onclick = async () => {
+      $('#err').textContent = '';
       const email = $('#email').value.trim(); if(!email) return alert('Enter your email.');
       saveEmail(email);
       try{ $('#btn-subscribe').disabled = true; await createSubscription(email); }
-      catch(e){ alert(e.message); }
+      catch(e){ $('#err').textContent = e.message; }
       finally{ $('#btn-subscribe').disabled = false; }
     };
     $('#btn-refresh').onclick = async () => {
@@ -177,19 +204,11 @@
     };
     $('#btn-go-chat').onclick = goChatIfAllowed;
 
-    // Init: load config, show TEST panel if using sk_test...
+    // Init
     (async function init(){
+      await loadConfig();
       const saved = getEmail();
       if(saved){ $('#email').value = saved; $('#nav-signout').classList.remove('hidden'); const sub=await checkSubscription(saved); $('#sub-status').textContent = sub.subscribed?'Status: ACTIVE':'Status: NOT ACTIVE'; }
-      try {
-        const cfg = await fetch(`${API_BASE}/api/config`).then(r => r.json());
-        if (cfg?.paystackTestMode) {
-          document.getElementById('test-cards').classList.remove('hidden');
-          const badge = document.getElementById('mode-badge');
-          badge.textContent = 'TEST MODE';
-          badge.classList.remove('hidden');
-        }
-      } catch {}
     })();
   </script>
 </body>
