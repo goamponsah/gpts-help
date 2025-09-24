@@ -2,13 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>GPTs Help — Chat</title>
   <style>
     :root{
       --bg:#0f172a;         /* sidebar bg (slate-900) */
       --bg-light:#111827;   /* header bg (gray-900) */
-      --panel:#111827;      /* sidebar item hover */
       --text:#e5e7eb;       /* text (gray-200) */
       --muted:#9ca3af;      /* gray-400 */
       --accent:#6366f1;     /* indigo-500 */
@@ -16,52 +15,90 @@
       --main:#0b1220;       /* main area bg */
       --bubble:#0f172a;     /* bot bubble */
       --user:#1f2937;       /* user bubble */
+      --side-width: 280px;
     }
     *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif;background:var(--main);color:var(--text);height:100vh;display:flex}
-    /* Layout */
+    body{
+      font-family:system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif;
+      background:var(--main);color:var(--text);
+      height:100vh;overflow:hidden; /* prevent page scroll; panes handle their own */
+    }
+
+    /* Sidebar (fixed so it never moves) */
     .sidebar{
-      width:280px; background:var(--bg); border-right:1px solid var(--border);
-      display:flex; flex-direction:column; height:100vh; position:sticky; top:0;
+      width:var(--side-width);
+      position:fixed; left:0; top:0; height:100vh; z-index:10;
+      background:var(--bg); border-right:1px solid var(--border);
+      display:flex; flex-direction:column;
     }
     .side-top{padding:12px; border-bottom:1px solid var(--border); background:var(--bg-light); display:flex; gap:8px}
     .btn{background:var(--accent); color:#fff; border:none; border-radius:10px; padding:10px 12px; font-weight:700; cursor:pointer}
     .btn.gray{background:#374151}
     .search{margin:10px 12px}
     .search input{width:100%; padding:10px; border-radius:10px; border:1px solid var(--border); background:#0b1220; color:var(--text)}
+
+    /* Only the list scrolls; bottom area stays pinned */
     .convlist{flex:1; overflow:auto; padding:6px}
     .conv{display:flex; gap:10px; align-items:center; padding:10px 12px; border-radius:10px; cursor:pointer}
-    .conv:hover{background:var(--panel)}
+    .conv:hover{background:#111a33}
     .conv.active{background:#1b2540}
     .conv .title{flex:1; font-size:.95rem; line-height:1.2}
     .conv .time{color:var(--muted); font-size:.8rem}
-    .conv .del{opacity:.6; border:none; background:transparent; color:var(--muted); cursor:pointer}
-    .side-bottom{padding:12px; border-top:1px solid var(--border); display:flex; gap:8px}
+    .conv .del{opacity:.65; border:none; background:transparent; color:var(--muted); cursor:pointer}
+
+    /* Pinned bottom area inside fixed sidebar */
+    .side-bottom{
+      padding:12px; border-top:1px solid var(--border);
+      background:var(--bg); display:flex; gap:8px;
+    }
     .side-bottom .mini{flex:1}
     .side-bottom .mini button{width:100%}
-    /* Main */
-    .main{flex:1; display:flex; flex-direction:column; height:100vh}
-    .topbar{background:var(--bg-light); border-bottom:1px solid var(--border); padding:12px 16px; display:flex; justify-content:space-between; align-items:center}
+
+    /* Main pane shifted to the right of the fixed sidebar */
+    .main{
+      margin-left:var(--side-width);
+      height:100vh; display:flex; flex-direction:column;
+    }
+    .topbar{
+      background:var(--bg-light); border-bottom:1px solid var(--border);
+      padding:12px 16px; display:flex; justify-content:space-between; align-items:center
+    }
     .topbar .left{display:flex; gap:10px; align-items:center}
     .pill{border:1px solid var(--border); border-radius:999px; padding:6px 10px; color:var(--muted); background:#0b1220}
+
     .wrap{flex:1; display:flex; flex-direction:column; max-width:1000px; margin:0 auto; width:100%}
     .transcript{flex:1; overflow:auto; padding:18px}
     .row{display:flex; margin:10px 0}
     .bubble{max-width:70%; white-space:pre-wrap; word-wrap:break-word; padding:14px; border-radius:14px; border:1px solid var(--border)}
     .bot .bubble{background:var(--bubble)}
     .user .bubble{background:var(--user)}
-    .composer{border-top:1px solid var(--border); padding:12px 16px; display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:end; background:var(--bg)}
+
+    .composer{border-top:1px solid var(--border); padding:12px 16px; display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:end; background:#0f1528}
     textarea{padding:12px; border:1px solid var(--border); border-radius:12px; min-height:54px; max-height:200px; resize:vertical; background:#0b1220; color:var(--text)}
     .attach{border:1px dashed var(--border); background:#0b1220; color:var(--muted)}
     .thumbs{display:flex; gap:8px; flex-wrap:wrap; margin-top:6px}
     .thumbs img{height:54px;width:54px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
     .muted{color:var(--muted); font-size:.9rem}
     .hide{display:none}
-    @media (max-width:900px){ .sidebar{display:none} .bubble{max-width:90%} }
+
+    /* Floating sign-out for mobile (when sidebar is hidden) */
+    .floating-signout{
+      position:fixed; left:12px; bottom:12px; z-index:20;
+      display:none; /* hidden on desktop */
+      background:#374151; color:#fff; border:none; border-radius:10px; padding:10px 12px; font-weight:700; cursor:pointer;
+      box-shadow:0 8px 20px rgba(0,0,0,.25);
+    }
+
+    @media (max-width:900px){
+      .sidebar{display:none}
+      .main{margin-left:0}
+      .floating-signout{display:inline-flex}
+      .bubble{max-width:90%}
+    }
   </style>
 </head>
 <body>
-  <!-- Sidebar -->
+  <!-- Sidebar (fixed) -->
   <aside class="sidebar">
     <div class="side-top">
       <button id="newChat" class="btn">+ New chat</button>
@@ -75,6 +112,9 @@
       <div class="mini"><button id="signout" class="btn gray">Sign out</button></div>
     </div>
   </aside>
+
+  <!-- Floating signout for mobile -->
+  <button id="floatingSignout" class="floating-signout">Sign out</button>
 
   <!-- Main -->
   <main class="main">
@@ -288,13 +328,19 @@
     $('#q').oninput = refreshSidebar;
     $('#newChat').onclick = newChat;
     $('#toAccount').onclick = () => location.href = 'index.html';
-    $('#signout').onclick = () => { localStorage.removeItem('gpts_email'); location.href = 'index.html'; };
+
+    function doSignout(){
+      localStorage.removeItem('gpts_email');
+      location.href = 'index.html';
+    }
+    $('#signout').onclick = doSignout;          // sidebar button
+    $('#floatingSignout').onclick = doSignout;  // mobile floating button
 
     // boot
     (async function init(){
       const email = getEmail();
       if(!email){ location.href='index.html'; return; }
-      $('#emailPill').textContent = email;
+      document.getElementById('emailPill').textContent = email;
 
       const sub = await checkSubscription(email);
       if(!sub.subscribed){ location.href='index.html'; return; }
