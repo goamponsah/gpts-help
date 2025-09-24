@@ -3,6 +3,17 @@ const axios = require('axios');
 const path = require('path');
 
 const app = express();
+const PORT = process.env.PORT || 3000;
+
+// ===== CONFIGURATION =====
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const PAYSTACK_PUBLIC_KEY = process.env.PAYSTACK_PUBLIC_KEY;
+const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
+
+// Middleware
+app.use(express.json());
+app.use(express.static('.')); // Serve from root directory, not 'public'
+
 // Enable CORS
 app.use((req, res, next) => {
     res.header('Access-Control-Allow-Origin', '*');
@@ -10,17 +21,6 @@ app.use((req, res, next) => {
     res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
     next();
 });
-const PORT = process.env.PORT || 3000;
-
-// Middleware
-app.use(express.json());
-app.use(express.static('public'));
-
-// ===== CONFIGURATION - UPDATE THESE WITH YOUR KEYS =====
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const PAYSTACK_PUBLIC_KEY = process.env.PAYSTACK_PUBLIC_KEY;
-const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
-// ======================================================
 
 // In-memory user storage (use a real database in production)
 let users = {};
@@ -45,25 +45,54 @@ const gptInstructions = {
 
 // Routes
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'public', 'index.html'));
+    res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// OpenAI API endpoint
+app.get('/dashboard', (req, res) => {
+    res.sendFile(path.join(__dirname, 'dashboard.html'));
+});
+
+// Debug endpoint to check environment variables
+app.get('/api/debug-env', (req, res) => {
+    res.json({
+        openaiKey: process.env.OPENAI_API_KEY ? '✅ Set' : '❌ Missing',
+        openaiKeyLength: process.env.OPENAI_API_KEY ? process.env.OPENAI_API_KEY.length : 0,
+        nodeEnv: process.env.NODE_ENV || 'Not set',
+        timestamp: new Date().toISOString()
+    });
+});
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+    res.json({ 
+        status: 'OK', 
+        message: 'Server is running',
+        timestamp: new Date().toISOString()
+    });
+});
+
+// OpenAI API endpoint - UPDATED: Removed authentication for demo
 app.post('/api/chat', async (req, res) => {
     try {
         const { message, gptType, userId } = req.body;
 
-        if (!users[userId]) {
-            return res.status(401).json({ error: 'User not authenticated' });
+        // DEMO MODE: Allow all requests without authentication
+        console.log(`Chat request from: ${userId || 'demo-user'}, GPT: ${gptType || 'math'}`);
+
+        if (!OPENAI_API_KEY) {
+            return res.status(500).json({ 
+                error: 'OpenAI API key not configured on server. Please check Railway environment variables.' 
+            });
         }
 
+        // Use gpt-3.5-turbo for cost efficiency instead of gpt-4o
         const response = await axios.post('https://api.openai.com/v1/chat/completions', {
-            model: 'gpt-4o',
+            model: 'gpt-3.5-turbo',
             messages: [
-                { role: 'system', content: gptInstructions[gptType] },
+                { role: 'system', content: gptInstructions[gptType] || gptInstructions['math'] },
                 { role: 'user', content: message }
             ],
-            max_tokens: 1000,
+            max_tokens: 800,
             temperature: 0.7
         }, {
             headers: {
@@ -79,20 +108,71 @@ app.post('/api/chat', async (req, res) => {
 
     } catch (error) {
         console.error('OpenAI API error:', error.response?.data || error.message);
-        res.status(500).json({ error: 'Failed to get response from AI' });
+        
+        // More detailed error response
+        if (error.response?.status === 401) {
+            res.status(500).json({ 
+                error: 'Invalid OpenAI API key. Please check your Railway environment variables.' 
+            });
+        } else if (error.response?.status === 429) {
+            res.status(500).json({ 
+                error: 'OpenAI API rate limit exceeded. Please try again later.' 
+            });
+        } else {
+            res.status(500).json({ 
+                error: 'Failed to get response from AI: ' + (error.message || 'Unknown error') 
+            });
+        }
     }
 });
 
-// Paystack payment initialization
+// Simple subscription endpoint (for demo)
+app.post('/api/subscribe', (req, res) => {
+    const { email } = req.body;
+    
+    if (!email) {
+        return res.status(400).json({ error: 'Email is required' });
+    }
+    
+    // For demo, just mark user as subscribed
+    users[email] = { 
+        subscribed: true, 
+        subscriptionDate: new Date(),
+        email: email
+    };
+    
+    console.log(`User subscribed: ${email}`);
+    
+    res.json({ 
+        success: true, 
+        message: 'Subscription activated (demo mode)',
+        email: email
+    });
+});
+
+// Check subscription status
+app.get('/api/user/:email', (req, res) => {
+    const user = users[req.params.email];
+    res.json({ 
+        subscribed: user?.subscribed || false,
+        email: req.params.email
+    });
+});
+
+// Paystack payment initialization (optional for future)
 app.post('/api/create-subscription', async (req, res) => {
     try {
         const { email, amount } = req.body;
+
+        if (!PAYSTACK_SECRET_KEY) {
+            return res.status(500).json({ error: 'Paystack not configured' });
+        }
 
         const response = await axios.post('https://api.paystack.co/transaction/initialize', {
             email: email,
             amount: amount * 100, // Convert to kobo
             currency: 'USD',
-            callback_url: 'http://yourwebsite.com/payment-success'
+            callback_url: `https://${req.get('host')}/dashboard`
         }, {
             headers: {
                 'Authorization': `Bearer ${PAYSTACK_SECRET_KEY}`,
@@ -110,7 +190,7 @@ app.post('/api/create-subscription', async (req, res) => {
     }
 });
 
-// Paystack webhook (for payment verification)
+// Paystack webhook (for payment verification) - optional for future
 app.post('/api/paystack-webhook', async (req, res) => {
     try {
         const event = req.body;
@@ -132,14 +212,9 @@ app.post('/api/paystack-webhook', async (req, res) => {
     }
 });
 
-// User authentication check
-app.get('/api/user/:email', (req, res) => {
-    const user = users[req.params.email];
-    res.json({ subscribed: user?.subscribed || false });
-});
-
 app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
+    console.log(`OpenAI API Key configured: ${!!OPENAI_API_KEY}`);
     console.log(`Open http://localhost:${PORT} to view your website`);
+    console.log(`Debug endpoint: http://localhost:${PORT}/api/debug-env`);
 });
-
