@@ -20,7 +20,6 @@ const PAYSTACK_CALLBACK_URL =
   process.env.PAYSTACK_CALLBACK_URL ||
   'https://gpts-help-production.up.railway.app/payment-success';
 
-// Use a currency your Paystack account supports (most test accounts: NGN or GHS)
 const PAYSTACK_CURRENCY = (process.env.PAYSTACK_CURRENCY || 'GHS').toUpperCase();
 const PAYSTACK_IS_TEST  = (PAYSTACK_SECRET_KEY || '').startsWith('sk_test_');
 
@@ -30,7 +29,6 @@ const PAYSTACK_IS_TEST  = (PAYSTACK_SECRET_KEY || '').startsWith('sk_test_');
 const DATABASE_URL = process.env.DATABASE_URL;
 const pool = new Pool({
   connectionString: DATABASE_URL,
-  // For some Railway setups, PGSSL=false is required locally; in hosted env, TLS is fine
   ssl: process.env.PGSSL === 'false' ? false : { rejectUnauthorized: false },
   max: 10,
 });
@@ -45,7 +43,6 @@ async function dbQuery(text, params) {
 }
 
 async function initDb() {
-  // Users (subscription status)
   await dbQuery(`
     CREATE TABLE IF NOT EXISTS users (
       email TEXT PRIMARY KEY,
@@ -57,7 +54,6 @@ async function initDb() {
     );
   `);
 
-  // Payments (Paystack)
   await dbQuery(`
     CREATE TABLE IF NOT EXISTS payments (
       id BIGSERIAL PRIMARY KEY,
@@ -74,7 +70,6 @@ async function initDb() {
   await dbQuery(`CREATE INDEX IF NOT EXISTS payments_email_idx ON payments(email);`);
   await dbQuery(`CREATE INDEX IF NOT EXISTS payments_reference_idx ON payments(reference);`);
 
-  // Conversations (sidebar)
   await dbQuery(`
     CREATE TABLE IF NOT EXISTS conversations (
       id BIGSERIAL PRIMARY KEY,
@@ -86,7 +81,6 @@ async function initDb() {
   `);
   await dbQuery(`CREATE INDEX IF NOT EXISTS conv_user_updated_idx ON conversations(user_email, updated_at DESC);`);
 
-  // Messages (per conversation)
   await dbQuery(`
     CREATE TABLE IF NOT EXISTS messages (
       id BIGSERIAL PRIMARY KEY,
@@ -171,14 +165,88 @@ async function addMessageToConversation(convId, role, content) {
   );
   await dbQuery(`UPDATE conversations SET updated_at=now() WHERE id=$1`, [convId]);
 }
-async function getConversationMessages(email, convId) {
-  const owns = await userOwnsConversation(email, convId);
-  if (!owns) return null;
-  const { rows } = await dbQuery(
-    `SELECT role, content, created_at FROM messages WHERE conversation_id=$1 ORDER BY created_at ASC`,
-    [convId]
-  );
-  return rows;
+async function getConversation(convId) {
+  const { rows } = await dbQuery(`SELECT id, user_email, title FROM conversations WHERE id=$1`, [convId]);
+  return rows[0] || null;
+}
+async function getMessageCount(convId) {
+  const { rows } = await dbQuery(`SELECT COUNT(*)::int AS c FROM messages WHERE conversation_id=$1`, [convId]);
+  return rows[0]?.c || 0;
+}
+async function updateConversationTitle(convId, newTitle) {
+  await dbQuery(`UPDATE conversations SET title=$2, updated_at=now() WHERE id=$1`, [convId, newTitle]);
+}
+
+/* ===== Title generation helpers ===== */
+function sanitizeTitle(s) {
+  if (!s) return 'New chat';
+  // strip quotes and extra punctuation, trim length
+  s = String(s).replace(/^["'“”‘’\s]+|["'“”‘’\s]+$/g, '').replace(/\s+/g, ' ').trim();
+  s = s.replace(/[.:;!?]$/g, '');
+  if (s.length > 60) s = s.slice(0, 60).trim();
+  return s || 'New chat';
+}
+function toTitleCase(s) {
+  return s.replace(/\w\S*/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase());
+}
+async function generateShortTitle(userText, assistantText) {
+  try {
+    const prompt = [
+      'Create a very short, descriptive chat title for a math tutoring conversation.',
+      'Max 6 words. Title Case. No trailing punctuation. Avoid quotes.',
+      '',
+      'User message:',
+      userText?.slice(0, 400) || '(photo)',
+      '',
+      'Assistant reply (excerpt):',
+      assistantText?.slice(0, 400) || '',
+      '',
+      'Return ONLY the title.'
+    ].join('\n');
+
+    const r = await axios.post('https://api.openai.com/v1/chat/completions', {
+      model: OPENAI_MODEL,
+      messages: [
+        { role: 'system', content: 'You generate concise titles for chats.' },
+        { role: 'user', content: prompt }
+      ],
+      max_tokens: 20,
+      temperature: 0.2
+    }, {
+      headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+      timeout: 15000
+    });
+
+    let title = r.data?.choices?.[0]?.message?.content || '';
+    title = sanitizeTitle(title);
+    title = toTitleCase(title);
+    return title;
+  } catch {
+    // Fallback: derive from user text
+    const base = (userText || 'New chat').split('\n')[0].slice(0, 50);
+    return toTitleCase(sanitizeTitle(base));
+  }
+}
+
+async function maybeAutoTitleConversation(email, conversationId, userText, assistantText) {
+  const conv = await getConversation(conversationId);
+  if (!conv || conv.user_email !== email) return;
+  const msgCount = await getMessageCount(conversationId);
+  // Only auto-title on first exchange (<= 2 messages: user + assistant)
+  if (msgCount > 2) return;
+
+  const current = (conv.title || '').trim().toLowerCase();
+  const isDefault =
+    !current ||
+    current === 'new chat' ||
+    current === 'photo problem' ||
+    current.startsWith('new chat') ||
+    current.length < 5;
+
+  if (!isDefault) return;
+
+  const title = await generateShortTitle(userText, assistantText);
+  if (title) await updateConversationTitle(conversationId, title);
 }
 
 /* =========================
@@ -352,7 +420,7 @@ app.get('/api/config', async (req, res) => {
     currencySymbol: currencySymbol(PAYSTACK_CURRENCY),
     model: OPENAI_MODEL,
     db: dbOk,
-    features: { photoSolve: true, sidebarConversations: true }
+    features: { photoSolve: true, sidebarConversations: true, autoTitle: true }
   });
 });
 
@@ -417,13 +485,11 @@ app.post('/api/chat', async (req, res) => {
     const user = await getUser(email);
     if (!user || !user.subscribed) return res.status(401).json({ error: 'User not authenticated or not subscribed' });
 
-    // Conversation handling
     if (!conversationId) {
       const snippet = message.slice(0, 60).replace(/\s+/g, ' ').trim();
       const conv = await createConversation(email, snippet || 'New chat');
       conversationId = conv.id;
     } else {
-      // ensure ownership if convId provided
       const owns = await userOwnsConversation(email, conversationId);
       if (!owns) return res.status(403).json({ error: 'Conversation not found' });
     }
@@ -444,6 +510,9 @@ app.post('/api/chat', async (req, res) => {
 
     const reply = ai.data?.choices?.[0]?.message?.content ?? '';
     await addMessageToConversation(conversationId, 'assistant', reply);
+
+    // Auto-title after first exchange
+    await maybeAutoTitleConversation(email, conversationId, message, reply);
 
     return res.json({ response: reply, usage: ai.data?.usage, model: OPENAI_MODEL, conversationId });
   } catch (err) {
@@ -473,7 +542,6 @@ app.post('/api/photo-solve', upload.single('image'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'image is required' });
     if (!ALLOWED_MIME.has(req.file.mimetype)) return res.status(400).json({ error: 'Unsupported image type' });
 
-    // Conversation handling
     if (!conversationId) {
       const conv = await createConversation(email, 'Photo problem');
       conversationId = conv.id;
@@ -484,12 +552,10 @@ app.post('/api/photo-solve', upload.single('image'), async (req, res) => {
     const userNote = (attempt && attempt.trim()) ? `📷 (with note) ${attempt}` : '📷 Photo uploaded';
     await addMessageToConversation(conversationId, 'user', userNote);
 
-    // Build data URL
     const mime = req.file.mimetype;
     const b64  = req.file.buffer.toString('base64');
     const dataUrl = `data:${mime};base64,${b64}`;
 
-    // Vision steering
     const visionTask = `
 You are given an image of a math problem. Do the following, in order:
 
@@ -525,6 +591,10 @@ Be patient, encouraging, and concise. If parts of the prompt are unclear due to 
     const reply = ai.data?.choices?.[0]?.message?.content ?? '';
     await addMessageToConversation(conversationId, 'assistant', reply);
 
+    // Auto-title after first exchange (use attempt or generic)
+    const userTextForTitle = attempt?.trim() || 'Photo math problem';
+    await maybeAutoTitleConversation(email, conversationId, userTextForTitle, reply);
+
     return res.json({ response: reply, usage: ai.data?.usage, model: OPENAI_MODEL, conversationId });
   } catch (err) {
     return safeApiError(res, err, 'Photo solve failed');
@@ -534,7 +604,6 @@ Be patient, encouraging, and concise. If parts of the prompt are unclear due to 
 /* =========================
    CONVERSATIONS API
    ========================= */
-// List conversations
 app.get('/api/conversations', async (req, res) => {
   try {
     const email = req.query.userId;
@@ -546,7 +615,6 @@ app.get('/api/conversations', async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Failed to list conversations' }); }
 });
 
-// Create conversation
 app.post('/api/conversations', async (req, res) => {
   try {
     const { userId, title } = req.body || {};
@@ -558,7 +626,6 @@ app.post('/api/conversations', async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Failed to create conversation' }); }
 });
 
-// Fetch messages
 app.get('/api/conversations/:id', async (req, res) => {
   try {
     const email = req.query.userId;
@@ -570,7 +637,6 @@ app.get('/api/conversations/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Failed to load messages' }); }
 });
 
-// Delete conversation
 app.delete('/api/conversations/:id', async (req, res) => {
   try {
     const { userId } = req.body || {};
@@ -587,7 +653,7 @@ app.delete('/api/conversations/:id', async (req, res) => {
    ========================= */
 app.post('/api/create-subscription', async (req, res) => {
   try {
-    const { email, amount } = req.body; // currency chosen server-side
+    const { email, amount } = req.body;
     if (!email || amount == null) return res.status(400).json({ error: 'email and amount are required' });
     if (!PAYSTACK_SECRET_KEY) return res.status(500).json({ error: 'Server missing PAYSTACK_SECRET_KEY' });
 
