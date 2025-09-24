@@ -15,17 +15,20 @@
     .card{background:#fff;border-radius:16px;box-shadow:0 8px 22px rgba(0,0,0,.12);padding:18px}
     .topbar{display:grid;gap:10px;grid-template-columns:1fr 1fr}
     .field label{font-weight:700;margin-bottom:6px;display:block}
-    select{width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px}
+    select,input{width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px}
     .chat{display:flex;flex-direction:column;height:70vh;margin-top:14px}
     .transcript{flex:1;overflow:auto;background:#f5f7ff;border:1px solid #e5e7eb;border-radius:12px;padding:12px}
     .message{display:flex;margin:8px 0}
     .bubble{padding:10px 12px;border-radius:12px;max-width:80%;white-space:pre-wrap;word-wrap:break-word}
     .user{justify-content:flex-end}.user .bubble{background:#e0e7ff}
     .bot .bubble{background:#fff;border:1px solid #e5e7eb}
-    .composer{display:flex;gap:10px;align-items:flex-end;margin-top:10px}
-    textarea{flex:1;padding:12px;border:1px solid #e5e7eb;border-radius:12px;min-height:54px;max-height:200px;resize:vertical}
-    .btn{background:#4e54c8;color:#fff;border:none;border-radius:10px;padding:12px 18px;font-weight:800;cursor:pointer}
+    .composer{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:end;margin-top:10px}
+    textarea{padding:12px;border:1px solid #e5e7eb;border-radius:12px;min-height:54px;max-height:200px;resize:vertical}
+    .btn{background:#4e54c8;color:#fff;border:none;border-radius:10px;padding:12px 14px;font-weight:800;cursor:pointer}
     .muted{color:#666;font-size:.9rem;margin-top:6px}
+    .thumbs{display:flex;gap:8px;margin-top:6px;flex-wrap:wrap}
+    .thumbs img{height:64px;width:64px;object-fit:cover;border-radius:8px;border:1px solid #e5e7eb}
+    .hide{display:none}
   </style>
 </head>
 <body>
@@ -42,7 +45,7 @@
       <div class="topbar">
         <div class="field">
           <label>Signed in as</label>
-          <input id="email" type="email" disabled style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px;background:#f9fafb">
+          <input id="email" type="email" disabled>
         </div>
         <div class="field">
           <label>Assistant</label>
@@ -55,8 +58,15 @@
 
       <div class="chat">
         <div id="transcript" class="transcript"></div>
+
+        <!-- Composer -->
         <div class="composer">
-          <textarea id="message" placeholder="Write your message... (Enter = send, Shift+Enter = newline)"></textarea>
+          <div>
+            <input id="file" class="hide" type="file" accept="image/*">
+            <button class="btn" id="attach">Attach Photo</button>
+            <div id="thumbs" class="thumbs hide"></div>
+          </div>
+          <textarea id="message" placeholder="Type your attempt or instructions (optional). Enter = send, Shift+Enter = newline"></textarea>
           <button class="btn" id="send">Send</button>
         </div>
         <div id="status" class="muted"></div>
@@ -69,13 +79,17 @@
     const $ = s => document.querySelector(s);
 
     const getEmail = () => localStorage.getItem('gpts_email') || '';
-    const saveEmail = e => localStorage.setItem('gpts_email', e);
+    const addMessage = (role,text) => {
+      const row=document.createElement('div'); row.className=`message ${role}`;
+      const bubble=document.createElement('div'); bubble.className='bubble'; bubble.textContent=text;
+      row.appendChild(bubble); const t=$('#transcript'); t.appendChild(row); t.scrollTop=t.scrollHeight;
+    };
 
     async function checkSubscription(email){
       const r = await fetch(`${API_BASE}/api/user/${encodeURIComponent(email)}`);
       return r.ok ? r.json() : { subscribed:false };
     }
-    async function askGPT(email, gptType, message){
+    async function askText(email, gptType, message){
       const r = await fetch(`${API_BASE}/api/chat`, {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ userId: email, gptType, message })
@@ -84,25 +98,38 @@
       if(!r.ok) throw new Error(data.error || 'Chat failed');
       return data.response || '(No response)';
     }
-
-    function addMessage(role, text){
-      const row = document.createElement('div');
-      row.className = `message ${role}`;
-      const bubble = document.createElement('div');
-      bubble.className = 'bubble';
-      bubble.textContent = text;
-      row.appendChild(bubble);
-      const t = $('#transcript');
-      t.appendChild(row);
-      t.scrollTop = t.scrollHeight;
+    async function askPhoto(email, gptType, file, attempt){
+      const fd = new FormData();
+      fd.append('userId', email);
+      fd.append('gptType', gptType);
+      if (attempt) fd.append('attempt', attempt);
+      fd.append('image', file);
+      const r = await fetch(`${API_BASE}/api/photo-solve`, { method:'POST', body: fd });
+      const data = await r.json();
+      if(!r.ok) throw new Error(data.error || 'Photo solve failed');
+      return data.response || '(No response)';
     }
+
+    // Attach & preview
+    let selectedFile = null; let previewUrl = null;
+    $('#attach').onclick = () => $('#file').click();
+    $('#file').onchange = () => {
+      const f = $('#file').files[0];
+      if(!f) { selectedFile=null; $('#thumbs').classList.add('hide'); return; }
+      if(!/^image\//.test(f.type)){ alert('Please select an image.'); return; }
+      selectedFile = f;
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      previewUrl = URL.createObjectURL(f);
+      $('#thumbs').innerHTML = `<img src="${previewUrl}" alt="preview">`;
+      $('#thumbs').classList.remove('hide');
+    };
 
     async function guardAccess(){
       const email = getEmail();
-      if(!email){ window.location.href = 'index.html'; return null; }
+      if(!email){ window.location.href='index.html'; return null; }
       $('#email').value = email;
       const sub = await checkSubscription(email);
-      if(!sub.subscribed){ window.location.href = 'index.html'; return null; }
+      if(!sub.subscribed){ window.location.href='index.html'; return null; }
       return email;
     }
 
@@ -110,17 +137,30 @@
       const email = getEmail();
       const gptType = $('#gptType').value;
       const msg = $('#message').value.trim();
-      if(!msg) return;
-      addMessage('user', msg);
+      const status = $('#status');
+
+      // Show user bubble
+      if (selectedFile) {
+        addMessage('user', msg ? `📷 Photo + note: ${msg}` : '📷 Photo sent');
+      } else if (msg) {
+        addMessage('user', msg);
+      } else {
+        return; // nothing to send
+      }
+
       $('#message').value = '';
-      $('#status').textContent = 'Thinking…';
+      status.textContent = 'Thinking…';
       try{
-        const reply = await askGPT(email, gptType, msg);
+        const reply = selectedFile
+          ? await askPhoto(email, gptType, selectedFile, msg)
+          : await askText(email, gptType, msg);
         addMessage('bot', reply);
       }catch(e){
         addMessage('bot', 'Error: ' + e.message);
       }finally{
-        $('#status').textContent = '';
+        status.textContent = '';
+        // clear selection
+        if (selectedFile){ selectedFile=null; if(previewUrl) URL.revokeObjectURL(previewUrl); $('#thumbs').classList.add('hide'); $('#file').value=''; }
       }
     }
 
@@ -133,8 +173,7 @@
     (async function init(){
       const email = await guardAccess();
       if(!email) return;
-      // optional: initial greeting
-      addMessage('bot', 'Hi! I’m ready. What math or content task can I help you with today?');
+      addMessage('bot', 'Hi! You can now attach a photo of a math problem. I’ll extract it, solve step-by-step (with LaTeX), and list common mistakes. If you tried it already, type your attempt in the box before sending.');
     })();
   </script>
 </body>
