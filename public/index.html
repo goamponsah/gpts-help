@@ -1,223 +1,289 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>GPTs Help - AI Tools Suite</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        :root {
-            --primary: #4e54c8;
-            --primary-dark: #3a3eb3;
-            --secondary: #6a11cb;
-            --accent-1: #FF6B6B;
-            --accent-2: #4ECDC4;
-            --light: #f8f9fa;
-            --dark: #343a40;
-        }
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        
-        body {
-            background: linear-gradient(135deg, var(--secondary) 0%, var(--primary) 100%);
-            color: var(--dark);
-            min-height: 100vh;
-            padding: 20px;
-        }
-        
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        
-        header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 20px 0;
-            margin-bottom: 30px;
-        }
-        
-        .logo {
-            font-size: 1.8rem;
-            font-weight: 700;
-            color: white;
-        }
-        
-        .nav-buttons a {
-            color: white;
-            text-decoration: none;
-            margin-left: 20px;
-            font-weight: 500;
-        }
-        
-        .hero {
-            text-align: center;
-            color: white;
-            margin-bottom: 50px;
-        }
-        
-        .hero h1 {
-            font-size: 3rem;
-            margin-bottom: 20px;
-        }
-        
-        .price-tag {
-            background: white;
-            color: var(--primary);
-            display: inline-block;
-            padding: 15px 30px;
-            border-radius: 50px;
-            font-size: 1.5rem;
-            font-weight: 700;
-            margin: 20px 0;
-        }
-        
-        .gpt-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-            gap: 25px;
-            margin-bottom: 50px;
-        }
-        
-        .gpt-card {
-            background: white;
-            border-radius: 15px;
-            overflow: hidden;
-            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-            transition: transform 0.3s;
-        }
-        
-        .gpt-card:hover {
-            transform: translateY(-5px);
-        }
-        
-        .gpt-icon {
-            height: 120px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-size: 2.5rem;
-        }
-        
-        .math-gpt { background: linear-gradient(135deg, #4e54c8 0%, #6a11cb 100%); color: white; }
-        .content-gpt { background: linear-gradient(135deg, #4ECDC4 0%, #6de0d9 100%); color: white; }
-        
-        .gpt-content {
-            padding: 20px;
-        }
-        
-        .subscribe-btn {
-            background: var(--primary);
-            color: white;
-            border: none;
-            padding: 15px 30px;
-            border-radius: 8px;
-            font-size: 1.2rem;
-            font-weight: 600;
-            cursor: pointer;
-            width: 100%;
-            margin-top: 10px;
-        }
-        
-        .auth-container {
-            background: white;
-            padding: 40px;
-            border-radius: 15px;
-            max-width: 400px;
-            margin: 50px auto;
-            text-align: center;
-        }
-        
-        .hidden {
-            display: none;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>GPTs Help - AI Tools Suite</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --primary:#4e54c8; --primary-dark:#3a3eb3; --secondary:#6a11cb;
+      --accent-1:#FF6B6B; --accent-2:#4ECDC4; --light:#f8f9fa; --dark:#343a40;
+    }
+    *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif}
+    body{background:linear-gradient(135deg,var(--secondary) 0%,var(--primary) 100%);color:var(--dark);min-height:100vh;padding:20px}
+    .container{max-width:1200px;margin:0 auto}
+    header{display:flex;justify-content:space-between;align-items:center;padding:20px 0;margin-bottom:30px}
+    .logo{font-size:1.8rem;font-weight:700;color:#fff}
+    .nav-buttons button{background:none;border:none;color:#fff;font-weight:500;margin-left:20px;cursor:pointer}
+    .hero{text-align:center;color:#fff;margin-bottom:50px}
+    .hero h1{font-size:3rem;margin-bottom:20px}
+    .price-tag{background:#fff;color:var(--primary);display:inline-block;padding:15px 30px;border-radius:50px;font-size:1.5rem;font-weight:700;margin:20px 0}
+    .gpt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:25px;margin-bottom:50px}
+    .gpt-card{background:#fff;border-radius:15px;overflow:hidden;box-shadow:0 5px 15px rgba(0,0,0,.1);transition:transform .3s}
+    .gpt-card:hover{transform:translateY(-5px)}
+    .gpt-icon{height:120px;display:flex;justify-content:center;align-items:center;font-size:2.5rem}
+    .math-gpt{background:linear-gradient(135deg,#4e54c8 0%,#6a11cb 100%);color:#fff}
+    .content-gpt{background:linear-gradient(135deg,#4ECDC4 0%,#6de0d9 100%);color:#fff}
+    .gpt-content{padding:20px}
+    .btn{background:var(--primary);color:#fff;border:none;padding:12px 18px;border-radius:8px;font-size:1rem;font-weight:600;cursor:pointer}
+    .btn.block{width:100%}
+    .btn.secondary{background:#222}
+    .card{background:#fff;padding:24px;border-radius:15px;box-shadow:0 6px 18px rgba(0,0,0,.12)}
+    .stack{display:grid;gap:12px}
+    .field label{display:block;margin:6px 0 4px;font-weight:600}
+    .field input,.field select,.field textarea{width:100%;padding:12px;border:1px solid #e5e7eb;border-radius:8px;font-size:1rem}
+    .muted{color:#666;font-size:.9rem}
+    .hidden{display:none}
+    pre{background:#f6f6f6;padding:12px;border-radius:8px;white-space:pre-wrap}
+    .split{display:grid;gap:20px;grid-template-columns:1fr}
+    @media (min-width:900px){.split{grid-template-columns:1fr 1fr}}
+  </style>
 </head>
-    <script>
-function showAuth() {
-    document.getElementById('homepage').style.display = 'none';
-    document.getElementById('auth-container').style.display = 'block';
-}
-
-function showHomepage() {
-    document.getElementById('auth-container').style.display = 'none';
-    document.getElementById('homepage').style.display = 'block';
-}
-
-function processPayment() {
-    // For now, just show a message
-    alert('Payment system would open here. After payment, you would access the GPTs.');
-    // In the full version, this would open Paystack
-}
-</script>
 <body>
-    <div class="container">
-        <header>
-            <div class="logo">GPTs Help</div>
-            <div class="nav-buttons">
-                <button onclick="showAuth()" style="background: none; border: none; color: white; font-weight: 500; margin-left: 20px; cursor: pointer;">Log In</button>
-            </div>
-        </header>
+  <div class="container">
+    <header>
+      <div class="logo">GPTs Help</div>
+      <div class="nav-buttons">
+        <button id="nav-login">Log In</button>
+        <button id="nav-dashboard" class="hidden">Dashboard</button>
+        <button id="nav-logout" class="hidden">Sign Out</button>
+      </div>
+    </header>
 
-        <div id="homepage">
-            <section class="hero">
-                <h1>One Subscription. All AI Tools.</h1>
-                <p>Get unlimited access to our suite of specialized AI assistants</p>
-                <div class="price-tag">$9.99 / month</div>
-                <button class="subscribe-btn" onclick="showAuth()">Get Started</button>
-            </section>
+    <!-- HOME -->
+    <div id="homepage">
+      <section class="hero">
+        <h1>One Subscription. All AI Tools.</h1>
+        <p>Get unlimited access to our suite of specialized AI assistants</p>
+        <div class="price-tag">$9.99 / month</div>
+        <button class="btn" id="cta-get-started">Get Started</button>
+      </section>
 
-            <div class="gpt-grid">
-                <div class="gpt-card">
-                    <div class="gpt-icon math-gpt">
-                        <i class="fas fa-square-root-alt"></i>
-                    </div>
-                    <div class="gpt-content">
-                        <h3>Math GPT</h3>
-                        <p>Your patient AI math tutor. Get step-by-step guidance from arithmetic to calculus.</p>
-                    </div>
-                </div>
-
-                <div class="gpt-card">
-                    <div class="gpt-icon content-gpt">
-                        <i class="fas fa-pen-fancy"></i>
-                    </div>
-                    <div class="gpt-content">
-                        <h3>Content GPT</h3>
-                        <p>Your AI content creation partner for blogs, social media, and business content.</p>
-                    </div>
-                </div>
-            </div>
+      <div class="gpt-grid">
+        <div class="gpt-card">
+          <div class="gpt-icon math-gpt"><i class="fas fa-square-root-alt"></i></div>
+          <div class="gpt-content">
+            <h3>Math GPT</h3>
+            <p>Your patient AI math tutor. Get step-by-step guidance from arithmetic to calculus.</p>
+          </div>
         </div>
-
-        <div id="auth-container" class="auth-container hidden">
-            <h2>Subscribe to GPTs Help</h2>
-            <p>Get unlimited access to all AI tools</p>
-            <button class="subscribe-btn" onclick="processPayment()">Subscribe Now - $9.99/month</button>
-            <p style="margin-top: 15px; font-size: 0.9rem; color: #666;">7-day money-back guarantee</p>
+        <div class="gpt-card">
+          <div class="gpt-icon content-gpt"><i class="fas fa-pen-fancy"></i></div>
+          <div class="gpt-content">
+            <h3>Content GPT</h3>
+            <p>Your AI content creation partner for blogs, social media, and business content.</p>
+          </div>
         </div>
+      </div>
     </div>
 
-    <script>
-        function showAuth() {
-            document.getElementById('homepage').classList.add('hidden');
-            document.getElementById('auth-container').classList.remove('hidden');
-        }
+    <!-- AUTH / SUBSCRIBE -->
+    <div id="auth" class="card hidden" style="max-width:520px;margin:0 auto;">
+      <h2>Subscribe to GPTs Help</h2>
+      <p class="muted">Unlimited access to all AI tools</p>
+      <div class="stack" style="margin-top:12px">
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" type="email" placeholder="you@example.com" />
+        </div>
+        <div class="split">
+          <button class="btn" id="btn-subscribe">$9.99/month — Subscribe</button>
+          <button class="btn secondary" id="btn-check-access" title="If you've paid already, or after returning from Paystack">I’ve Paid — Refresh Access</button>
+        </div>
+        <p class="muted">7-day money-back guarantee</p>
+        <hr/>
+        <button class="btn secondary" id="btn-debug-login" title="Testing only (marks email as subscribed without paying)">Debug Login (Testing)</button>
+        <small class="muted">For testing only — remove this button in production.</small>
+      </div>
+    </div>
 
-        function processPayment() {
-            // Simulate payment processing
-            alert('Payment gateway would open here. After successful payment, you would get access.');
-            // In real implementation: window.location.href = 'dashboard.html';
-        }
-    </script>
+    <!-- DASHBOARD -->
+    <div id="dashboard" class="hidden">
+      <div class="split">
+        <div class="card">
+          <h2>Chat</h2>
+          <div class="stack" style="margin-top:12px">
+            <div class="field">
+              <label for="dash-email">Signed in as</label>
+              <input id="dash-email" type="email" disabled />
+            </div>
+            <div class="field">
+              <label for="gptType">Assistant</label>
+              <select id="gptType">
+                <option value="math">Math GPT</option>
+                <option value="content">Content GPT</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="message">Your message</label>
+              <textarea id="message" rows="6" placeholder="Explain Pythagoras simply"></textarea>
+            </div>
+            <button class="btn" id="btn-send">Send</button>
+            <div id="status" class="muted"></div>
+            <h3>Response</h3>
+            <pre id="out">(no response yet)</pre>
+          </div>
+        </div>
+        <div class="card">
+          <h2>Account</h2>
+          <div class="stack" style="margin-top:12px">
+            <div id="sub-status" class="muted">Checking subscription…</div>
+            <button class="btn secondary" id="btn-refresh-sub">Check Subscription</button>
+            <button class="btn secondary" id="btn-go-pay">Subscribe / Manage Billing</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'https://gpts-help-production.up.railway.app';
+    // If your Paystack account supports USD (price shows $9.99), we pass USD.
+    // If you prefer Ghana Cedi, change amount/label and set currency:'GHS'.
+    const PLAN = { amount: 9.99, currency: 'USD' };
+
+    // ---------- UI helpers ----------
+    const $ = sel => document.querySelector(sel);
+    function show(id){ ['homepage','auth','dashboard'].forEach(x => $('#'+x).classList.add('hidden')); $('#'+id).classList.remove('hidden'); }
+    function saveEmail(email){ localStorage.setItem('gpts_email', email); }
+    function getEmail(){ return localStorage.getItem('gpts_email') || ''; }
+    function signOut(){ localStorage.removeItem('gpts_email'); $('#nav-login').classList.remove('hidden'); $('#nav-dashboard').classList.add('hidden'); $('#nav-logout').classList.add('hidden'); show('homepage'); }
+    function setNavForLoggedIn(email){ $('#nav-login').classList.add('hidden'); $('#nav-dashboard').classList.remove('hidden'); $('#nav-logout').classList.remove('hidden'); $('#dash-email').value = email; }
+
+    // ---------- API calls ----------
+    async function checkSubscription(email){
+      if(!email) return { subscribed:false };
+      const r = await fetch(`${API_BASE}/api/user/${encodeURIComponent(email)}`);
+      return r.ok ? r.json() : { subscribed:false };
+    }
+
+    async function createSubscription(email){
+      const r = await fetch(`${API_BASE}/api/create-subscription`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ email, amount: PLAN.amount, currency: PLAN.currency })
+      });
+      const data = await r.json();
+      if(!r.ok) throw new Error(data.error || 'Failed to initialize payment');
+      if(!data.authorization_url) throw new Error('No authorization URL returned');
+      // Redirect to Paystack
+      window.location.href = data.authorization_url;
+    }
+
+    async function debugLogin(email){
+      const r = await fetch(`${API_BASE}/api/debug-login`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ email })
+      });
+      if(!r.ok) throw new Error('Debug login failed');
+      return r.json();
+    }
+
+    async function askGPT(email, gptType, message){
+      const r = await fetch(`${API_BASE}/api/chat`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ userId: email, gptType, message })
+      });
+      const data = await r.json();
+      if(!r.ok) throw new Error(data.error || 'Chat failed');
+      return data.response || '(No response)';
+    }
+
+    // ---------- Event wiring ----------
+    $('#cta-get-started').onclick = () => { show('auth'); $('#email').focus(); };
+    $('#nav-login').onclick = () => { show('auth'); $('#email').focus(); };
+    $('#nav-dashboard').onclick = async () => {
+      const email = getEmail();
+      if(!email){ show('auth'); return; }
+      const sub = await checkSubscription(email);
+      if(sub.subscribed){ setNavForLoggedIn(email); show('dashboard'); refreshSubUI(email); } else { show('auth'); }
+    };
+    $('#nav-logout').onclick = signOut;
+
+    $('#btn-subscribe').onclick = async () => {
+      const email = $('#email').value.trim();
+      if(!email) return alert('Please enter your email.');
+      saveEmail(email);
+      try{
+        $('#btn-subscribe').disabled = true;
+        await createSubscription(email);
+      }catch(e){
+        alert('Payment init error: ' + e.message);
+      }finally{
+        $('#btn-subscribe').disabled = false;
+      }
+    };
+
+    $('#btn-check-access').onclick = async () => {
+      const email = $('#email').value.trim() || getEmail();
+      if(!email) return alert('Enter your email first.');
+      saveEmail(email);
+      const sub = await checkSubscription(email);
+      if(sub.subscribed){
+        setNavForLoggedIn(email); show('dashboard'); refreshSubUI(email);
+      }else{
+        alert('No active subscription yet. If you just paid, wait a moment and try again.');
+      }
+    };
+
+    $('#btn-debug-login').onclick = async () => {
+      const email = $('#email').value.trim();
+      if(!email) return alert('Enter email first.');
+      saveEmail(email);
+      try{
+        await debugLogin(email);
+        alert('Marked as subscribed (testing).');
+        setNavForLoggedIn(email); show('dashboard'); refreshSubUI(email);
+      }catch(e){
+        alert('Debug login failed: ' + e.message);
+      }
+    };
+
+    $('#btn-send').onclick = async () => {
+      const email = getEmail();
+      const gptType = $('#gptType').value;
+      const message = $('#message').value.trim();
+      const out = $('#out'), status = $('#status');
+      if(!email) return alert('Not signed in.');
+      if(!message) return alert('Type a message.');
+      status.textContent = 'Thinking…'; out.textContent = '';
+      try{
+        const reply = await askGPT(email, gptType, message);
+        out.textContent = reply;
+      }catch(e){
+        out.textContent = 'Error: ' + e.message;
+      }finally{
+        status.textContent = '';
+      }
+    };
+
+    $('#btn-refresh-sub').onclick = async () => {
+      const email = getEmail();
+      await refreshSubUI(email);
+    };
+
+    $('#btn-go-pay').onclick = () => {
+      show('auth');
+      $('#email').value = getEmail();
+    };
+
+    async function refreshSubUI(email){
+      const sub = await checkSubscription(email);
+      $('#sub-status').textContent = sub.subscribed ? 'Subscription: ACTIVE' : 'Subscription: NOT ACTIVE';
+    }
+
+    // ---------- Initial load ----------
+    (async function init(){
+      const saved = getEmail();
+      if(saved) $('#email').value = saved;
+      // If user already subscribed, go straight to dashboard
+      if(saved){
+        const sub = await checkSubscription(saved);
+        if(sub.subscribed){ setNavForLoggedIn(saved); show('dashboard'); refreshSubUI(saved); return; }
+      }
+      // Default: show homepage
+      show('homepage');
+    })();
+  </script>
 </body>
-
 </html>
-
