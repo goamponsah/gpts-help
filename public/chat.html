@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GPTs Help — Chat</title>
+  <style>
+    :root{--primary:#4e54c8;--secondary:#6a11cb}
+    *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif}
+    body{background:#f7f7fb;color:#111}
+    header{background:linear-gradient(135deg,var(--secondary),var(--primary));padding:16px 20px;color:#fff;display:flex;justify-content:space-between;align-items:center}
+    header .logo{font-weight:800}
+    header .nav a, header .nav button{color:#fff;text-decoration:none;border:none;background:none;font-weight:700;margin-left:16px;cursor:pointer}
+    .wrap{max-width:900px;margin:18px auto;padding:0 16px}
+    .card{background:#fff;border-radius:16px;box-shadow:0 8px 22px rgba(0,0,0,.12);padding:18px}
+    .topbar{display:grid;gap:10px;grid-template-columns:1fr 1fr}
+    .field label{font-weight:700;margin-bottom:6px;display:block}
+    select{width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px}
+    .chat{display:flex;flex-direction:column;height:70vh;margin-top:14px}
+    .transcript{flex:1;overflow:auto;background:#f5f7ff;border:1px solid #e5e7eb;border-radius:12px;padding:12px}
+    .message{display:flex;margin:8px 0}
+    .bubble{padding:10px 12px;border-radius:12px;max-width:80%;white-space:pre-wrap;word-wrap:break-word}
+    .user{justify-content:flex-end}.user .bubble{background:#e0e7ff}
+    .bot .bubble{background:#fff;border:1px solid #e5e7eb}
+    .composer{display:flex;gap:10px;align-items:flex-end;margin-top:10px}
+    textarea{flex:1;padding:12px;border:1px solid #e5e7eb;border-radius:12px;min-height:54px;max-height:200px;resize:vertical}
+    .btn{background:#4e54c8;color:#fff;border:none;border-radius:10px;padding:12px 18px;font-weight:800;cursor:pointer}
+    .muted{color:#666;font-size:.9rem;margin-top:6px}
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">GPTs Help — Chat</div>
+    <div class="nav">
+      <a href="index.html">Account</a>
+      <button id="signout">Sign Out</button>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <div class="card">
+      <div class="topbar">
+        <div class="field">
+          <label>Signed in as</label>
+          <input id="email" type="email" disabled style="width:100%;padding:10px;border:1px solid #e5e7eb;border-radius:10px;background:#f9fafb">
+        </div>
+        <div class="field">
+          <label>Assistant</label>
+          <select id="gptType">
+            <option value="math">Math GPT</option>
+            <option value="content">Content GPT</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="chat">
+        <div id="transcript" class="transcript"></div>
+        <div class="composer">
+          <textarea id="message" placeholder="Write your message... (Enter = send, Shift+Enter = newline)"></textarea>
+          <button class="btn" id="send">Send</button>
+        </div>
+        <div id="status" class="muted"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const API_BASE = 'https://gpts-help-production.up.railway.app';
+    const $ = s => document.querySelector(s);
+
+    const getEmail = () => localStorage.getItem('gpts_email') || '';
+    const saveEmail = e => localStorage.setItem('gpts_email', e);
+
+    async function checkSubscription(email){
+      const r = await fetch(`${API_BASE}/api/user/${encodeURIComponent(email)}`);
+      return r.ok ? r.json() : { subscribed:false };
+    }
+    async function askGPT(email, gptType, message){
+      const r = await fetch(`${API_BASE}/api/chat`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ userId: email, gptType, message })
+      });
+      const data = await r.json();
+      if(!r.ok) throw new Error(data.error || 'Chat failed');
+      return data.response || '(No response)';
+    }
+
+    function addMessage(role, text){
+      const row = document.createElement('div');
+      row.className = `message ${role}`;
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.textContent = text;
+      row.appendChild(bubble);
+      const t = $('#transcript');
+      t.appendChild(row);
+      t.scrollTop = t.scrollHeight;
+    }
+
+    async function guardAccess(){
+      const email = getEmail();
+      if(!email){ window.location.href = 'index.html'; return null; }
+      $('#email').value = email;
+      const sub = await checkSubscription(email);
+      if(!sub.subscribed){ window.location.href = 'index.html'; return null; }
+      return email;
+    }
+
+    async function send(){
+      const email = getEmail();
+      const gptType = $('#gptType').value;
+      const msg = $('#message').value.trim();
+      if(!msg) return;
+      addMessage('user', msg);
+      $('#message').value = '';
+      $('#status').textContent = 'Thinking…';
+      try{
+        const reply = await askGPT(email, gptType, msg);
+        addMessage('bot', reply);
+      }catch(e){
+        addMessage('bot', 'Error: ' + e.message);
+      }finally{
+        $('#status').textContent = '';
+      }
+    }
+
+    $('#send').onclick = send;
+    $('#message').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+    });
+    $('#signout').onclick = () => { localStorage.removeItem('gpts_email'); window.location.href = 'index.html'; };
+
+    (async function init(){
+      const email = await guardAccess();
+      if(!email) return;
+      // optional: initial greeting
+      addMessage('bot', 'Hi! I’m ready. What math or content task can I help you with today?');
+    })();
+  </script>
+</body>
+</html>
