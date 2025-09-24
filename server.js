@@ -9,12 +9,13 @@ const PORT = process.env.PORT || 3000;
 
 // ===== ENV / CONFIG =====
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const OPENAI_MODEL   = process.env.OPENAI_MODEL || 'gpt-4o'; // set to 'gpt-4.1' on Railway to pin to GPT-4.1
-const PAYSTACK_PUBLIC_KEY = process.env.PAYSTACK_PUBLIC_KEY; // optional, for client use
+const OPENAI_MODEL   = process.env.OPENAI_MODEL || 'gpt-4o'; // set 'gpt-4.1' on Railway to pin GPT-4.1
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
 const PAYSTACK_CALLBACK_URL =
   process.env.PAYSTACK_CALLBACK_URL ||
   'https://gpts-help-production.up.railway.app/payment-success';
+
+const PAYSTACK_IS_TEST = (PAYSTACK_SECRET_KEY || '').startsWith('sk_test');
 
 // ===== STARTUP CHECKS =====
 if (!OPENAI_API_KEY) console.warn('[warn] OPENAI_API_KEY is not set.');
@@ -26,21 +27,17 @@ let users = {};          // { [email]: { subscribed: boolean, subscriptionDate: 
 let subscriptions = {};  // { [email]: { active: boolean, plan: string } }
 
 // ===== CORS (incl. preflight) =====
-// Tighten Access-Control-Allow-Origin to your frontend origin for production
 app.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*'); // e.g. 'https://your-frontend.com'
-  res.header(
-    'Access-Control-Allow-Headers',
-    'Origin, X-Requested-With, Content-Type, Accept, Authorization'
-  );
+  res.header('Access-Control-Allow-Origin', '*'); // lock to your FE origin in prod
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
 
 /**
- * IMPORTANT: Paystack webhook must use RAW body for signature verification.
- * Register BEFORE app.use(express.json()) so JSON parser doesn't alter bytes.
+ * Paystack webhook MUST use RAW body for signature verification.
+ * Register BEFORE express.json().
  */
 app.post('/api/paystack-webhook', express.raw({ type: '*/*' }), (req, res) => {
   try {
@@ -48,13 +45,10 @@ app.post('/api/paystack-webhook', express.raw({ type: '*/*' }), (req, res) => {
     if (!signature || !PAYSTACK_SECRET_KEY) {
       return res.status(400).send('Missing signature or server key');
     }
-
     const hmac = crypto.createHmac('sha512', PAYSTACK_SECRET_KEY);
     hmac.update(req.body);
     const expected = hmac.digest('hex');
-    if (signature !== expected) {
-      return res.status(401).send('Invalid signature');
-    }
+    if (signature !== expected) return res.status(401).send('Invalid signature');
 
     const event = JSON.parse(req.body.toString('utf8'));
     if (event?.event === 'charge.success') {
@@ -65,7 +59,6 @@ app.post('/api/paystack-webhook', express.raw({ type: '*/*' }), (req, res) => {
         console.log(`[paystack] Subscription activated for: ${email}`);
       }
     }
-
     return res.status(200).send('OK');
   } catch (err) {
     console.error('Webhook error:', err);
@@ -75,7 +68,7 @@ app.post('/api/paystack-webhook', express.raw({ type: '*/*' }), (req, res) => {
 
 // ===== NORMAL MIDDLEWARE (after webhook) =====
 app.use(express.json());
-app.use(express.static('public')); // ensure /public exists or remove
+app.use(express.static('public'));
 
 // ===== GPT INSTRUCTIONS =====
 const gptInstructions = {
@@ -149,11 +142,7 @@ Your response should be:
 function safeApiError(res, err, fallbackMsg) {
   const status = err?.response?.status || 500;
   const data = err?.response?.data;
-  console.error('[server error]', {
-    status,
-    message: err?.message,
-    data: data?.error || data
-  });
+  console.error('[server error]', { status, message: err?.message, data: data?.error || data });
   return res.status(500).json({
     error: fallbackMsg,
     detail: data?.error?.message || err?.message || 'Unknown error'
@@ -165,47 +154,36 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Simple success page (callback after Paystack payment)
 app.get('/payment-success', (req, res) => {
   res.type('html').send(`
-    <!doctype html>
-    <html>
-      <head><meta charset="utf-8"><title>Payment Success</title></head>
-      <body style="font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 40px;">
-        <h1>Payment Successful</h1>
-        <p>Thank you! Your payment was successful. You can now return to the app.</p>
-      </body>
-    </html>
+    <!doctype html><html><head><meta charset="utf-8"><title>Payment Success</title></head>
+    <body style="font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 40px;">
+      <h1>Payment Successful</h1>
+      <p>Thank you! Your payment was successful. You can now return to the app.</p>
+      <p><a href="/index.html">Back to Account</a></p>
+    </body></html>
   `);
 });
 
-// Health check
-app.get('/api/health', (req, res) => {
-  res.json({
-    ok: true,
-    hasOpenAI: !!OPENAI_API_KEY,
-    model: OPENAI_MODEL,
-    time: new Date().toISOString()
-  });
+// Small config endpoint so FE can show Test Cards panel automatically
+app.get('/api/config', (req, res) => {
+  res.json({ paystackTestMode: PAYSTACK_IS_TEST, currencyDefault: 'USD', model: OPENAI_MODEL });
 });
 
-// Quick probe to verify OpenAI key/model from the server
+// Health + ping
+app.get('/api/health', (req, res) => {
+  res.json({ ok: true, hasOpenAI: !!OPENAI_API_KEY, model: OPENAI_MODEL, time: new Date().toISOString() });
+});
+
 app.get('/api/ping-openai', async (req, res) => {
   try {
-    const r = await axios.post(
-      'https://api.openai.com/v1/chat/completions',
-      {
-        model: OPENAI_MODEL,
-        messages: [{ role: 'user', content: 'Say OK' }]
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${OPENAI_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 20000
-      }
-    );
+    const r = await axios.post('https://api.openai.com/v1/chat/completions', {
+      model: OPENAI_MODEL,
+      messages: [{ role: 'user', content: 'Say OK' }]
+    }, {
+      headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+      timeout: 20000
+    });
     res.json({ ok: true, text: r.data?.choices?.[0]?.message?.content || '' });
   } catch (e) {
     console.error('ping-openai error:', e?.response?.status, e?.response?.data || e?.message);
@@ -213,7 +191,7 @@ app.get('/api/ping-openai', async (req, res) => {
   }
 });
 
-// Temporary debug login to mark a user as subscribed (remove in production)
+// Debug login (testing only)
 app.post('/api/debug-login', (req, res) => {
   const { email } = req.body || {};
   if (!email) return res.status(400).json({ error: 'email required' });
@@ -222,109 +200,70 @@ app.post('/api/debug-login', (req, res) => {
   res.json({ ok: true });
 });
 
-// OpenAI chat endpoint
+// Chat
 app.post('/api/chat', async (req, res) => {
   try {
     const { message, gptType = 'math', userId } = req.body;
 
-    if (!OPENAI_API_KEY) {
-      return res.status(500).json({ error: 'Server missing OPENAI_API_KEY' });
-    }
-    if (typeof message !== 'string' || !message.trim()) {
-      return res.status(400).json({ error: 'Message must be a non-empty string' });
-    }
+    if (!OPENAI_API_KEY) return res.status(500).json({ error: 'Server missing OPENAI_API_KEY' });
+    if (typeof message !== 'string' || !message.trim()) return res.status(400).json({ error: 'Message must be a non-empty string' });
     if (!gptInstructions[gptType]) {
-      return res
-        .status(400)
-        .json({ error: `Invalid gptType. Use one of: ${Object.keys(gptInstructions).join(', ')}` });
+      return res.status(400).json({ error: `Invalid gptType. Use one of: ${Object.keys(gptInstructions).join(', ')}` });
     }
 
-    // Canonical user key is email; treat userId as email
     const email = userId;
-    if (!email || !users[email]?.subscribed) {
-      return res.status(401).json({ error: 'User not authenticated or not subscribed' });
-    }
+    if (!email || !users[email]?.subscribed) return res.status(401).json({ error: 'User not authenticated or not subscribed' });
 
-    const ai = await axios.post(
-      'https://api.openai.com/v1/chat/completions',
-      {
-        model: OPENAI_MODEL,
-        messages: [
-          { role: 'system', content: gptInstructions[gptType] },
-          { role: 'user', content: message }
-        ],
-        max_tokens: 1000,
-        temperature: 0.7
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${OPENAI_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 45000
-      }
-    );
-
-    return res.json({
-      response: ai.data?.choices?.[0]?.message?.content ?? '',
-      usage: ai.data?.usage,
-      model: OPENAI_MODEL
+    const ai = await axios.post('https://api.openai.com/v1/chat/completions', {
+      model: OPENAI_MODEL,
+      messages: [
+        { role: 'system', content: gptInstructions[gptType] },
+        { role: 'user', content: message }
+      ],
+      max_tokens: 1000,
+      temperature: 0.7
+    }, {
+      headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+      timeout: 45000
     });
+
+    return res.json({ response: ai.data?.choices?.[0]?.message?.content ?? '', usage: ai.data?.usage, model: OPENAI_MODEL });
   } catch (err) {
     return safeApiError(res, err, 'Failed to get response from AI');
   }
 });
 
-// Paystack payment initialization
+// Paystack init
 app.post('/api/create-subscription', async (req, res) => {
   try {
-    const { email, amount, currency = 'USD' } = req.body; // change to 'GHS' if billing in Ghana
-    if (!email || amount == null) {
-      return res.status(400).json({ error: 'email and amount are required' });
-    }
-    if (!PAYSTACK_SECRET_KEY) {
-      return res.status(500).json({ error: 'Server missing PAYSTACK_SECRET_KEY' });
-    }
+    const { email, amount, currency = 'USD' } = req.body;
+    if (!email || amount == null) return res.status(400).json({ error: 'email and amount are required' });
+    if (!PAYSTACK_SECRET_KEY) return res.status(500).json({ error: 'Server missing PAYSTACK_SECRET_KEY' });
 
-    const minorUnits = Math.round(Number(amount) * 100); // cents/USD, pesewas/GHS, kobo/NGN
-    if (!Number.isFinite(minorUnits) || minorUnits <= 0) {
-      return res.status(400).json({ error: 'amount must be a positive number' });
-    }
+    const minorUnits = Math.round(Number(amount) * 100);
+    if (!Number.isFinite(minorUnits) || minorUnits <= 0) return res.status(400).json({ error: 'amount must be a positive number' });
 
-    const response = await axios.post(
-      'https://api.paystack.co/transaction/initialize',
-      {
-        email,
-        amount: minorUnits,
-        currency, // 'GHS' for Ghana, 'NGN' for Nigeria, 'USD' if enabled on your account
-        callback_url: PAYSTACK_CALLBACK_URL,
-        metadata: { plan: 'monthly' }
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        timeout: 30000
-      }
-    );
+    const response = await axios.post('https://api.paystack.co/transaction/initialize', {
+      email, amount: minorUnits, currency, callback_url: PAYSTACK_CALLBACK_URL, metadata: { plan: 'monthly' }
+    }, {
+      headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`, 'Content-Type': 'application/json' },
+      timeout: 30000
+    });
 
-    // Pre-create user record (not subscribed yet)
     users[email] = users[email] || { subscribed: false };
-
     return res.json({ authorization_url: response.data?.data?.authorization_url });
   } catch (err) {
     return safeApiError(res, err, 'Payment initialization failed');
   }
 });
 
-// Simple user subscription check
+// Subscription check
 app.get('/api/user/:email', (req, res) => {
   const user = users[req.params.email];
   res.json({ subscribed: !!user?.subscribed });
 });
 
-// ===== START SERVER =====
+// ===== START =====
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Open http://localhost:${PORT}`);
