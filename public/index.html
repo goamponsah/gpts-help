@@ -1,334 +1,168 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>GPTs Help - AI Tools Suite</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GPTs Help — Account</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <style>
-    :root {
-      --primary:#4e54c8; --primary-dark:#3a3eb3; --secondary:#6a11cb;
-      --accent-1:#FF6B6B; --accent-2:#4ECDC4; --light:#f8f9fa; --dark:#343a40;
-    }
-    *{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif}
-    body{background:linear-gradient(135deg,var(--secondary) 0%,var(--primary) 100%);color:var(--dark);min-height:100vh;padding:20px}
-    .container{max-width:1200px;margin:0 auto}
-    header{display:flex;justify-content:space-between;align-items:center;padding:20px 0;margin-bottom:30px}
-    .logo{font-size:1.8rem;font-weight:700;color:#fff}
-    .nav-buttons button{background:none;border:none;color:#fff;font-weight:500;margin-left:20px;cursor:pointer}
-    .hero{text-align:center;color:#fff;margin-bottom:50px}
-    .hero h1{font-size:3rem;margin-bottom:20px}
-    .price-tag{background:#fff;color:var(--primary);display:inline-block;padding:15px 30px;border-radius:50px;font-size:1.5rem;font-weight:700;margin:20px 0}
-    .gpt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:25px;margin-bottom:50px}
-    .gpt-card{background:#fff;border-radius:15px;overflow:hidden;box-shadow:0 5px 15px rgba(0,0,0,.1);transition:transform .3s}
-    .gpt-card:hover{transform:translateY(-5px)}
-    .gpt-icon{height:120px;display:flex;justify-content:center;align-items:center;font-size:2.5rem}
-    .math-gpt{background:linear-gradient(135deg,#4e54c8 0%,#6a11cb 100%);color:#fff}
-    .content-gpt{background:linear-gradient(135deg,#4ECDC4 0%,#6de0d9 100%);color:#fff}
-    .gpt-content{padding:20px}
-    .btn{background:var(--primary);color:#fff;border:none;padding:12px 18px;border-radius:8px;font-size:1rem;font-weight:600;cursor:pointer}
-    .btn.block{width:100%}
+    :root{--primary:#4e54c8;--secondary:#6a11cb;--light:#f8f9fa;--dark:#343a40}
+    *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif}
+    body{background:linear-gradient(135deg,var(--secondary) 0%,var(--primary) 100%);min-height:100vh;color:#222;padding:20px}
+    .container{max-width:1100px;margin:0 auto}
+    header{display:flex;justify-content:space-between;align-items:center;margin:10px 0 24px}
+    .logo{color:#fff;font-weight:800;font-size:1.6rem}
+    .nav button{background:none;border:none;color:#fff;font-weight:600;margin-left:16px;cursor:pointer}
+    .hero{color:#fff;text-align:center;margin:40px 0}
+    .hero h1{font-size:2.4rem;margin-bottom:10px}
+    .price{display:inline-block;background:#fff;color:#4e54c8;font-weight:800;border-radius:999px;padding:10px 18px;margin:14px 0}
+    .grid{display:grid;gap:20px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));margin-top:28px}
+    .card{background:#fff;border-radius:16px;box-shadow:0 6px 16px rgba(0,0,0,.12);padding:20px}
+    .gpt-icon{height:110px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:2rem;color:#fff;margin-bottom:12px}
+    .math{background:linear-gradient(135deg,#4e54c8,#6a11cb)} .content{background:linear-gradient(135deg,#4ECDC4,#6de0d9)}
+    .btn{background:#4e54c8;color:#fff;border:none;border-radius:10px;padding:12px 18px;font-weight:700;cursor:pointer}
     .btn.secondary{background:#222}
-    .card{background:#fff;padding:24px;border-radius:15px;box-shadow:0 6px 18px rgba(0,0,0,.12)}
+    .center{text-align:center}
     .stack{display:grid;gap:12px}
-    .field label{display:block;margin:6px 0 4px;font-weight:600}
-    .field input,.field select,.field textarea{width:100%;padding:12px;border:1px solid #e5e7eb;border-radius:8px;font-size:1rem}
+    .field label{font-weight:700;margin-bottom:6px;display:block}
+    .field input{width:100%;padding:12px;border-radius:10px;border:1px solid #e5e7eb}
     .muted{color:#666;font-size:.9rem}
     .hidden{display:none}
-    .split{display:grid;gap:20px;grid-template-columns:1fr}
-    @media (min-width:900px){.split{grid-template-columns:1fr 1fr}}
-
-    /* === ChatGPT-like layout === */
-    .chat-shell{display:flex;flex-direction:column;gap:10px}
-    .transcript{
-      height:420px; /* adjust as you like */
-      overflow:auto;
-      background:#f6f6f6;
-      border:1px solid #e5e7eb;
-      border-radius:12px;
-      padding:12px;
-    }
-    .composer{display:flex;gap:10px;align-items:flex-end}
-    .composer textarea{resize:vertical;min-height:48px;max-height:200px;flex:1}
-    .message{display:flex;margin:8px 0}
-    .bubble{
-      padding:10px 12px;border-radius:12px;max-width:80%;
-      white-space:pre-wrap;word-wrap:break-word
-    }
-    .message.user{justify-content:flex-end}
-    .message.user .bubble{background:#e0e7ff}
-    .message.bot .bubble{background:#fff;border:1px solid #e5e7eb}
   </style>
 </head>
 <body>
   <div class="container">
     <header>
       <div class="logo">GPTs Help</div>
-      <div class="nav-buttons">
-        <button id="nav-login">Log In</button>
-        <button id="nav-dashboard" class="hidden">Dashboard</button>
-        <button id="nav-logout" class="hidden">Sign Out</button>
+      <div class="nav">
+        <button id="nav-chat">Chat</button>
+        <button id="nav-signout" class="hidden">Sign Out</button>
       </div>
     </header>
 
-    <!-- HOME -->
-    <div id="homepage">
-      <section class="hero">
-        <h1>One Subscription. All AI Tools.</h1>
-        <p>Get unlimited access to our suite of specialized AI assistants</p>
-        <div class="price-tag">$9.99 / month</div>
+    <section class="hero">
+      <h1>One Subscription. All AI Tools.</h1>
+      <p>Unlimited access to specialized AI assistants</p>
+      <div class="price">$9.99 / month</div>
+      <div class="center" style="margin-top:14px;">
         <button class="btn" id="cta-get-started">Get Started</button>
-      </section>
-
-      <div class="gpt-grid">
-        <div class="gpt-card">
-          <div class="gpt-icon math-gpt"><i class="fas fa-square-root-alt"></i></div>
-          <div class="gpt-content">
-            <h3>Math GPT</h3>
-            <p>Your patient AI math tutor. Get step-by-step guidance from arithmetic to calculus.</p>
-          </div>
-        </div>
-        <div class="gpt-card">
-          <div class="gpt-icon content-gpt"><i class="fas fa-pen-fancy"></i></div>
-          <div class="gpt-content">
-            <h3>Content GPT</h3>
-            <p>Your AI content creation partner for blogs, social media, and business content.</p>
-          </div>
-        </div>
       </div>
-    </div>
+    </section>
 
-    <!-- AUTH / SUBSCRIBE -->
-    <div id="auth" class="card hidden" style="max-width:520px;margin:0 auto;">
-      <h2>Subscribe to GPTs Help</h2>
-      <p class="muted">Unlimited access to all AI tools</p>
+    <section class="grid">
+      <div class="card">
+        <div class="gpt-icon math"><i class="fas fa-square-root-alt"></i></div>
+        <h3>Math GPT</h3>
+        <p>Your patient AI math tutor—step-by-step help from arithmetic to calculus.</p>
+      </div>
+      <div class="card">
+        <div class="gpt-icon content"><i class="fas fa-pen-fancy"></i></div>
+        <h3>Content GPT</h3>
+        <p>Create engaging content for posts, blogs, and business—fast.</p>
+      </div>
+    </section>
+
+    <section class="card" id="account" style="max-width:520px;margin:28px auto 0;">
+      <h2>Subscribe / Sign In</h2>
+      <p class="muted">Use your email to subscribe and unlock chat.</p>
       <div class="stack" style="margin-top:12px">
         <div class="field">
           <label for="email">Email</label>
-          <input id="email" type="email" placeholder="you@example.com" />
+          <input id="email" type="email" placeholder="you@example.com">
         </div>
-        <div class="split">
+        <div class="stack" style="grid-template-columns:1fr 1fr">
           <button class="btn" id="btn-subscribe">$9.99/month — Subscribe</button>
-          <button class="btn secondary" id="btn-check-access">I’ve Paid — Refresh Access</button>
+          <button class="btn secondary" id="btn-refresh">I’ve Paid — Refresh Access</button>
         </div>
         <p class="muted">7-day money-back guarantee</p>
         <hr/>
-        <button class="btn secondary" id="btn-debug-login">Debug Login (Testing)</button>
-        <small class="muted">For testing only — remove this button in production.</small>
-      </div>
-    </div>
-
-    <!-- DASHBOARD -->
-    <div id="dashboard" class="hidden">
-      <div class="split">
-        <div class="card">
-          <h2>Chat</h2>
-          <div class="stack" style="margin-top:12px">
-            <div class="field">
-              <label for="dash-email">Signed in as</label>
-              <input id="dash-email" type="email" disabled />
-            </div>
-            <div class="field">
-              <label for="gptType">Assistant</label>
-              <select id="gptType">
-                <option value="math">Math GPT</option>
-                <option value="content">Content GPT</option>
-              </select>
-            </div>
-
-            <!-- ChatGPT-style area -->
-            <div class="chat-shell">
-              <div id="transcript" class="transcript"></div>
-              <div class="composer">
-                <textarea id="message" rows="3" placeholder="Write your message... (Shift+Enter = newline)"></textarea>
-                <button class="btn" id="btn-send">Send</button>
-              </div>
-            </div>
-
-            <div id="status" class="muted"></div>
-          </div>
+        <div class="stack" style="grid-template-columns:1fr 1fr">
+          <button class="btn secondary" id="btn-debug">Debug Login (Testing)</button>
+          <button class="btn" id="btn-go-chat">Go to Chat</button>
         </div>
-
-        <div class="card">
-          <h2>Account</h2>
-          <div class="stack" style="margin-top:12px">
-            <div id="sub-status" class="muted">Checking subscription…</div>
-            <button class="btn secondary" id="btn-refresh-sub">Check Subscription</button>
-            <button class="btn secondary" id="btn-go-pay">Subscribe / Manage Billing</button>
-          </div>
-        </div>
+        <small class="muted">Debug is for testing only—remove in production.</small>
+        <div id="sub-status" class="muted" style="margin-top:6px">Status: (not checked)</div>
       </div>
-    </div>
+    </section>
   </div>
 
   <script>
     const API_BASE = 'https://gpts-help-production.up.railway.app';
     const PLAN = { amount: 9.99, currency: 'USD' };
 
-    // ---------- UI helpers ----------
-    const $ = sel => document.querySelector(sel);
-    function show(id){ ['homepage','auth','dashboard'].forEach(x => $('#'+x).classList.add('hidden')); $('#'+id).classList.remove('hidden'); }
-    function saveEmail(email){ localStorage.setItem('gpts_email', email); }
-    function getEmail(){ return localStorage.getItem('gpts_email') || ''; }
-    function signOut(){ localStorage.removeItem('gpts_email'); $('#nav-login').classList.remove('hidden'); $('#nav-dashboard').classList.add('hidden'); $('#nav-logout').classList.add('hidden'); show('homepage'); }
-    function setNavForLoggedIn(email){ $('#nav-login').classList.add('hidden'); $('#nav-dashboard').classList.remove('hidden'); $('#nav-logout').classList.remove('hidden'); $('#dash-email').value = email; }
+    const $ = s => document.querySelector(s);
+    const saveEmail = e => localStorage.setItem('gpts_email', e);
+    const getEmail = () => localStorage.getItem('gpts_email') || '';
+    const signedIn = () => !!getEmail();
 
-    // Chat helpers
-    function addMessage(role, text){
-      const row = document.createElement('div');
-      row.className = `message ${role}`;
-      const bubble = document.createElement('div');
-      bubble.className = 'bubble';
-      bubble.textContent = text;
-      row.appendChild(bubble);
-      const t = $('#transcript');
-      t.appendChild(row);
-      t.scrollTop = t.scrollHeight; // auto-scroll
-    }
-
-    // ---------- API calls ----------
     async function checkSubscription(email){
       if(!email) return { subscribed:false };
       const r = await fetch(`${API_BASE}/api/user/${encodeURIComponent(email)}`);
       return r.ok ? r.json() : { subscribed:false };
     }
-
     async function createSubscription(email){
       const r = await fetch(`${API_BASE}/api/create-subscription`, {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ email, amount: PLAN.amount, currency: PLAN.currency })
       });
       const data = await r.json();
-      if(!r.ok) throw new Error(data.error || 'Failed to initialize payment');
-      if(!data.authorization_url) throw new Error('No authorization URL returned');
-      window.location.href = data.authorization_url; // Paystack
+      if(!r.ok) throw new Error(data.error || 'Payment init failed');
+      if(!data.authorization_url) throw new Error('No Paystack URL returned');
+      window.location.href = data.authorization_url;
     }
-
     async function debugLogin(email){
       const r = await fetch(`${API_BASE}/api/debug-login`, {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ email })
       });
-      if(!r.ok) throw new Error('Debug login failed');
+      if(!r.ok) throw new Error('Debug failed');
       return r.json();
     }
 
-    async function askGPT(email, gptType, message){
-      const r = await fetch(`${API_BASE}/api/chat`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ userId: email, gptType, message })
-      });
-      const data = await r.json();
-      if(!r.ok) throw new Error(data.error || 'Chat failed');
-      return data.response || '(No response)';
+    async function goChatIfAllowed(){
+      const email = getEmail() || $('#email').value.trim();
+      if(!email){ alert('Enter your email first.'); $('#email').focus(); return; }
+      saveEmail(email);
+      const sub = await checkSubscription(email);
+      if(sub.subscribed) window.location.href = 'chat.html';
+      else { $('#sub-status').textContent = 'Status: NOT ACTIVE'; alert('No active subscription yet. If you just paid, click “Refresh Access”.'); }
     }
 
-    // ---------- Event wiring ----------
-    $('#cta-get-started').onclick = () => { show('auth'); $('#email').focus(); };
-    $('#nav-login').onclick = () => { show('auth'); $('#email').focus(); };
-    $('#nav-dashboard').onclick = async () => {
-      const email = getEmail();
-      if(!email){ show('auth'); return; }
-      const sub = await checkSubscription(email);
-      if(sub.subscribed){ setNavForLoggedIn(email); show('dashboard'); refreshSubUI(email); } else { show('auth'); }
-    };
-    $('#nav-logout').onclick = signOut;
+    // Nav actions
+    $('#nav-chat').onclick = goChatIfAllowed;
+    $('#nav-signout').onclick = () => { localStorage.removeItem('gpts_email'); $('#nav-signout').classList.add('hidden'); alert('Signed out.'); };
+    $('#cta-get-started').onclick = () => $('#email').focus();
 
+    // Account actions
     $('#btn-subscribe').onclick = async () => {
-      const email = $('#email').value.trim();
-      if(!email) return alert('Please enter your email.');
+      const email = $('#email').value.trim(); if(!email) return alert('Enter your email.');
       saveEmail(email);
-      try{
-        $('#btn-subscribe').disabled = true;
-        await createSubscription(email);
-      }catch(e){
-        alert('Payment init error: ' + e.message);
-      }finally{
-        $('#btn-subscribe').disabled = false;
-      }
+      try{ $('#btn-subscribe').disabled = true; await createSubscription(email); }
+      catch(e){ alert(e.message); }
+      finally{ $('#btn-subscribe').disabled = false; }
     };
 
-    $('#btn-check-access').onclick = async () => {
-      const email = $('#email').value.trim() || getEmail();
-      if(!email) return alert('Enter your email first.');
+    $('#btn-refresh').onclick = async () => {
+      const email = $('#email').value.trim() || getEmail(); if(!email) return alert('Enter your email.');
       saveEmail(email);
       const sub = await checkSubscription(email);
-      if(sub.subscribed){
-        setNavForLoggedIn(email); show('dashboard'); refreshSubUI(email);
-      }else{
-        alert('No active subscription yet. If you just paid, wait a moment and try again.');
-      }
+      $('#sub-status').textContent = sub.subscribed ? 'Status: ACTIVE' : 'Status: NOT ACTIVE';
+      if(sub.subscribed){ $('#nav-signout').classList.remove('hidden'); alert('Access active—click Chat to start.'); }
     };
 
-    $('#btn-debug-login').onclick = async () => {
-      const email = $('#email').value.trim();
-      if(!email) return alert('Enter email first.');
-      saveEmail(email);
-      try{
-        await debugLogin(email);
-        alert('Marked as subscribed (testing).');
-        setNavForLoggedIn(email); show('dashboard'); refreshSubUI(email);
-      }catch(e){
-        alert('Debug login failed: ' + e.message);
-      }
+    $('#btn-debug').onclick = async () => {
+      const email = $('#email').value.trim(); if(!email) return alert('Enter your email.'); saveEmail(email);
+      try{ await debugLogin(email); $('#sub-status').textContent = 'Status: ACTIVE (debug)'; $('#nav-signout').classList.remove('hidden'); alert('Marked subscribed for testing. Click Chat.'); }
+      catch(e){ alert('Debug failed: '+e.message); }
     };
 
-    async function sendMessage(){
-      const email = getEmail();
-      const gptType = $('#gptType').value;
-      const message = $('#message').value.trim();
-      const status = $('#status');
-      if(!email) return alert('Not signed in.');
-      if(!message) return;
-      // show user bubble immediately
-      addMessage('user', message);
-      $('#message').value = '';
-      status.textContent = 'Thinking…';
-      try{
-        const reply = await askGPT(email, gptType, message);
-        addMessage('bot', reply);
-      }catch(e){
-        addMessage('bot', 'Error: ' + e.message);
-      }finally{
-        status.textContent = '';
-      }
-    }
+    $('#btn-go-chat').onclick = goChatIfAllowed;
 
-    $('#btn-send').onclick = sendMessage;
-    // Enter to send (Shift+Enter for newline)
-    $('#message').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-      }
-    });
-
-    $('#btn-refresh-sub').onclick = async () => {
-      const email = getEmail();
-      await refreshSubUI(email);
-    };
-
-    $('#btn-go-pay').onclick = () => {
-      show('auth');
-      $('#email').value = getEmail();
-    };
-
-    async function refreshSubUI(email){
-      const sub = await checkSubscription(email);
-      $('#sub-status').textContent = sub.subscribed ? 'Subscription: ACTIVE' : 'Subscription: NOT ACTIVE';
-    }
-
-    // ---------- Initial load ----------
+    // Init
     (async function init(){
       const saved = getEmail();
-      if(saved) $('#email').value = saved;
-      if(saved){
-        const sub = await checkSubscription(saved);
-        if(sub.subscribed){ setNavForLoggedIn(saved); show('dashboard'); refreshSubUI(saved); return; }
-      }
-      show('homepage');
+      if(saved){ $('#email').value = saved; $('#nav-signout').classList.remove('hidden'); const sub=await checkSubscription(saved); $('#sub-status').textContent = sub.subscribed?'Status: ACTIVE':'Status: NOT ACTIVE'; }
     })();
   </script>
 </body>
 </html>
-
