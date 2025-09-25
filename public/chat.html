@@ -40,6 +40,15 @@
     .conv.active{background:#1b2540}
     .conv .title{flex:1; font-size:.95rem; line-height:1.2}
     .conv .time{color:var(--muted); font-size:.8rem}
+    .conv.editing{cursor:default}
+
+    /* Inline title input */
+    .title-input{
+      width:100%; font-size:.95rem; color:var(--text);
+      background:transparent; border:1px solid var(--border);
+      border-radius:8px; padding:6px 8px; outline:none;
+    }
+    .title-input:disabled{opacity:.7}
 
     /* Kebab (three-dots) button */
     .kebab{
@@ -103,12 +112,12 @@
     }
     textarea{
       padding:12px; border:1px solid var(--border); border-radius:12px;
-      min-height:54px; max-height:200px; resize:vertical; background:#0b1220; color:var(--text);
+      min-height:54px; max-height:200px; resize:vertical; background:#0b1220; color:#fff;
     }
-    .attach{border:1px dashed var(--border); background:#0b1220; color:var(--muted)}
+    .attach{border:1px dashed var(--border); background:#0b1220; color:#9ca3af}
     .thumbs{display:flex; gap:8px; flex-wrap:wrap; margin-top:6px}
     .thumbs img{height:54px;width:54px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
-    .muted{color:var(--muted); font-size:.9rem}
+    .muted{color:#9ca3af; font-size:.9rem}
     .hide{display:none}
 
     .floating-signout{
@@ -182,7 +191,7 @@
         <div class="pill" id="status"></div>
       </div>
       <div class="left">
-        <select id="gptType" class="pill" style="background:#0b1220;color:var(--text);border:1px solid var(--border)">
+        <select id="gptType" class="pill" style="background:#0b1220;color:#e5e7eb;border:1px solid var(--border)">
           <option value="math">Math GPT</option>
           <option value="content">Content GPT</option>
         </select>
@@ -216,10 +225,8 @@
     const addRow = (role, text) => {
       const r = document.createElement('div'); r.className = `row ${role}`;
       const b = document.createElement('div'); b.className = 'bubble';
-
       if (role === 'bot' && window.renderMarkdown) b.innerHTML = window.renderMarkdown(text);
       else b.textContent = text;
-
       r.appendChild(b);
       const t = $('#transcript'); t.appendChild(r); t.scrollTop = t.scrollHeight;
       if (role === 'bot' && window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise([b]).catch(()=>{});
@@ -312,7 +319,7 @@
       return data;
     }
 
-    // Build a conversation row with kebab menu
+    // Build a conversation row with kebab menu and inline rename
     function buildConvRow(item, activeId){
       const row = document.createElement('div');
       row.className = 'conv' + (String(item.id)===String(activeId) ? ' active':'');
@@ -321,10 +328,8 @@
       const title = document.createElement('div'); title.className = 'title'; title.textContent = item.title || 'Untitled';
       const time  = document.createElement('div'); time.className = 'time'; time.textContent = new Date(item.updated_at).toLocaleString();
 
-      // kebab
       const kebab = document.createElement('button'); kebab.className = 'kebab'; kebab.setAttribute('aria-label','Chat menu'); kebab.textContent = '⋯';
 
-      // menu
       const menu = document.createElement('div'); menu.className = 'menu';
       menu.innerHTML = `
         <button class="share">Share (copy link)</button>
@@ -332,10 +337,13 @@
         <button class="delete danger">Delete</button>
       `;
 
-      // clicking a row opens conversation
-      row.onclick = () => openConversation(item.id);
+      // Open conversation (disabled during inline editing)
+      row.addEventListener('click', () => {
+        if (row.classList.contains('editing')) return;
+        openConversation(item.id);
+      });
 
-      // toggle menu
+      // Toggle menu
       kebab.onclick = (e) => {
         e.stopPropagation();
         closeAllMenus();
@@ -343,26 +351,74 @@
         openMenuConvId = menu.classList.contains('show') ? item.id : null;
       };
 
-      // menu actions
+      // Menu actions
       menu.querySelector('.share').onclick = async (e) => {
         e.stopPropagation(); menu.classList.remove('show'); openMenuConvId = null;
         const url = `${location.origin}${location.pathname}?cid=${item.id}`;
         try { await navigator.clipboard.writeText(url); h('Share link copied'); setTimeout(()=>h(''),2000); }
         catch { prompt('Copy this link:', url); }
       };
-      menu.querySelector('.rename').onclick = async (e) => {
-        e.stopPropagation();
-        const current = item.title || 'Untitled';
-        const next = prompt('Rename chat to:', current);
-        if (!next || next.trim() === current) { menu.classList.remove('show'); openMenuConvId = null; return; }
-        try {
-          await renameConversation(getEmail(), item.id, next.trim());
-          await refreshSidebar();
-          h('Chat renamed'); setTimeout(()=>h(''),1500);
-        } catch (err) {
-          h(err.message || 'Rename failed'); setTimeout(()=>h(''),2500);
-        } finally { menu.classList.remove('show'); openMenuConvId = null; }
+
+      // INLINE RENAME
+      const beginInlineRename = () => {
+        menu.classList.remove('show'); openMenuConvId = null;
+        if (row.classList.contains('editing')) return;
+        row.classList.add('editing');
+
+        const current = title.textContent;
+        const input = document.createElement('input');
+        input.className = 'title-input';
+        input.value = current;
+        input.setAttribute('maxlength', '80');
+
+        // replace title node with input
+        row.replaceChild(input, title);
+        input.focus();
+        input.select();
+
+        // prevent row click while editing
+        const stopClick = (e)=> e.stopPropagation();
+        input.addEventListener('click', stopClick);
+
+        const commit = async () => {
+          const next = (input.value || '').trim();
+          if (!next || next === current) { cancel(); return; }
+          input.disabled = true;
+          try {
+            await renameConversation(getEmail(), item.id, next);
+            // Update local state to avoid full reload flicker
+            item.title = next;
+            title.textContent = next;
+            row.replaceChild(title, input);
+            row.classList.remove('editing');
+            await refreshSidebar(); // keep ordering/updated timestamps accurate if the server changes them later
+            h('Chat renamed'); setTimeout(()=>h(''),1200);
+          } catch (err) {
+            input.disabled = false;
+            h(err.message || 'Rename failed'); setTimeout(()=>h(''),2500);
+            // keep editing so the user can try again
+            input.focus();
+            input.select();
+          }
+        };
+
+        const cancel = () => {
+          row.replaceChild(title, input);
+          row.classList.remove('editing');
+        };
+
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') { e.preventDefault(); commit(); }
+          else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+        });
+
+        input.addEventListener('blur', () => {
+          // Save on blur (common UX)
+          if (row.classList.contains('editing')) commit();
+        });
       };
+
+      menu.querySelector('.rename').onclick = (e) => { e.stopPropagation(); beginInlineRename(); };
       menu.querySelector('.delete').onclick = async (e) => {
         e.stopPropagation();
         if (!confirm('Delete this chat?')) { menu.classList.remove('show'); openMenuConvId = null; return; }
@@ -506,7 +562,7 @@
         else { addRow('bot', 'Welcome back! Pick a chat on the left or start a new one.'); }
       }
 
-      h('Tip: Hover a chat for ⋯ to Share / Rename / Delete.');
+      h('Tip: Hover a chat for ⋯, choose Rename to edit inline. Enter = save, Esc = cancel.');
       document.querySelector('.composer')?.scrollIntoView({ block:'end' });
     })();
   </script>
