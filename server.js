@@ -6,6 +6,11 @@ const crypto = require('crypto');
 const { Pool } = require('pg');
 const multer = require('multer');
 
+/* ===== New: export libs ===== */
+const { Document, Packer, Paragraph, TextRun } = require('docx');
+const PDFDocument = require('pdfkit');
+const PptxGenJS = require('pptxgenjs');
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -374,7 +379,7 @@ app.get('/api/config', async (req, res) => {
     currencySymbol: currencySymbol(PAYSTACK_CURRENCY),
     model: OPENAI_MODEL,
     db: dbOk,
-    features: { photoSolve: true, sidebarConversations: true, autoTitle: true, contextHistory: true, adaptiveTutor: true }
+    features: { photoSolve: true, sidebarConversations: true, autoTitle: true, contextHistory: true, adaptiveTutor: true, multiFormatContent: true, exports: { docx: true, pdf: true, pptx: true, html: true, md: true } }
   });
 });
 
@@ -663,7 +668,7 @@ app.post('/api/create-subscription', async (req, res) => {
 });
 
 /* =========================
-   ADAPTIVE TUTOR MODE
+   ADAPTIVE TUTOR MODE (Math)
    ========================= */
 
 const TOPICS = ['Arithmetic','Algebra','Geometry','Trigonometry','Calculus','Statistics','Linear Algebra','Word Problems'];
@@ -678,10 +683,7 @@ function parseJsonSafe(text) {
 /* Tutor chat formatting helpers */
 function formatQuestionForChat(q, idx, total) {
   const letters = ['A','B','C','D'];
-  const choices = (q.choices || []).map((c,i) => {
-    // ensure "A) ..." shape
-    return `${letters[i] || '?'}${c.replace(/^([A-D])\)\s*/,'$1) ')}`;
-  }).join('\n');
+  const choices = (q.choices || []).map((c,i) => `${letters[i] || '?'}${c.replace(/^([A-D])\)\s*/,'$1) ')}`).join('\n');
   return [
     `Q${idx}/${total} — Topic: ${q.topic} (${q.difficulty})`,
     ``,
@@ -937,7 +939,7 @@ Return STRICT JSON:
     "Step 2 ...",
     "..."
   ],
-  "final_answer": "Short final answer."
+    "final_answer": "Short final answer."
 }`;
   const r = await axios.post('https://api.openai.com/v1/chat/completions', {
     model: OPENAI_MODEL,
@@ -1000,6 +1002,377 @@ app.post('/api/tutor/next-problem', async (req, res) => {
     res.json({ sessionId, problem: prob, conversationId: convId, postedToConversation: true });
   } catch (e) {
     return safeApiError(res, e, 'Failed to fetch next problem');
+  }
+});
+
+/* =========================
+   CONTENT GPT: Multi-Format Generation
+   ========================= */
+
+function buildMultiFormatPrompt(opts) {
+  const {
+    source='', topic='', audience='', tone='professional',
+    goal='awareness', keywords=[], length='short'
+  } = opts || {};
+  return `
+You are ContentGPT. Convert the given source content or topic into multiple platform-specific formats.
+
+Context:
+- Topic: ${topic || '(from source)'}
+- Goal: ${goal}
+- Audience: ${audience}
+- Tone: ${tone}
+- SEO Keywords (if relevant): ${Array.isArray(keywords) ? keywords.join(', ') : '' }
+- Length: ${length} (short/medium/long)
+- Platforms: Blog, LinkedIn, Twitter/X thread, Email newsletter, YouTube script, TikTok script
+
+STRICT JSON RESPONSE (no prose, no markdown fences). Use this schema:
+
+{
+  "title": "Overall working title",
+  "blog_post": {
+    "title": "H1 title",
+    "body_md": "Full blog in Markdown (with H2/H3, bullets, etc.)",
+    "meta_description": "<=160 chars"
+  },
+  "linkedin_post": "Concise LinkedIn copy (with spacing and 3–5 hashtags)",
+  "tweet_thread": ["Tweet 1 (<=280 chars)", "Tweet 2", "..."],
+  "email_newsletter": {
+    "subject": "Compelling subject",
+    "preheader": "Short preheader",
+    "intro": "Warm intro paragraph",
+    "body_md": "Main content in Markdown",
+    "cta": "Clear CTA"
+  },
+  "youtube_script": {
+    "hook": "0-10s hook",
+    "outline": ["Beat 1","Beat 2","..."],
+    "script_md": "Script in Markdown sections"
+  },
+  "tiktok_script": {
+    "hook": "First 3 seconds hook",
+    "beats": ["Beat 1","Beat 2","..."],
+    "cta": "Call to action",
+    "caption": "Caption with relevant hashtags"
+  }
+}
+
+Source content (may be empty if you're working from the topic/brief):
+---
+${source}
+---
+`.trim();
+}
+
+/* Generate multi-format content and (optionally) post into a conversation */
+app.post('/api/content/multiformat', async (req, res) => {
+  try {
+    const { userId, source='', topic='', audience='', tone='professional', goal='awareness',
+      keywords=[], length='short', conversationId } = req.body || {};
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    const user = await getUser(userId);
+    if (!user || !user.subscribed) return res.status(401).json({ error: 'Not subscribed' });
+
+    // Conversation wiring (content chat)
+    let convId = conversationId;
+    if (!convId) {
+      const conv = await createConversation(userId, ensureTitle(topic || 'Content Plan'));
+      convId = conv.id;
+    } else {
+      const owns = await userOwnsConversation(userId, convId);
+      if (!owns) return res.status(403).json({ error: 'Conversation not found' });
+    }
+
+    // Save user's request
+    const userMsg = [
+      'Create multi-format content.',
+      topic ? `Topic: ${topic}` : '',
+      audience ? `Audience: ${audience}` : '',
+      tone ? `Tone: ${tone}` : '',
+      goal ? `Goal: ${goal}` : '',
+      Array.isArray(keywords) && keywords.length ? `Keywords: ${keywords.join(', ')}` : '',
+      length ? `Length: ${length}` : '',
+      source ? `\nSource:\n${source}` : ''
+    ].filter(Boolean).join('\n');
+    await addMessageToConversation(convId, 'user', userMsg);
+
+    const prompt = buildMultiFormatPrompt({ source, topic, audience, tone, goal, keywords, length });
+    const ai = await axios.post('https://api.openai.com/v1/chat/completions', {
+      model: OPENAI_MODEL,
+      messages: [
+        { role: 'system', content: gptInstructions.content },
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.5,
+      max_tokens: 1800
+    }, {
+      headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+      timeout: 60000
+    });
+
+    const raw = ai.data?.choices?.[0]?.message?.content || '';
+    const content = parseJsonSafe(raw);
+    if (!content || !content.blog_post || !content.linkedin_post || !content.tweet_thread) {
+      throw new Error('Bad multi-format JSON');
+    }
+
+    // Post a compact summary into chat (ContentGPT allows headings)
+    const summaryMd = [
+      `**${content.title || (topic || 'Content Package')}**`,
+      '',
+      'Generated formats:',
+      '- Blog post',
+      '- LinkedIn post',
+      '- Twitter/X thread',
+      '- Email newsletter',
+      '- YouTube script',
+      '- TikTok script',
+      '',
+      'Tip: Use the export options to download as Word, PDF, PowerPoint, HTML, or Markdown.'
+    ].join('\n');
+    await addMessageToConversation(convId, 'assistant', summaryMd);
+
+    // Try auto-title based on package title
+    if (content.title) await updateConversationTitle(convId, ensureTitle(content.title));
+
+    return res.json({ conversationId: convId, content });
+  } catch (e) {
+    return safeApiError(res, e, 'Multi-format generation failed');
+  }
+});
+
+/* =========================
+   CONTENT EXPORTS (DOCX, PDF, PPTX, HTML, MD)
+   ========================= */
+
+function bundleAllAsMarkdown(content){
+  const lines = [];
+  const push = (s='') => lines.push(String(s));
+
+  push(`# ${content.title || 'Content Package'}`);
+  push('');
+  if (content.blog_post) {
+    push(`## Blog Post — ${content.blog_post.title || ''}`);
+    push(content.blog_post.body_md || '');
+    if (content.blog_post.meta_description) {
+      push('');
+      push(`> Meta: ${content.blog_post.meta_description}`);
+    }
+  }
+  if (content.linkedin_post) {
+    push('---'); push('## LinkedIn Post'); push(content.linkedin_post);
+  }
+  if (Array.isArray(content.tweet_thread)) {
+    push('---'); push('## Twitter/X Thread');
+    content.tweet_thread.forEach((t,i)=> push(`${i+1}. ${t}`));
+  }
+  if (content.email_newsletter) {
+    push('---'); push('## Email Newsletter');
+    push(`**Subject:** ${content.email_newsletter.subject || ''}`);
+    push(`**Preheader:** ${content.email_newsletter.preheader || ''}`);
+    push('');
+    push(content.email_newsletter.intro || '');
+    push('');
+    push(content.email_newsletter.body_md || '');
+    if (content.email_newsletter.cta) { push(''); push(`**CTA:** ${content.email_newsletter.cta}`); }
+  }
+  if (content.youtube_script) {
+    push('---'); push('## YouTube Script');
+    push(`**Hook:** ${content.youtube_script.hook || ''}`);
+    if (Array.isArray(content.youtube_script.outline) && content.youtube_script.outline.length) {
+      push('**Outline:**'); content.youtube_script.outline.forEach((b,i)=> push(`${i+1}. ${b}`));
+    }
+    push(''); push(content.youtube_script.script_md || '');
+  }
+  if (content.tiktok_script) {
+    push('---'); push('## TikTok Script');
+    push(`**Hook:** ${content.tiktok_script.hook || ''}`);
+    if (Array.isArray(content.tiktok_script.beats) && content.tiktok_script.beats.length){
+      push('**Beats:**'); content.tiktok_script.beats.forEach((b,i)=> push(`${i+1}. ${b}`));
+    }
+    if (content.tiktok_script.cta) { push(''); push(`**CTA:** ${content.tiktok_script.cta}`); }
+    if (content.tiktok_script.caption) { push(''); push(`**Caption:** ${content.tiktok_script.caption}`); }
+  }
+  return lines.join('\n');
+}
+
+async function createDocxBufferFromMarkdown(md, title='Content'){
+  const doc = new Document({ sections: [] });
+  const paras = [];
+  md.split('\n').forEach(line => {
+    paras.push(new Paragraph({
+      children: [new TextRun({ text: line.replace(/\t/g, '    '), break: 0 })]
+    }));
+  });
+  doc.addSection({ children: paras });
+  return await Packer.toBuffer(doc);
+}
+function createPdfBufferFromText(text){
+  return new Promise((resolve, reject) => {
+    const doc = new PDFDocument({ margin: 50 });
+    const chunks = [];
+    doc.on('data', (d)=> chunks.push(d));
+    doc.on('end', ()=> resolve(Buffer.concat(chunks)));
+    doc.on('error', reject);
+    doc.fontSize(20).text(text.split('\n')[0] || 'Content Package', { underline: false });
+    doc.moveDown();
+    doc.fontSize(11).text(text, { align: 'left' });
+    doc.end();
+  });
+}
+async function createPptxBufferFromContent(content){
+  const pptx = new PptxGenJS();
+
+  const addSlideWithTitleAndText = (title, body) => {
+    const s = pptx.addSlide();
+    s.addText(title, { x:0.5, y:0.5, w:9, h:0.8, fontSize:24, bold:true });
+    const chunks = splitForPpt(body);
+    s.addText(chunks, { x:0.5, y:1.3, w:9, h:5, fontSize:14, lineSpacing:18, valign:'top' });
+  };
+
+  addSlideWithTitleAndText(content.title || 'Content Package', 'Multi-format export');
+
+  if (content.blog_post) {
+    addSlideWithTitleAndText(`Blog: ${content.blog_post.title || ''}`, stripMd(content.blog_post.body_md || '').slice(0,4000));
+  }
+  if (content.linkedin_post) {
+    addSlideWithTitleAndText('LinkedIn Post', content.linkedin_post);
+  }
+  if (Array.isArray(content.tweet_thread)){
+    addSlideWithTitleAndText('Twitter/X Thread', content.tweet_thread.map((t,i)=>`${i+1}. ${t}`).join('\n'));
+  }
+  if (content.email_newsletter) {
+    const body = [
+      `Subject: ${content.email_newsletter.subject || ''}`,
+      `Preheader: ${content.email_newsletter.preheader || ''}`,
+      '',
+      stripMd(content.email_newsletter.intro || ''),
+      '',
+      stripMd(content.email_newsletter.body_md || ''),
+      '',
+      `CTA: ${content.email_newsletter.cta || ''}`
+    ].join('\n');
+    addSlideWithTitleAndText('Email Newsletter', body);
+  }
+  if (content.youtube_script) {
+    const body = [
+      `Hook: ${content.youtube_script.hook || ''}`,
+      '',
+      'Outline:',
+      ...(content.youtube_script.outline || []).map((b,i)=>`${i+1}. ${b}`),
+      '',
+      stripMd(content.youtube_script.script_md || '')
+    ].join('\n');
+    addSlideWithTitleAndText('YouTube Script', body);
+  }
+  if (content.tiktok_script) {
+    const body = [
+      `Hook: ${content.tiktok_script.hook || ''}`,
+      '',
+      'Beats:',
+      ...(content.tiktok_script.beats || []).map((b,i)=>`${i+1}. ${b}`),
+      '',
+      `CTA: ${content.tiktok_script.cta || ''}`,
+      '',
+      `Caption: ${content.tiktok_script.caption || ''}`
+    ].join('\n');
+    addSlideWithTitleAndText('TikTok Script', body);
+  }
+
+  return await pptx.write('nodebuffer'); // returns Buffer in Node
+}
+
+function stripMd(md=''){
+  return String(md).replace(/[#*_>`]/g,'');
+}
+function splitForPpt(text=''){
+  const lines = String(text).split('\n');
+  const out = [];
+  for (let ln of lines){
+    while (ln.length > 110){
+      out.push(ln.slice(0,110));
+      ln = ln.slice(110);
+    }
+    out.push(ln);
+  }
+  return out;
+}
+function htmlWrap(title, bodyPre){
+  const esc = (s='') => s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+  return [
+    '<!doctype html><html><head><meta charset="utf-8">',
+    `<title>${esc(title||'Content')}</title>`,
+    '<style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,sans-serif;padding:40px;white-space:pre-wrap}</style>',
+    '</head><body>',
+    `<h1>${esc(title||'Content')}</h1>`,
+    `<pre>${esc(bodyPre||'')}</pre>`,
+    '</body></html>'
+  ].join('');
+}
+
+/* Export endpoint
+   Body: {
+     userId, format: 'docx'|'pdf'|'pptx'|'html'|'md',
+     which: 'all'|'blog_post'|'linkedin_post'|'tweet_thread'|'email_newsletter'|'youtube_script'|'tiktok_script',
+     content: { ...returned by /api/content/multiformat ... },
+     filename?: 'MyFile'
+   }
+*/
+app.post('/api/content/export', async (req, res) => {
+  try {
+    const { userId, format, which='all', content, filename } = req.body || {};
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    const user = await getUser(userId);
+    if (!user || !user.subscribed) return res.status(401).json({ error: 'Not subscribed' });
+    if (!content) return res.status(400).json({ error: 'content required' });
+    const baseName = (filename || content.title || 'content').replace(/[^\w\- ]+/g,'').trim() || 'content';
+
+    // Build a single markdown string representing the selected slice(s)
+    const mdAll = bundleAllAsMarkdown(content);
+    let md = mdAll;
+    if (which !== 'all') {
+      const one = { ...content };
+      const empty = { title: content.title };
+      // keep only requested section
+      ['blog_post','linkedin_post','tweet_thread','email_newsletter','youtube_script','tiktok_script'].forEach(k => {
+        if (k !== which) delete one[k];
+      });
+      md = bundleAllAsMarkdown(one || empty);
+    }
+
+    if (format === 'md') {
+      res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${baseName}.md"`);
+      return res.send(md);
+    }
+    if (format === 'html') {
+      const html = htmlWrap(content.title || baseName, md);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Content-Disposition', `attachment; filename="${baseName}.html"`);
+      return res.send(html);
+    }
+    if (format === 'docx') {
+      const buf = await createDocxBufferFromMarkdown(md, content.title || baseName);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+      res.setHeader('Content-Disposition', `attachment; filename="${baseName}.docx"`);
+      return res.send(buf);
+    }
+    if (format === 'pdf') {
+      const buf = await createPdfBufferFromText(md);
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${baseName}.pdf"`);
+      return res.send(buf);
+    }
+    if (format === 'pptx') {
+      const buf = await createPptxBufferFromContent(content);
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+      res.setHeader('Content-Disposition', `attachment; filename="${baseName}.pptx"`);
+      return res.send(buf);
+    }
+
+    return res.status(400).json({ error: 'Unsupported format. Use docx, pdf, pptx, html, md.' });
+  } catch (e) {
+    return safeApiError(res, e, 'Export failed');
   }
 });
 
