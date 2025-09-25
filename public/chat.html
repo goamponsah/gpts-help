@@ -15,11 +15,10 @@
     body{
       font-family:system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif;
       background:var(--main);color:var(--text);
-      height:100dvh; /* dynamic vh fixes mobile browser chrome */
-      overflow:hidden; /* panes handle their own scrolling */
+      height:100dvh; overflow:hidden;
     }
 
-    /* Sidebar (fixed so it never moves) */
+    /* Sidebar (fixed) */
     .sidebar{
       width:var(--side-width);
       position:fixed; left:0; top:0; height:100dvh; z-index:10;
@@ -32,14 +31,38 @@
     .search{margin:10px 12px}
     .search input{width:100%; padding:10px; border-radius:10px; border:1px solid var(--border); background:#0b1220; color:var(--text)}
 
-    /* Only the list scrolls; bottom stays pinned */
     .convlist{flex:1; overflow:auto; padding:6px}
-    .conv{display:flex; gap:10px; align-items:center; padding:10px 12px; border-radius:10px; cursor:pointer}
+    .conv{
+      position:relative;
+      display:flex; gap:10px; align-items:center; padding:10px 12px; border-radius:10px; cursor:pointer;
+    }
     .conv:hover{background:#111a33}
     .conv.active{background:#1b2540}
     .conv .title{flex:1; font-size:.95rem; line-height:1.2}
     .conv .time{color:var(--muted); font-size:.8rem}
-    .conv .del{opacity:.65; border:none; background:transparent; color:var(--muted); cursor:pointer}
+
+    /* Kebab (three-dots) button */
+    .kebab{
+      opacity:0; transition:opacity .15s ease;
+      border:none; background:transparent; color:#9ca3af; font-size:18px; cursor:pointer; padding:2px 6px; border-radius:8px;
+    }
+    .conv:hover .kebab{opacity:1}
+    .kebab:focus{outline:1px solid #334155}
+
+    /* Context menu */
+    .menu{
+      position:absolute; right:8px; top:36px; z-index:30;
+      min-width:160px; background:#0b1220; border:1px solid var(--border); border-radius:10px; box-shadow:0 12px 28px rgba(0,0,0,.35);
+      display:none; overflow:hidden;
+    }
+    .menu.show{display:block;}
+    .menu button{
+      width:100%; text-align:left; background:transparent; border:none; color:var(--text);
+      padding:10px 12px; cursor:pointer; font-size:.95rem;
+    }
+    .menu button:hover{background:#111a33}
+    .menu .danger{color:#fca5a5}
+    .menu .muted{color:#9ca3af}
 
     .side-bottom{
       padding:12px; border-top:1px solid var(--border); background:var(--bg);
@@ -48,7 +71,7 @@
     .side-bottom .mini{flex:1}
     .side-bottom .mini button{width:100%}
 
-    /* Main pane offset to the right of fixed sidebar */
+    /* Main pane */
     .main{
       margin-left:var(--side-width);
       height:100dvh; display:flex; flex-direction:column; min-width:0;
@@ -62,17 +85,15 @@
 
     .wrap{
       flex:1; display:flex; flex-direction:column; max-width:1000px; margin:0 auto; width:100%;
-      min-height:0; /* allow children to flex/scroll correctly */
+      min-height:0;
     }
-    .transcript{
-      flex:1; overflow:auto; padding:18px; scroll-behavior:smooth;
-    }
+    .transcript{flex:1; overflow:auto; padding:18px; scroll-behavior:smooth;}
     .row{display:flex; margin:10px 0}
     .bubble{max-width:70%; white-space:pre-wrap; word-wrap:break-word; padding:14px; border-radius:14px; border:1px solid var(--border)}
     .bot .bubble{background:var(--bubble)}
     .user .bubble{background:var(--user)}
 
-    /* STICKY composer: always visible at bottom */
+    /* STICKY composer */
     .composer{
       position:sticky; bottom:0; z-index:5;
       border-top:1px solid var(--border);
@@ -90,7 +111,6 @@
     .muted{color:var(--muted); font-size:.9rem}
     .hide{display:none}
 
-    /* Floating sign-out for mobile (when sidebar hidden) */
     .floating-signout{
       position:fixed; left:12px; bottom:12px; z-index:20;
       display:none;
@@ -124,7 +144,7 @@
     };
   </script>
 
-  <!-- MathJax for \( \) and \[ \] -->
+  <!-- MathJax -->
   <script>
     window.MathJax = {
       tex: { inlineMath: [['\\(','\\)'], ['$', '$']], displayMath: [['\\[','\\]']] },
@@ -192,24 +212,17 @@
     const $ = s => document.querySelector(s);
     const h = s => { $('#hint').textContent = s || ''; };
 
-    // Render chat rows (Markdown for bot; literal for user)
+    // Markdown rendering for bot messages
     const addRow = (role, text) => {
       const r = document.createElement('div'); r.className = `row ${role}`;
       const b = document.createElement('div'); b.className = 'bubble';
 
-      if (role === 'bot' && window.renderMarkdown) {
-        b.innerHTML = window.renderMarkdown(text);
-      } else {
-        b.textContent = text;
-      }
+      if (role === 'bot' && window.renderMarkdown) b.innerHTML = window.renderMarkdown(text);
+      else b.textContent = text;
 
       r.appendChild(b);
       const t = $('#transcript'); t.appendChild(r); t.scrollTop = t.scrollHeight;
-
-      // typeset math only for bot messages
-      if (role === 'bot' && window.MathJax && MathJax.typesetPromise) {
-        MathJax.typesetPromise([b]).catch(() => {});
-      }
+      if (role === 'bot' && window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise([b]).catch(()=>{});
     };
 
     // session
@@ -220,6 +233,7 @@
     // sidebar state
     let conversations = [];
     let filtered = [];
+    let openMenuConvId = null;
 
     // thumbnails
     let selectedFile = null; let previewUrl = null;
@@ -260,6 +274,17 @@
       });
       return r.ok;
     }
+    async function renameConversation(email, id, title){
+      const r = await fetch(`${API_BASE}/api/conversations/${id}`, {
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ userId: email, title })
+      });
+      if (!r.ok) {
+        const d = await r.json().catch(()=>({}));
+        throw new Error(d.error || 'Rename failed');
+      }
+      return true;
+    }
     async function getMessages(email, id){
       const r = await fetch(`${API_BASE}/api/conversations/${id}?userId=${encodeURIComponent(email)}`);
       const d = await r.json(); if(!r.ok) throw new Error(d.error || 'Failed to load messages');
@@ -287,29 +312,88 @@
       return data;
     }
 
+    // Build a conversation row with kebab menu
+    function buildConvRow(item, activeId){
+      const row = document.createElement('div');
+      row.className = 'conv' + (String(item.id)===String(activeId) ? ' active':'');
+      row.dataset.id = item.id;
+
+      const title = document.createElement('div'); title.className = 'title'; title.textContent = item.title || 'Untitled';
+      const time  = document.createElement('div'); time.className = 'time'; time.textContent = new Date(item.updated_at).toLocaleString();
+
+      // kebab
+      const kebab = document.createElement('button'); kebab.className = 'kebab'; kebab.setAttribute('aria-label','Chat menu'); kebab.textContent = '⋯';
+
+      // menu
+      const menu = document.createElement('div'); menu.className = 'menu';
+      menu.innerHTML = `
+        <button class="share">Share (copy link)</button>
+        <button class="rename">Rename</button>
+        <button class="delete danger">Delete</button>
+      `;
+
+      // clicking a row opens conversation
+      row.onclick = () => openConversation(item.id);
+
+      // toggle menu
+      kebab.onclick = (e) => {
+        e.stopPropagation();
+        closeAllMenus();
+        menu.classList.toggle('show');
+        openMenuConvId = menu.classList.contains('show') ? item.id : null;
+      };
+
+      // menu actions
+      menu.querySelector('.share').onclick = async (e) => {
+        e.stopPropagation(); menu.classList.remove('show'); openMenuConvId = null;
+        const url = `${location.origin}${location.pathname}?cid=${item.id}`;
+        try { await navigator.clipboard.writeText(url); h('Share link copied'); setTimeout(()=>h(''),2000); }
+        catch { prompt('Copy this link:', url); }
+      };
+      menu.querySelector('.rename').onclick = async (e) => {
+        e.stopPropagation();
+        const current = item.title || 'Untitled';
+        const next = prompt('Rename chat to:', current);
+        if (!next || next.trim() === current) { menu.classList.remove('show'); openMenuConvId = null; return; }
+        try {
+          await renameConversation(getEmail(), item.id, next.trim());
+          await refreshSidebar();
+          h('Chat renamed'); setTimeout(()=>h(''),1500);
+        } catch (err) {
+          h(err.message || 'Rename failed'); setTimeout(()=>h(''),2500);
+        } finally { menu.classList.remove('show'); openMenuConvId = null; }
+      };
+      menu.querySelector('.delete').onclick = async (e) => {
+        e.stopPropagation();
+        if (!confirm('Delete this chat?')) { menu.classList.remove('show'); openMenuConvId = null; return; }
+        const ok = await deleteConversation(getEmail(), item.id);
+        if (ok) {
+          if (String(getActiveId()) === String(item.id)) setActiveId('');
+          await refreshSidebar();
+          if(!getActiveId()) { await newChat(); }
+        } else {
+          h('Delete failed'); setTimeout(()=>h(''),2000);
+        }
+        menu.classList.remove('show'); openMenuConvId = null;
+      };
+
+      row.appendChild(title); row.appendChild(time); row.appendChild(kebab); row.appendChild(menu);
+      return row;
+    }
+
+    function closeAllMenus(){
+      document.querySelectorAll('.menu.show').forEach(m => m.classList.remove('show'));
+      openMenuConvId = null;
+    }
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.menu') && !e.target.closest('.kebab')) closeAllMenus();
+    });
+
     // Sidebar rendering
     function renderList(list){
       const c = $('#convlist'); c.innerHTML = '';
       const active = getActiveId();
-      list.forEach(item => {
-        const row = document.createElement('div'); row.className = 'conv' + (String(item.id)===String(active) ? ' active':'');
-        row.onclick = () => openConversation(item.id);
-        const title = document.createElement('div'); title.className = 'title'; title.textContent = item.title || 'Untitled';
-        const time  = document.createElement('div'); time.className = 'time'; time.textContent = new Date(item.updated_at).toLocaleString();
-        const del   = document.createElement('button'); del.className = 'del'; del.textContent = '✕';
-        del.onclick = async (e) => {
-          e.stopPropagation();
-          if(!confirm('Delete this chat?')) return;
-          const ok = await deleteConversation(getEmail(), item.id);
-          if(ok){
-            if(String(active)===String(item.id)) setActiveId('');
-            await refreshSidebar();
-            if(!getActiveId()) { await newChat(); }
-          }
-        };
-        row.appendChild(title); row.appendChild(time); row.appendChild(del);
-        c.appendChild(row);
-      });
+      list.forEach(item => c.appendChild(buildConvRow(item, active)));
     }
 
     async function refreshSidebar(){
@@ -351,7 +435,6 @@
         convId = c.id; setActiveId(convId); await refreshSidebar();
       }
 
-      // user bubble
       if (selectedFile) addRow('user', msg ? `📷 ${msg}` : '📷 Photo sent');
       else if (msg) addRow('user', msg);
       else return;
@@ -397,6 +480,12 @@
       vv.addEventListener('resize', onVV); vv.addEventListener('scroll', onVV);
     }
 
+    // Open a shared link like ?cid=123
+    function getQueryParam(name){
+      const m = new RegExp('[?&]'+name+'=([^&]+)').exec(location.search);
+      return m ? decodeURIComponent(m[1]) : null;
+    }
+
     (async function init(){
       const email = getEmail();
       if(!email){ location.href='index.html'; return; }
@@ -406,10 +495,18 @@
       if(!sub.subscribed){ location.href='index.html'; return; }
 
       await refreshSidebar();
-      const active = getActiveId();
-      if(active){ await openConversation(active); }
-      else { addRow('bot', 'Welcome back! Pick a chat on the left or start a new one.'); }
-      h('Tip: The input stays pinned at the bottom. Press Enter to send.');
+
+      const sharedCid = getQueryParam('cid');
+      if (sharedCid) {
+        try { await openConversation(sharedCid); }
+        catch { /* ignore */ }
+      } else {
+        const active = getActiveId();
+        if(active){ await openConversation(active); }
+        else { addRow('bot', 'Welcome back! Pick a chat on the left or start a new one.'); }
+      }
+
+      h('Tip: Hover a chat for ⋯ to Share / Rename / Delete.');
       document.querySelector('.composer')?.scrollIntoView({ block:'end' });
     })();
   </script>
