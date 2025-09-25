@@ -12,134 +12,60 @@
       --side-width: 280px;
     }
     *{margin:0;padding:0;box-sizing:border-box}
-    body{
-      font-family:system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif;
-      background:var(--main);color:var(--text);
-      height:100dvh; overflow:hidden;
-    }
-
-    /* Sidebar (fixed) */
-    .sidebar{
-      width:var(--side-width);
-      position:fixed; left:0; top:0; height:100dvh; z-index:10;
-      background:var(--bg); border-right:1px solid var(--border);
-      display:flex; flex-direction:column;
-    }
-    .side-top{padding:12px; border-bottom:1px solid var(--border); background:var(--bg-light); display:flex; gap:8px}
-    .btn{background:var(--accent); color:#fff; border:none; border-radius:10px; padding:10px 12px; font-weight:700; cursor:pointer}
+    body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif;background:var(--main);color:var(--text);height:100dvh;overflow:hidden}
+    .sidebar{width:var(--side-width);position:fixed;left:0;top:0;height:100dvh;z-index:10;background:var(--bg);border-right:1px solid var(--border);display:flex;flex-direction:column}
+    .side-top{padding:12px;border-bottom:1px solid var(--border);background:var(--bg-light);display:flex;gap:8px}
+    .btn{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:10px 12px;font-weight:700;cursor:pointer}
     .btn.gray{background:#374151}
+    .btn.ghost{background:transparent;border:1px solid var(--border);color:var(--text)}
     .search{margin:10px 12px}
-    .search input{width:100%; padding:10px; border-radius:10px; border:1px solid var(--border); background:#0b1220; color:var(--text)}
-
-    .convlist{flex:1; overflow:auto; padding:6px}
-    .conv{
-      position:relative;
-      display:flex; gap:10px; align-items:center; padding:10px 12px; border-radius:10px; cursor:pointer;
-    }
+    .search input{width:100%;padding:10px;border-radius:10px;border:1px solid var(--border);background:#0b1220;color:var(--text)}
+    .convlist{flex:1;overflow:auto;padding:6px}
+    .conv{position:relative;display:flex;gap:10px;align-items:center;padding:10px 12px;border-radius:10px;cursor:pointer}
     .conv:hover{background:#111a33}
     .conv.active{background:#1b2540}
-    .conv .title{flex:1; font-size:.95rem; line-height:1.2}
-    .conv .time{color:var(--muted); font-size:.8rem}
-    .conv.editing{cursor:default}
-
-    /* Inline title input */
-    .title-input{
-      width:100%; font-size:.95rem; color:var(--text);
-      background:transparent; border:1px solid var(--border);
-      border-radius:8px; padding:6px 8px; outline:none;
-    }
-    .title-input:disabled{opacity:.7}
-
-    /* Kebab (three-dots) button */
-    .kebab{
-      opacity:0; transition:opacity .15s ease;
-      border:none; background:transparent; color:#9ca3af; font-size:18px; cursor:pointer; padding:2px 6px; border-radius:8px;
-    }
+    .conv .title{flex:1;font-size:.95rem;line-height:1.2}
+    .conv .time{color:var(--muted);font-size:.8rem}
+    .kebab{opacity:0;transition:opacity .15s;border:none;background:transparent;color:#9ca3af;font-size:18px;cursor:pointer;padding:2px 6px;border-radius:8px}
     .conv:hover .kebab{opacity:1}
-    .kebab:focus{outline:1px solid #334155}
-
-    /* Context menu */
-    .menu{
-      position:absolute; right:8px; top:36px; z-index:30;
-      min-width:160px; background:#0b1220; border:1px solid var(--border); border-radius:10px; box-shadow:0 12px 28px rgba(0,0,0,.35);
-      display:none; overflow:hidden;
-    }
-    .menu.show{display:block;}
-    .menu button{
-      width:100%; text-align:left; background:transparent; border:none; color:var(--text);
-      padding:10px 12px; cursor:pointer; font-size:.95rem;
-    }
+    .menu{position:absolute;right:8px;top:36px;z-index:30;min-width:160px;background:#0b1220;border:1px solid var(--border);border-radius:10px;box-shadow:0 12px 28px rgba(0,0,0,.35);display:none;overflow:hidden}
+    .menu.show{display:block}
+    .menu button{width:100%;text-align:left;background:transparent;border:none;color:var(--text);padding:10px 12px;cursor:pointer;font-size:.95rem}
     .menu button:hover{background:#111a33}
     .menu .danger{color:#fca5a5}
-    .menu .muted{color:#9ca3af}
-
-    .side-bottom{
-      padding:12px; border-top:1px solid var(--border); background:var(--bg);
-      display:flex; gap:8px;
-    }
+    .title-input{width:100%;font-size:.95rem;color:var(--text);background:transparent;border:1px solid var(--border);border-radius:8px;padding:6px 8px;outline:none}
+    .conv.editing{cursor:default}
+    .side-bottom{padding:12px;border-top:1px solid var(--border);background:var(--bg);display:flex;gap:8px}
     .side-bottom .mini{flex:1}
     .side-bottom .mini button{width:100%}
-
-    /* Main pane */
-    .main{
-      margin-left:var(--side-width);
-      height:100dvh; display:flex; flex-direction:column; min-width:0;
-    }
-    .topbar{
-      background:var(--bg-light); border-bottom:1px solid var(--border);
-      padding:12px 16px; display:flex; justify-content:space-between; align-items:center
-    }
-    .topbar .left{display:flex; gap:10px; align-items:center}
-    .pill{border:1px solid var(--border); border-radius:999px; padding:6px 10px; color:var(--muted); background:#0b1220}
-
-    .wrap{
-      flex:1; display:flex; flex-direction:column; max-width:1000px; margin:0 auto; width:100%;
-      min-height:0;
-    }
-    .transcript{flex:1; overflow:auto; padding:18px; scroll-behavior:smooth;}
-    .row{display:flex; margin:10px 0}
-    .bubble{max-width:70%; white-space:pre-wrap; word-wrap:break-word; padding:14px; border-radius:14px; border:1px solid var(--border)}
+    .main{margin-left:var(--side-width);height:100dvh;display:flex;flex-direction:column;min-width:0}
+    .topbar{background:var(--bg-light);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;justify-content:space-between;align-items:center}
+    .topbar .left{display:flex;gap:10px;align-items:center}
+    .pill{border:1px solid var(--border);border-radius:999px;padding:6px 10px;color:var(--muted);background:#0b1220}
+    .wrap{flex:1;display:flex;flex-direction:column;max-width:1000px;margin:0 auto;width:100%;min-height:0}
+    .transcript{flex:1;overflow:auto;padding:18px;scroll-behavior:smooth}
+    .row{display:flex;margin:10px 0}
+    .bubble{max-width:70%;white-space:pre-wrap;word-wrap:break-word;padding:14px;border-radius:14px;border:1px solid var(--border)}
     .bot .bubble{background:var(--bubble)}
     .user .bubble{background:var(--user)}
-
-    /* STICKY composer */
-    .composer{
-      position:sticky; bottom:0; z-index:5;
-      border-top:1px solid var(--border);
-      padding:12px 16px calc(12px + env(safe-area-inset-bottom));
-      display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:end;
-      background:rgba(15,21,40,.92); backdrop-filter: blur(6px);
-    }
-    textarea{
-      padding:12px; border:1px solid var(--border); border-radius:12px;
-      min-height:54px; max-height:200px; resize:vertical; background:#0b1220; color:#fff;
-    }
-    .attach{border:1px dashed var(--border); background:#0b1220; color:#9ca3af}
-    .thumbs{display:flex; gap:8px; flex-wrap:wrap; margin-top:6px}
+    .composer{position:sticky;bottom:0;z-index:5;border-top:1px solid var(--border);padding:12px 16px calc(12px + env(safe-area-inset-bottom));display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:end;background:rgba(15,21,40,.92);backdrop-filter:blur(6px)}
+    textarea{padding:12px;border:1px solid var(--border);border-radius:12px;min-height:54px;max-height:200px;resize:vertical;background:#0b1220;color:#e5e7eb}
+    .attach{border:1px dashed var(--border);background:#0b1220;color:#9ca3af}
+    .thumbs{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
     .thumbs img{height:54px;width:54px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
-    .muted{color:#9ca3af; font-size:.9rem}
+    .muted{color:#9ca3af;font-size:.9rem}
     .hide{display:none}
-
-    .floating-signout{
-      position:fixed; left:12px; bottom:12px; z-index:20;
-      display:none;
-      background:#374151; color:#fff; border:none; border-radius:10px; padding:10px 12px; font-weight:700; cursor:pointer;
-      box-shadow:0 8px 20px rgba(0,0,0,.25);
-    }
-
-    @media (max-width:900px){
-      .sidebar{display:none}
-      .main{margin-left:0}
-      .floating-signout{display:inline-flex}
-      .bubble{max-width:90%}
-    }
-
-    /* Markdown polish */
-    .bubble h1,.bubble h2,.bubble h3 { margin: 8px 0 6px; line-height: 1.25; }
-    .bubble pre { background:#0b1220; border:1px solid #1f2937; padding:10px; border-radius:10px; overflow:auto; }
-    .bubble code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
-    .bubble ul,.bubble ol{ padding-left: 1.25rem; }
-    .bubble p { margin: 6px 0; }
+    .floating-signout{position:fixed;left:12px;bottom:12px;z-index:20;display:none;background:#374151;color:#fff;border:none;border-radius:10px;padding:10px 12px;font-weight:700;cursor:pointer;box-shadow:0 8px 20px rgba(0,0,0,.25)}
+    @media (max-width:900px){.sidebar{display:none}.main{margin-left:0}.floating-signout{display:inline-flex}.bubble{max-width:90%}}
+    .bubble h1,.bubble h2,.bubble h3{margin:8px 0 6px;line-height:1.25}
+    .bubble pre{background:#0b1220;border:1px solid #1f2937;padding:10px;border-radius:10px;overflow:auto}
+    .bubble code{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace}
+    .bubble ul,.bubble ol{padding-left:1.25rem}
+    .bubble p{margin:6px 0}
+    .choicebar{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+    .choicebar .btn{padding:8px 10px}
+    details.solution{margin-top:10px}
+    .progress{color:#9ca3af;font-size:.85rem;margin-top:6px}
   </style>
 
   <!-- Markdown + sanitization -->
@@ -164,25 +90,18 @@
 </head>
 
 <body>
-  <!-- Sidebar (fixed) -->
   <aside class="sidebar">
     <div class="side-top">
       <button id="newChat" class="btn">+ New chat</button>
       <button id="toAccount" class="btn gray">Account</button>
     </div>
-    <div class="search">
-      <input id="q" placeholder="Search chats…">
-    </div>
+    <div class="search"><input id="q" placeholder="Search chats…"></div>
     <div id="convlist" class="convlist"></div>
-    <div class="side-bottom">
-      <div class="mini"><button id="signout" class="btn gray">Sign out</button></div>
-    </div>
+    <div class="side-bottom"><div class="mini"><button id="signout" class="btn gray">Sign out</button></div></div>
   </aside>
 
-  <!-- Mobile floating signout -->
   <button id="floatingSignout" class="floating-signout">Sign out</button>
 
-  <!-- Main -->
   <main class="main">
     <div class="topbar">
       <div class="left">
@@ -190,18 +109,20 @@
         <div class="pill"><span id="model">Math GPT</span></div>
         <div class="pill" id="status"></div>
       </div>
-      <div class="left">
+      <div class="left" style="gap:8px">
         <select id="gptType" class="pill" style="background:#0b1220;color:#e5e7eb;border:1px solid var(--border)">
           <option value="math">Math GPT</option>
           <option value="content">Content GPT</option>
         </select>
+        <!-- NEW Tutor buttons -->
+        <button id="btnDiagnostic" class="btn ghost">Start Diagnostic</button>
+        <button id="btnNextProblem" class="btn ghost">Next Problem</button>
       </div>
     </div>
 
     <div class="wrap">
       <div id="transcript" class="transcript"></div>
 
-      <!-- STICKY composer -->
       <div class="composer">
         <div>
           <input id="file" class="hide" type="file" accept="image/*" capture="environment">
@@ -230,9 +151,10 @@
       r.appendChild(b);
       const t = $('#transcript'); t.appendChild(r); t.scrollTop = t.scrollHeight;
       if (role === 'bot' && window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise([b]).catch(()=>{});
+      return b; // return bubble element for richer UI injections
     };
 
-    // session
+    // session helpers
     const getEmail = () => localStorage.getItem('gpts_email') || '';
     const setActiveId = id => localStorage.setItem('gpts_active_conversation', id || '');
     const getActiveId = () => localStorage.getItem('gpts_active_conversation') || '';
@@ -240,7 +162,9 @@
     // sidebar state
     let conversations = [];
     let filtered = [];
-    let openMenuConvId = null;
+
+    // diagnostic session state
+    let diag = { sessionId: null, currentQ: null };
 
     // thumbnails
     let selectedFile = null; let previewUrl = null;
@@ -263,63 +187,156 @@
     }
     async function listConversations(email){
       const r = await fetch(`${API_BASE}/api/conversations?userId=${encodeURIComponent(email)}`);
-      if(!r.ok) throw new Error('Failed to load conversations');
-      return r.json();
+      if(!r.ok) throw new Error('Failed to load conversations'); return r.json();
     }
     async function createConversation(email, title='New chat'){
       const r = await fetch(`${API_BASE}/api/conversations`, {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ userId: email, title })
       });
-      const d = await r.json(); if(!r.ok) throw new Error(d.error || 'Failed to create');
-      return d;
+      const d = await r.json(); if(!r.ok) throw new Error(d.error || 'Failed to create'); return d;
     }
     async function deleteConversation(email, id){
       const r = await fetch(`${API_BASE}/api/conversations/${id}`, {
         method:'DELETE', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ userId: email })
-      });
-      return r.ok;
+      }); return r.ok;
     }
     async function renameConversation(email, id, title){
       const r = await fetch(`${API_BASE}/api/conversations/${id}`, {
         method:'PATCH', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ userId: email, title })
-      });
-      if (!r.ok) {
-        const d = await r.json().catch(()=>({}));
-        throw new Error(d.error || 'Rename failed');
-      }
-      return true;
+      }); if(!r.ok){ const d=await r.json().catch(()=>({})); throw new Error(d.error||'Rename failed'); } return true;
     }
     async function getMessages(email, id){
       const r = await fetch(`${API_BASE}/api/conversations/${id}?userId=${encodeURIComponent(email)}`);
-      const d = await r.json(); if(!r.ok) throw new Error(d.error || 'Failed to load messages');
-      return d.messages || [];
+      const d = await r.json(); if(!r.ok) throw new Error(d.error || 'Failed to load messages'); return d.messages || [];
     }
     async function askText(email, gptType, message, conversationId){
       const r = await fetch(`${API_BASE}/api/chat`, {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ userId: email, gptType, message, conversationId })
-      });
-      const data = await r.json();
-      if(!r.ok) throw new Error(data.error || 'Chat failed');
-      return data;
+      }); const data = await r.json(); if(!r.ok) throw new Error(data.error || 'Chat failed'); return data;
     }
     async function askPhoto(email, gptType, file, attempt, conversationId){
       const fd = new FormData();
-      fd.append('userId', email);
-      fd.append('gptType', gptType);
+      fd.append('userId', email); fd.append('gptType', gptType);
       if (attempt) fd.append('attempt', attempt);
       if (conversationId) fd.append('conversationId', conversationId);
       fd.append('image', file);
       const r = await fetch(`${API_BASE}/api/photo-solve`, { method:'POST', body: fd });
-      const data = await r.json();
-      if(!r.ok) throw new Error(data.error || 'Photo solve failed');
-      return data;
+      const data = await r.json(); if(!r.ok) throw new Error(data.error || 'Photo solve failed'); return data;
     }
 
-    // Build a conversation row with kebab menu and inline rename
+    // Tutor APIs
+    async function startDiagnostic(){
+      const email = getEmail();
+      const bubble = addRow('bot', 'Starting a quick 6-question diagnostic…');
+      try{
+        const r = await fetch(`${API_BASE}/api/tutor/start-diagnostic`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ userId: email, level: 'auto', count: 6 })
+        });
+        const d = await r.json(); if(!r.ok) throw new Error(d.error || 'Failed to start diagnostic');
+        diag.sessionId = d.sessionId; diag.currentQ = d.question;
+        renderQuestion(d.question, 1, 6);
+      }catch(e){
+        bubble.textContent = 'Error starting diagnostic: ' + e.message;
+      }
+    }
+    async function answerDiagnostic(letter){
+      const email = getEmail();
+      const q = diag.currentQ; if(!q) return;
+      const bubble = addRow('user', `My answer: ${letter}`);
+      try{
+        const r = await fetch(`${API_BASE}/api/tutor/answer-diagnostic`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ userId: email, sessionId: diag.sessionId, questionId: q.id, answer: letter })
+        });
+        const d = await r.json(); if(!r.ok) throw new Error(d.error || 'Failed to submit answer');
+
+        if(!d.done){
+          diag.currentQ = d.question;
+          renderQuestion(d.question, d.progress.current+0, d.progress.total);
+        } else {
+          diag.currentQ = null;
+          const summary = [
+            'Diagnostic complete!',
+            '',
+            'Skill vector:',
+            '```json',
+            JSON.stringify(d.vector, null, 2),
+            '```',
+            '',
+            'Mini-plan:',
+            '```json',
+            JSON.stringify(d.plan, null, 2),
+            '```',
+            '',
+            'Click "Next Problem" for a practice task from a weak topic.'
+          ].join('\n');
+          addRow('bot', summary);
+        }
+      }catch(e){
+        addRow('bot','Error: ' + e.message);
+      }
+    }
+    async function nextProblem(){
+      const email = getEmail();
+      const bubble = addRow('bot','Picking a problem from your weakest topic…');
+      try{
+        const r = await fetch(`${API_BASE}/api/tutor/next-problem`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ userId: email })
+        });
+        const d = await r.json(); if(!r.ok) throw new Error(d.error || 'Failed to get problem');
+
+        const md = [
+          `**Topic:** ${d.problem.topic}   •   **Difficulty:** ${d.problem.difficulty}`,
+          '',
+          `**Problem**`,
+          d.problem.problem,
+          '',
+          `<details class="solution"><summary>Show solution</summary>`,
+          '',
+          '**Step-by-step**',
+          ...(d.problem.solution_steps || []).map(s => '- ' + s),
+          '',
+          `**Final Answer**`,
+          d.problem.final_answer,
+          '',
+          `</details>`
+        ].join('\n');
+        addRow('bot', md);
+      }catch(e){
+        bubble.textContent = 'Error: ' + e.message;
+      }
+    }
+
+    function choiceButton(letter, onClick){
+      const btn = document.createElement('button');
+      btn.className = 'btn ghost';
+      btn.textContent = letter;
+      btn.onclick = onClick;
+      return btn;
+    }
+    function renderQuestion(q, idx, total){
+      const text = `**Q${idx}/${total} — ${q.topic} (${q.difficulty})**\n\n${q.prompt}`;
+      const bubble = addRow('bot', text);
+      const bar = document.createElement('div'); bar.className = 'choicebar';
+      const letters = ['A','B','C','D'];
+      (q.choices || []).forEach((opt,i)=>{
+        const btn = choiceButton(letters[i] || '?', ()=>answerDiagnostic(letters[i]));
+        btn.title = opt; // tooltip shows the "A) ..." text
+        bar.appendChild(btn);
+      });
+      const prog = document.createElement('div'); prog.className='progress';
+      prog.textContent = `Select A–D. (Hover to read each choice.)`;
+      bubble.appendChild(bar); bubble.appendChild(prog);
+      if (window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise([bubble]).catch(()=>{});
+    }
+
+    // Sidebar render (includes ⋯ menu + inline rename unchanged from previous step)
     function buildConvRow(item, activeId){
       const row = document.createElement('div');
       row.className = 'conv' + (String(item.id)===String(activeId) ? ' active':'');
@@ -327,134 +344,58 @@
 
       const title = document.createElement('div'); title.className = 'title'; title.textContent = item.title || 'Untitled';
       const time  = document.createElement('div'); time.className = 'time'; time.textContent = new Date(item.updated_at).toLocaleString();
-
       const kebab = document.createElement('button'); kebab.className = 'kebab'; kebab.setAttribute('aria-label','Chat menu'); kebab.textContent = '⋯';
-
       const menu = document.createElement('div'); menu.className = 'menu';
-      menu.innerHTML = `
-        <button class="share">Share (copy link)</button>
-        <button class="rename">Rename</button>
-        <button class="delete danger">Delete</button>
-      `;
+      menu.innerHTML = `<button class="share">Share (copy link)</button><button class="rename">Rename</button><button class="delete danger">Delete</button>`;
 
-      // Open conversation (disabled during inline editing)
-      row.addEventListener('click', () => {
-        if (row.classList.contains('editing')) return;
-        openConversation(item.id);
-      });
+      row.addEventListener('click', () => { if (!row.classList.contains('editing')) openConversation(item.id); });
+      kebab.onclick = (e)=>{ e.stopPropagation(); closeAllMenus(); menu.classList.toggle('show'); };
 
-      // Toggle menu
-      kebab.onclick = (e) => {
-        e.stopPropagation();
-        closeAllMenus();
-        menu.classList.toggle('show');
-        openMenuConvId = menu.classList.contains('show') ? item.id : null;
-      };
-
-      // Menu actions
       menu.querySelector('.share').onclick = async (e) => {
-        e.stopPropagation(); menu.classList.remove('show'); openMenuConvId = null;
+        e.stopPropagation(); menu.classList.remove('show');
         const url = `${location.origin}${location.pathname}?cid=${item.id}`;
         try { await navigator.clipboard.writeText(url); h('Share link copied'); setTimeout(()=>h(''),2000); }
         catch { prompt('Copy this link:', url); }
       };
 
-      // INLINE RENAME
+      // inline rename
       const beginInlineRename = () => {
-        menu.classList.remove('show'); openMenuConvId = null;
+        menu.classList.remove('show');
         if (row.classList.contains('editing')) return;
         row.classList.add('editing');
-
         const current = title.textContent;
-        const input = document.createElement('input');
-        input.className = 'title-input';
-        input.value = current;
-        input.setAttribute('maxlength', '80');
-
-        // replace title node with input
-        row.replaceChild(input, title);
-        input.focus();
-        input.select();
-
-        // prevent row click while editing
-        const stopClick = (e)=> e.stopPropagation();
-        input.addEventListener('click', stopClick);
-
+        const input = document.createElement('input'); input.className='title-input'; input.value=current; input.setAttribute('maxlength','80');
+        row.replaceChild(input, title); input.focus(); input.select();
         const commit = async () => {
-          const next = (input.value || '').trim();
-          if (!next || next === current) { cancel(); return; }
+          const next=(input.value||'').trim();
+          if(!next || next===current){ cancel(); return; }
           input.disabled = true;
-          try {
-            await renameConversation(getEmail(), item.id, next);
-            // Update local state to avoid full reload flicker
-            item.title = next;
-            title.textContent = next;
-            row.replaceChild(title, input);
-            row.classList.remove('editing');
-            await refreshSidebar(); // keep ordering/updated timestamps accurate if the server changes them later
-            h('Chat renamed'); setTimeout(()=>h(''),1200);
-          } catch (err) {
-            input.disabled = false;
-            h(err.message || 'Rename failed'); setTimeout(()=>h(''),2500);
-            // keep editing so the user can try again
-            input.focus();
-            input.select();
-          }
+          try { await renameConversation(getEmail(), item.id, next); item.title=next; title.textContent=next; row.replaceChild(title,input); row.classList.remove('editing'); await refreshSidebar(); h('Chat renamed'); setTimeout(()=>h(''),1200); }
+          catch(err){ input.disabled=false; h(err.message||'Rename failed'); setTimeout(()=>h(''),2500); input.focus(); input.select(); }
         };
-
-        const cancel = () => {
-          row.replaceChild(title, input);
-          row.classList.remove('editing');
-        };
-
-        input.addEventListener('keydown', (e) => {
-          if (e.key === 'Enter') { e.preventDefault(); commit(); }
-          else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
-        });
-
-        input.addEventListener('blur', () => {
-          // Save on blur (common UX)
-          if (row.classList.contains('editing')) commit();
-        });
+        const cancel = ()=>{ row.replaceChild(title,input); row.classList.remove('editing'); };
+        input.addEventListener('keydown',(e)=>{ if(e.key==='Enter'){e.preventDefault();commit();} else if(e.key==='Escape'){e.preventDefault();cancel();}});
+        input.addEventListener('blur',()=>{ if(row.classList.contains('editing')) commit(); });
       };
-
-      menu.querySelector('.rename').onclick = (e) => { e.stopPropagation(); beginInlineRename(); };
+      menu.querySelector('.rename').onclick = (e)=>{ e.stopPropagation(); beginInlineRename(); };
       menu.querySelector('.delete').onclick = async (e) => {
         e.stopPropagation();
-        if (!confirm('Delete this chat?')) { menu.classList.remove('show'); openMenuConvId = null; return; }
+        if (!confirm('Delete this chat?')) { menu.classList.remove('show'); return; }
         const ok = await deleteConversation(getEmail(), item.id);
-        if (ok) {
-          if (String(getActiveId()) === String(item.id)) setActiveId('');
-          await refreshSidebar();
-          if(!getActiveId()) { await newChat(); }
-        } else {
-          h('Delete failed'); setTimeout(()=>h(''),2000);
-        }
-        menu.classList.remove('show'); openMenuConvId = null;
+        if (ok) { if (String(getActiveId()) === String(item.id)) setActiveId(''); await refreshSidebar(); if(!getActiveId()) { await newChat(); } }
+        else { h('Delete failed'); setTimeout(()=>h(''),2000); }
+        menu.classList.remove('show');
       };
 
       row.appendChild(title); row.appendChild(time); row.appendChild(kebab); row.appendChild(menu);
       return row;
     }
+    function closeAllMenus(){ document.querySelectorAll('.menu.show').forEach(m => m.classList.remove('show')); }
+    document.addEventListener('click', (e) => { if (!e.target.closest('.menu') && !e.target.closest('.kebab')) closeAllMenus(); });
 
-    function closeAllMenus(){
-      document.querySelectorAll('.menu.show').forEach(m => m.classList.remove('show'));
-      openMenuConvId = null;
-    }
-    document.addEventListener('click', (e) => {
-      if (!e.target.closest('.menu') && !e.target.closest('.kebab')) closeAllMenus();
-    });
-
-    // Sidebar rendering
-    function renderList(list){
-      const c = $('#convlist'); c.innerHTML = '';
-      const active = getActiveId();
-      list.forEach(item => c.appendChild(buildConvRow(item, active)));
-    }
-
+    function renderList(list){ const c = $('#convlist'); c.innerHTML=''; const active=getActiveId(); list.forEach(item=>c.appendChild(buildConvRow(item,active))); }
     async function refreshSidebar(){
-      const email = getEmail();
-      conversations = await listConversations(email);
+      const email=getEmail(); conversations=await listConversations(email);
       const q = $('#q').value.trim().toLowerCase();
       filtered = q ? conversations.filter(x => (x.title||'').toLowerCase().includes(q)) : conversations;
       renderList(filtered);
@@ -468,7 +409,6 @@
       await refreshSidebar();
       document.querySelector('.composer')?.scrollIntoView({ block:'end' });
     }
-
     async function newChat(){
       const email = getEmail();
       const conv = await createConversation(email, 'New chat');
@@ -519,24 +459,22 @@
 
     // events
     $('#send').onclick = send;
-    $('#message').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
-    });
+    $('#message').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } });
     $('#q').oninput = refreshSidebar;
     $('#newChat').onclick = newChat;
     $('#toAccount').onclick = () => location.href = 'index.html';
+    $('#btnDiagnostic').onclick = startDiagnostic;
+    $('#btnNextProblem').onclick = nextProblem;
 
     function doSignout(){ localStorage.removeItem('gpts_email'); location.href = 'index.html'; }
     $('#signout').onclick = doSignout; $('#floatingSignout').onclick = doSignout;
 
-    // Keep composer visible on mobile keyboard show/hide
     if (window.visualViewport) {
       const vv = window.visualViewport;
       const onVV = () => document.querySelector('.composer')?.scrollIntoView({ block:'end' });
       vv.addEventListener('resize', onVV); vv.addEventListener('scroll', onVV);
     }
 
-    // Open a shared link like ?cid=123
     function getQueryParam(name){
       const m = new RegExp('[?&]'+name+'=([^&]+)').exec(location.search);
       return m ? decodeURIComponent(m[1]) : null;
@@ -545,7 +483,7 @@
     (async function init(){
       const email = getEmail();
       if(!email){ location.href='index.html'; return; }
-      document.getElementById('emailPill').textContent = email;
+      $('#emailPill').textContent = email;
 
       const sub = await checkSubscription(email);
       if(!sub.subscribed){ location.href='index.html'; return; }
@@ -553,16 +491,14 @@
       await refreshSidebar();
 
       const sharedCid = getQueryParam('cid');
-      if (sharedCid) {
-        try { await openConversation(sharedCid); }
-        catch { /* ignore */ }
-      } else {
+      if (sharedCid) { try { await openConversation(sharedCid); } catch {} }
+      else {
         const active = getActiveId();
         if(active){ await openConversation(active); }
         else { addRow('bot', 'Welcome back! Pick a chat on the left or start a new one.'); }
       }
 
-      h('Tip: Hover a chat for ⋯, choose Rename to edit inline. Enter = save, Esc = cancel.');
+      h('Tip: Use Start Diagnostic to get a mini plan; Next Problem pulls from your weakest topic.');
       document.querySelector('.composer')?.scrollIntoView({ block:'end' });
     })();
   </script>
