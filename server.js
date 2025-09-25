@@ -6,10 +6,22 @@ const crypto = require('crypto');
 const { Pool } = require('pg');
 const multer = require('multer');
 
-/* ===== New: export libs ===== */
-const { Document, Packer, Paragraph, TextRun } = require('docx');
-const PDFDocument = require('pdfkit');
-const PptxGenJS = require('pptxgenjs');
+//
+// Optional export libraries (loaded safely so the app still boots if missing)
+//
+function safeRequire(name) {
+  try { return require(name); }
+  catch (e) {
+    if (e.code === 'MODULE_NOT_FOUND') {
+      console.warn(`[exports] Optional dependency not installed: ${name}`);
+      return null;
+    }
+    throw e;
+  }
+}
+const DOCX = safeRequire('docx');         // { Document, Packer, Paragraph, TextRun }
+const PDFKit = safeRequire('pdfkit');     // constructor PDFDocument
+const PptxGenJS = safeRequire('pptxgenjs'); // class/constructor
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -379,7 +391,12 @@ app.get('/api/config', async (req, res) => {
     currencySymbol: currencySymbol(PAYSTACK_CURRENCY),
     model: OPENAI_MODEL,
     db: dbOk,
-    features: { photoSolve: true, sidebarConversations: true, autoTitle: true, contextHistory: true, adaptiveTutor: true, multiFormatContent: true, exports: { docx: true, pdf: true, pptx: true, html: true, md: true } }
+    features: {
+      photoSolve: true, sidebarConversations: true, autoTitle: true, contextHistory: true,
+      adaptiveTutor: true, multiFormatContent: true,
+      exports: { docx: !!DOCX, pdf: !!PDFKit, pptx: !!PptxGenJS, html: true, md: true },
+      downloadableLinks: true
+    }
   });
 });
 
@@ -939,7 +956,7 @@ Return STRICT JSON:
     "Step 2 ...",
     "..."
   ],
-    "final_answer": "Short final answer."
+  "final_answer": "Short final answer."
 }`;
   const r = await axios.post('https://api.openai.com/v1/chat/completions', {
     model: OPENAI_MODEL,
@@ -1116,7 +1133,7 @@ app.post('/api/content/multiformat', async (req, res) => {
       throw new Error('Bad multi-format JSON');
     }
 
-    // Post a compact summary into chat (ContentGPT allows headings)
+    // Post a compact summary into chat (ContentGPT allows headings/bold)
     const summaryMd = [
       `**${content.title || (topic || 'Content Package')}**`,
       '',
@@ -1197,6 +1214,8 @@ function bundleAllAsMarkdown(content){
 }
 
 async function createDocxBufferFromMarkdown(md, title='Content'){
+  if (!DOCX) throw new Error('DOCX export not available (docx not installed)');
+  const { Document, Packer, Paragraph, TextRun } = DOCX;
   const doc = new Document({ sections: [] });
   const paras = [];
   md.split('\n').forEach(line => {
@@ -1207,7 +1226,10 @@ async function createDocxBufferFromMarkdown(md, title='Content'){
   doc.addSection({ children: paras });
   return await Packer.toBuffer(doc);
 }
+
 function createPdfBufferFromText(text){
+  if (!PDFKit) throw new Error('PDF export not available (pdfkit not installed)');
+  const PDFDocument = PDFKit;
   return new Promise((resolve, reject) => {
     const doc = new PDFDocument({ margin: 50 });
     const chunks = [];
@@ -1220,7 +1242,9 @@ function createPdfBufferFromText(text){
     doc.end();
   });
 }
+
 async function createPptxBufferFromContent(content){
+  if (!PptxGenJS) throw new Error('PPTX export not available (pptxgenjs not installed)');
   const pptx = new PptxGenJS();
 
   const addSlideWithTitleAndText = (title, body) => {
@@ -1310,70 +1334,178 @@ function htmlWrap(title, bodyPre){
   ].join('');
 }
 
-/* Export endpoint
-   Body: {
-     userId, format: 'docx'|'pdf'|'pptx'|'html'|'md',
-     which: 'all'|'blog_post'|'linkedin_post'|'tweet_thread'|'email_newsletter'|'youtube_script'|'tiktok_script',
-     content: { ...returned by /api/content/multiformat ... },
-     filename?: 'MyFile'
-   }
-*/
+/* --- helper: sanitize a filename --- */
+function sanitizeFilename(name='content'){
+  return (name || 'content').replace(/[^\w\- ]+/g,'').trim() || 'content';
+}
+
+/* --- render an export artifact into {buffer,mime,filename} --- */
+async function renderExportArtifact({ content, which='all', format='md', filename }) {
+  if (!content) throw new Error('content required');
+  const baseName = sanitizeFilename(filename || content.title || 'content');
+
+  // make a markdown "bundle" for the chosen selection
+  const mdAll = bundleAllAsMarkdown(content);
+  let md = mdAll;
+  if (which !== 'all') {
+    const one = { ...content };
+    ['blog_post','linkedin_post','tweet_thread','email_newsletter','youtube_script','tiktok_script'].forEach(k => {
+      if (k !== which) delete one[k];
+    });
+    md = bundleAllAsMarkdown(one);
+  }
+
+  if (format === 'md') {
+    return { buffer: Buffer.from(md, 'utf8'), mime: 'text/markdown; charset=utf-8', filename: `${baseName}.md` };
+  }
+  if (format === 'html') {
+    const html = htmlWrap(content.title || baseName, md);
+    return { buffer: Buffer.from(html, 'utf8'), mime: 'text/html; charset=utf-8', filename: `${baseName}.html` };
+  }
+  if (format === 'docx') {
+    const buf = await createDocxBufferFromMarkdown(md, content.title || baseName);
+    return { buffer: buf, mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', filename: `${baseName}.docx` };
+  }
+  if (format === 'pdf') {
+    const buf = await createPdfBufferFromText(md);
+    return { buffer: buf, mime: 'application/pdf', filename: `${baseName}.pdf` };
+  }
+  if (format === 'pptx') {
+    const buf = await createPptxBufferFromContent(content);
+    return { buffer: buf, mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation', filename: `${baseName}.pptx` };
+  }
+  throw new Error('Unsupported format. Use docx, pdf, pptx, html, md.');
+}
+
+/* Export-as-download response (immediate) */
 app.post('/api/content/export', async (req, res) => {
   try {
     const { userId, format, which='all', content, filename } = req.body || {};
     if (!userId) return res.status(400).json({ error: 'userId required' });
     const user = await getUser(userId);
     if (!user || !user.subscribed) return res.status(401).json({ error: 'Not subscribed' });
-    if (!content) return res.status(400).json({ error: 'content required' });
-    const baseName = (filename || content.title || 'content').replace(/[^\w\- ]+/g,'').trim() || 'content';
 
-    // Build a single markdown string representing the selected slice(s)
-    const mdAll = bundleAllAsMarkdown(content);
-    let md = mdAll;
-    if (which !== 'all') {
-      const one = { ...content };
-      const empty = { title: content.title };
-      // keep only requested section
-      ['blog_post','linkedin_post','tweet_thread','email_newsletter','youtube_script','tiktok_script'].forEach(k => {
-        if (k !== which) delete one[k];
-      });
-      md = bundleAllAsMarkdown(one || empty);
-    }
+    // ensure optional deps
+    if (format === 'docx' && !DOCX) return res.status(400).json({ error: 'DOCX export not available on server' });
+    if (format === 'pdf' && !PDFKit) return res.status(400).json({ error: 'PDF export not available on server' });
+    if (format === 'pptx' && !PptxGenJS) return res.status(400).json({ error: 'PPTX export not available on server' });
 
-    if (format === 'md') {
-      res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="${baseName}.md"`);
-      return res.send(md);
-    }
-    if (format === 'html') {
-      const html = htmlWrap(content.title || baseName, md);
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.setHeader('Content-Disposition', `attachment; filename="${baseName}.html"`);
-      return res.send(html);
-    }
-    if (format === 'docx') {
-      const buf = await createDocxBufferFromMarkdown(md, content.title || baseName);
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
-      res.setHeader('Content-Disposition', `attachment; filename="${baseName}.docx"`);
-      return res.send(buf);
-    }
-    if (format === 'pdf') {
-      const buf = await createPdfBufferFromText(md);
-      res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="${baseName}.pdf"`);
-      return res.send(buf);
-    }
-    if (format === 'pptx') {
-      const buf = await createPptxBufferFromContent(content);
-      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
-      res.setHeader('Content-Disposition', `attachment; filename="${baseName}.pptx"`);
-      return res.send(buf);
-    }
-
-    return res.status(400).json({ error: 'Unsupported format. Use docx, pdf, pptx, html, md.' });
+    const { buffer, mime, filename: outName } = await renderExportArtifact({ content, which, format, filename });
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Disposition', `attachment; filename="${outName}"`);
+    return res.send(buffer);
   } catch (e) {
     return safeApiError(res, e, 'Export failed');
   }
+});
+
+/* =========================
+   NEW: EPHEMERAL DOWNLOAD LINKS
+   ========================= */
+
+/**
+ * We keep generated files in-memory with a short TTL, and return
+ * a unique download URL the frontend can display as a real link.
+ */
+const downloadStore = new Map(); // id => { buffer, mime, filename, expiresAt }
+const DEFAULT_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+function pruneDownloads() {
+  const now = Date.now();
+  for (const [id, meta] of downloadStore.entries()) {
+    if (!meta || meta.expiresAt <= now) downloadStore.delete(id);
+  }
+}
+function putDownload(buffer, mime, filename, ttlMs = DEFAULT_TTL_MS) {
+  pruneDownloads();
+  const id = crypto.randomBytes(24).toString('hex');
+  const expiresAt = Date.now() + Math.max(30_000, Math.min(ttlMs, 60 * 60 * 1000)); // 30s..60min
+  downloadStore.set(id, { buffer, mime, filename, expiresAt });
+  return { id, expiresAt };
+}
+
+/**
+ * Create ONE link for a requested artifact
+ * Body: { userId, format, which='all', content, filename?, ttlSec? }
+ * Returns: { url, expiresAt, filename, format, which }
+ */
+app.post('/api/content/export-link', async (req, res) => {
+  try {
+    const { userId, format, which='all', content, filename, ttlSec } = req.body || {};
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    const user = await getUser(userId);
+    if (!user || !user.subscribed) return res.status(401).json({ error: 'Not subscribed' });
+
+    // optional deps check
+    if (format === 'docx' && !DOCX) return res.status(400).json({ error: 'DOCX export not available on server' });
+    if (format === 'pdf' && !PDFKit) return res.status(400).json({ error: 'PDF export not available on server' });
+    if (format === 'pptx' && !PptxGenJS) return res.status(400).json({ error: 'PPTX export not available on server' });
+
+    const { buffer, mime, filename: outName } = await renderExportArtifact({ content, which, format, filename });
+    const ttlMs = (Number(ttlSec) > 0 ? Number(ttlSec) * 1000 : DEFAULT_TTL_MS);
+    const { id, expiresAt } = putDownload(buffer, mime, outName, ttlMs);
+
+    const url = `${req.protocol}://${req.get('host')}/api/download/${id}`;
+    return res.json({ url, expiresAt, filename: outName, format, which });
+  } catch (e) {
+    return safeApiError(res, e, 'Failed to create download link');
+  }
+});
+
+/**
+ * Create MANY links at once
+ * Body: { userId, content, filename?, ttlSec?, items: [{format, which}] }
+ * Returns: { links: [{ url, expiresAt, filename, format, which }] }
+ */
+app.post('/api/content/export-links', async (req, res) => {
+  try {
+    const { userId, content, filename, ttlSec, items } = req.body || {};
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    const user = await getUser(userId);
+    if (!user || !user.subscribed) return res.status(401).json({ error: 'Not subscribed' });
+    if (!content) return res.status(400).json({ error: 'content required' });
+    const list = Array.isArray(items) && items.length ? items : [
+      { format: 'md', which: 'all' },
+      { format: 'html', which: 'all' },
+      ...(DOCX ? [{ format: 'docx', which: 'all' }] : []),
+      ...(PDFKit ? [{ format: 'pdf', which: 'all' }] : []),
+      ...(PptxGenJS ? [{ format: 'pptx', which: 'all' }] : [])
+    ];
+
+    const results = [];
+    for (const it of list) {
+      const { format, which='all' } = it;
+      if (format === 'docx' && !DOCX) { results.push({ error: 'docx not available', format, which }); continue; }
+      if (format === 'pdf' && !PDFKit) { results.push({ error: 'pdf not available', format, which }); continue; }
+      if (format === 'pptx' && !PptxGenJS) { results.push({ error: 'pptx not available', format, which }); continue; }
+
+      const { buffer, mime, filename: outName } = await renderExportArtifact({ content, which, format, filename });
+      const ttlMs = (Number(ttlSec) > 0 ? Number(ttlSec) * 1000 : DEFAULT_TTL_MS);
+      const { id, expiresAt } = putDownload(buffer, mime, outName, ttlMs);
+      const url = `${req.protocol}://${req.get('host')}/api/download/${id}`;
+      results.push({ url, expiresAt, filename: outName, format, which });
+    }
+
+    return res.json({ links: results });
+  } catch (e) {
+    return safeApiError(res, e, 'Failed to create download links');
+  }
+});
+
+/**
+ * GET the actual artifact by id (public but unguessable id + short TTL)
+ */
+app.get('/api/download/:id', (req, res) => {
+  const id = req.params.id;
+  const meta = downloadStore.get(id);
+  if (!meta) return res.status(404).send('Not found or expired');
+  if (meta.expiresAt <= Date.now()) {
+    downloadStore.delete(id);
+    return res.status(410).send('Link expired');
+  }
+  res.setHeader('Content-Type', meta.mime);
+  res.setHeader('Content-Disposition', `attachment; filename="${meta.filename}"`);
+  return res.send(meta.buffer);
 });
 
 /* =========================
