@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 3000;
    ENV / CONFIG
    ========================= */
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-const OPENAI_MODEL   = process.env.OPENAI_MODEL || 'gpt-4o'; // Vision-capable; set 'gpt-4.1' if you prefer
+const OPENAI_MODEL   = process.env.OPENAI_MODEL || 'gpt-4o'; // vision-capable
 
 const PAYSTACK_SECRET_KEY  = process.env.PAYSTACK_SECRET_KEY;
 const PAYSTACK_CALLBACK_URL =
@@ -35,11 +35,8 @@ const pool = new Pool({
 
 async function dbQuery(text, params) {
   const client = await pool.connect();
-  try {
-    return await client.query(text, params);
-  } finally {
-    client.release();
-  }
+  try { return await client.query(text, params); }
+  finally { client.release(); }
 }
 
 async function initDb() {
@@ -95,6 +92,7 @@ async function initDb() {
   console.log('[db] schema ready');
 }
 
+/* ===== Users & Payments ===== */
 async function getUser(email) {
   const { rows } = await dbQuery(`SELECT * FROM users WHERE email=$1`, [email]);
   return rows[0] || null;
@@ -133,7 +131,7 @@ async function markPaymentStatus(reference, status, raw) {
   );
 }
 
-// Conversations helpers
+/* ===== Conversations & Messages ===== */
 async function createConversation(email, title = 'New chat') {
   const { rows } = await dbQuery(
     `INSERT INTO conversations(user_email, title) VALUES($1,$2) RETURNING id, title, created_at, updated_at`,
@@ -176,77 +174,26 @@ async function getMessageCount(convId) {
 async function updateConversationTitle(convId, newTitle) {
   await dbQuery(`UPDATE conversations SET title=$2, updated_at=now() WHERE id=$1`, [convId, newTitle]);
 }
-
-/* ===== Title generation helpers ===== */
-function sanitizeTitle(s) {
-  if (!s) return 'New chat';
-  // strip quotes and extra punctuation, trim length
-  s = String(s).replace(/^["'“”‘’\s]+|["'“”‘’\s]+$/g, '').replace(/\s+/g, ' ').trim();
-  s = s.replace(/[.:;!?]$/g, '');
-  if (s.length > 60) s = s.slice(0, 60).trim();
-  return s || 'New chat';
+async function getConversationMessages(email, convId) {
+  const owns = await userOwnsConversation(email, convId);
+  if (!owns) return null;
+  const { rows } = await dbQuery(
+    `SELECT role, content, created_at FROM messages WHERE conversation_id=$1 ORDER BY created_at ASC`,
+    [convId]
+  );
+  return rows;
 }
-function toTitleCase(s) {
-  return s.replace(/\w\S*/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase());
-}
-async function generateShortTitle(userText, assistantText) {
-  try {
-    const prompt = [
-      'Create a very short, descriptive chat title for a math tutoring conversation.',
-      'Max 6 words. Title Case. No trailing punctuation. Avoid quotes.',
-      '',
-      'User message:',
-      userText?.slice(0, 400) || '(photo)',
-      '',
-      'Assistant reply (excerpt):',
-      assistantText?.slice(0, 400) || '',
-      '',
-      'Return ONLY the title.'
-    ].join('\n');
-
-    const r = await axios.post('https://api.openai.com/v1/chat/completions', {
-      model: OPENAI_MODEL,
-      messages: [
-        { role: 'system', content: 'You generate concise titles for chats.' },
-        { role: 'user', content: prompt }
-      ],
-      max_tokens: 20,
-      temperature: 0.2
-    }, {
-      headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
-      timeout: 15000
-    });
-
-    let title = r.data?.choices?.[0]?.message?.content || '';
-    title = sanitizeTitle(title);
-    title = toTitleCase(title);
-    return title;
-  } catch {
-    // Fallback: derive from user text
-    const base = (userText || 'New chat').split('\n')[0].slice(0, 50);
-    return toTitleCase(sanitizeTitle(base));
-  }
-}
-
-async function maybeAutoTitleConversation(email, conversationId, userText, assistantText) {
-  const conv = await getConversation(conversationId);
-  if (!conv || conv.user_email !== email) return;
-  const msgCount = await getMessageCount(conversationId);
-  // Only auto-title on first exchange (<= 2 messages: user + assistant)
-  if (msgCount > 2) return;
-
-  const current = (conv.title || '').trim().toLowerCase();
-  const isDefault =
-    !current ||
-    current === 'new chat' ||
-    current === 'photo problem' ||
-    current.startsWith('new chat') ||
-    current.length < 5;
-
-  if (!isDefault) return;
-
-  const title = await generateShortTitle(userText, assistantText);
-  if (title) await updateConversationTitle(conversationId, title);
+/* NEW: for sending recent history to OpenAI */
+async function getRecentMessagesForModel(convId, limit = 20) {
+  const { rows } = await dbQuery(
+    `SELECT role, content FROM messages
+     WHERE conversation_id=$1
+     ORDER BY created_at DESC
+     LIMIT $2`,
+    [convId, Math.max(2, Math.min(50, limit))]
+  );
+  // return ascending order for the API
+  return rows.reverse();
 }
 
 /* =========================
@@ -266,7 +213,7 @@ async function maybeAutoTitleConversation(email, conversationId, userText, assis
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*'); // tighten to your FE origin in prod
   res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
@@ -305,7 +252,7 @@ app.use(express.json());
 app.use(express.static('public'));
 
 /* =========================
-   GPT INSTRUCTIONS
+   GPT INSTRUCTIONS + FOLLOW-UP RULE
    ========================= */
 const gptInstructions = {
   math: `Role & Goal: You are "Math GPT," an expert AI tutor dedicated to making mathematics accessible, 
@@ -374,26 +321,27 @@ Your response should be:
 5. Help with brainstorming and idea generation`
 };
 
-/* =========================
-   HELPERS
-   ========================= */
-function currencySymbol(code) {
-  switch ((code || '').toUpperCase()) {
-    case 'NGN': return '₦';
-    case 'GHS': return 'GH₵';
-    case 'USD': return '$';
-    case 'ZAR': return 'R';
-    default: return code || '';
-  }
-}
-function safeApiError(res, err, fallbackMsg) {
-  const status = err?.response?.status || 500;
-  const data = err?.response?.data;
-  console.error('[server error]', { status, message: err?.message, data: data?.error || data });
-  return res.status(500).json({
-    error: fallbackMsg,
-    detail: data?.message || data?.error?.message || err?.message || 'Unknown error'
-  });
+/* NEW: small behavioral nudge to fix "Yes" follow-ups */
+const followupRule = `Follow-up Handling (Very Important):
+- Use conversation history to interpret short replies.
+- If your previous message offered to show a worked example (or asked "Would you like an example?" or "which area?") and the user replies with a bare affirmation such as "yes", "yeah", "yep", "ok", "sure", "please":
+  • Do NOT ask more questions.
+  • Immediately provide a concise, fully worked example with step-by-step reasoning and a clearly stated final answer.
+  • If no domain was specified, choose a sensible default (e.g., business/finance: compound interest), and then offer 2–3 alternative domains for the next example.
+- Keep the tone encouraging and concise; avoid redundant follow-up questions.`;
+
+/* helper to assemble messages with context */
+async function buildChatMessagesForModel(convId, gptType) {
+  // Pull recent chat history from DB
+  const history = await getRecentMessagesForModel(convId, 20); // last ~20 turns
+  // Convert to OpenAI messages, preserving roles
+  const prior = history.map(m => ({ role: m.role, content: m.content }));
+  // Prepend system messages
+  return [
+    { role: 'system', content: gptInstructions[gptType] || gptInstructions.math },
+    { role: 'system', content: followupRule },
+    ...prior
+  ];
 }
 
 /* =========================
@@ -420,7 +368,7 @@ app.get('/api/config', async (req, res) => {
     currencySymbol: currencySymbol(PAYSTACK_CURRENCY),
     model: OPENAI_MODEL,
     db: dbOk,
-    features: { photoSolve: true, sidebarConversations: true, autoTitle: true }
+    features: { photoSolve: true, sidebarConversations: true, autoTitle: true, contextHistory: true }
   });
 });
 
@@ -469,7 +417,7 @@ app.get('/api/user/:email', async (req, res) => {
 });
 
 /* =========================
-   CHAT (TEXT)
+   CHAT (TEXT) — now with history + follow-up rule
    ========================= */
 app.post('/api/chat', async (req, res) => {
   try {
@@ -485,6 +433,7 @@ app.post('/api/chat', async (req, res) => {
     const user = await getUser(email);
     if (!user || !user.subscribed) return res.status(401).json({ error: 'User not authenticated or not subscribed' });
 
+    // conversation init / ownership
     if (!conversationId) {
       const snippet = message.slice(0, 60).replace(/\s+/g, ' ').trim();
       const conv = await createConversation(email, snippet || 'New chat');
@@ -493,14 +442,16 @@ app.post('/api/chat', async (req, res) => {
       const owns = await userOwnsConversation(email, conversationId);
       if (!owns) return res.status(403).json({ error: 'Conversation not found' });
     }
+
+    // save user message first
     await addMessageToConversation(conversationId, 'user', message);
+
+    // build context + follow-up system rule
+    const messages = await buildChatMessagesForModel(conversationId, gptType);
 
     const ai = await axios.post('https://api.openai.com/v1/chat/completions', {
       model: OPENAI_MODEL,
-      messages: [
-        { role: 'system', content: gptInstructions[gptType] },
-        { role: 'user', content: message }
-      ],
+      messages,
       max_tokens: 1000,
       temperature: 0.7
     }, {
@@ -521,7 +472,7 @@ app.post('/api/chat', async (req, res) => {
 });
 
 /* =========================
-   PHOTO SOLVE (VISION)
+   PHOTO SOLVE (VISION) — now also includes prior text history
    ========================= */
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6 * 1024 * 1024 } }); // 6MB
 const ALLOWED_MIME = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp']);
@@ -552,6 +503,7 @@ app.post('/api/photo-solve', upload.single('image'), async (req, res) => {
     const userNote = (attempt && attempt.trim()) ? `📷 (with note) ${attempt}` : '📷 Photo uploaded';
     await addMessageToConversation(conversationId, 'user', userNote);
 
+    // Build data URL
     const mime = req.file.mimetype;
     const b64  = req.file.buffer.toString('base64');
     const dataUrl = `data:${mime};base64,${b64}`;
@@ -559,16 +511,22 @@ app.post('/api/photo-solve', upload.single('image'), async (req, res) => {
     const visionTask = `
 You are given an image of a math problem. Do the following, in order:
 
-1) **Extract the problem** as text (if visible).
-2) **Solve step-by-step** with clear reasoning and proper LaTeX. Use display math \\[ ... \\] for derivations.
-3) **Mistake Watchlist**: bullet a short list of common mistakes a student might make on this exact problem.
-${attempt && attempt.trim() ? `4) **Error Analysis of Student Attempt**: The student attempted it as below. Identify the exact step that goes wrong, explain the misconception, and show the correct correction.\n---\n${attempt}\n---` : ''}
-5) **Final Answer**: state the final numeric/algebraic answer clearly.
+1) Extract the problem as text (if visible).
+2) Solve step-by-step with clear reasoning and proper LaTeX. Use display math \\[ ... \\] for derivations.
+3) Mistake Watchlist: bullet a short list of common mistakes on this problem.
+${attempt && attempt.trim() ? `4) Error Analysis of Student Attempt: Identify the exact step that goes wrong, explain the misconception, and correct it.\n---\n${attempt}\n---` : ''}
+5) Final Answer: state clearly.
 
-Be patient, encouraging, and concise. If parts of the prompt are unclear due to image quality, say what is ambiguous and give the best-guess interpretation.`.trim();
+Be patient, encouraging, and concise. If something is ambiguous due to image quality, state the ambiguity and proceed with a reasonable assumption.`.trim();
+
+    // Include prior text history and the follow-up rule, then the fresh vision user message
+    const prior = await getRecentMessagesForModel(conversationId, 18);
+    const priorText = prior.map(m => ({ role: m.role, content: m.content }));
 
     const messages = [
-      { role: 'system', content: gptInstructions[gptType] },
+      { role: 'system', content: gptInstructions[gptType] || gptInstructions.math },
+      { role: 'system', content: followupRule },
+      ...priorText,
       {
         role: 'user',
         content: [
@@ -591,7 +549,7 @@ Be patient, encouraging, and concise. If parts of the prompt are unclear due to 
     const reply = ai.data?.choices?.[0]?.message?.content ?? '';
     await addMessageToConversation(conversationId, 'assistant', reply);
 
-    // Auto-title after first exchange (use attempt or generic)
+    // Auto-title after first exchange
     const userTextForTitle = attempt?.trim() || 'Photo math problem';
     await maybeAutoTitleConversation(email, conversationId, userTextForTitle, reply);
 
@@ -602,7 +560,7 @@ Be patient, encouraging, and concise. If parts of the prompt are unclear due to 
 });
 
 /* =========================
-   CONVERSATIONS API
+   CONVERSATIONS API (list/get/create/delete/rename)
    ========================= */
 app.get('/api/conversations', async (req, res) => {
   try {
@@ -648,6 +606,22 @@ app.delete('/api/conversations/:id', async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Failed to delete conversation' }); }
 });
 
+/* NEW: rename endpoint (used by ⋯ menu in chat.html) */
+app.patch('/api/conversations/:id', async (req, res) => {
+  try {
+    const { userId, title } = req.body || {};
+    const id = Number(req.params.id);
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+    if (!title || !title.trim()) return res.status(400).json({ error: 'title required' });
+    const owns = await userOwnsConversation(userId, id);
+    if (!owns) return res.status(404).json({ error: 'Not found' });
+    await updateConversationTitle(id, title.trim());
+    res.json({ ok:true });
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to rename conversation' });
+  }
+});
+
 /* =========================
    PAYSTACK INIT
    ========================= */
@@ -690,6 +664,90 @@ app.post('/api/create-subscription', async (req, res) => {
     return safeApiError(res, err, 'Payment initialization failed');
   }
 });
+
+/* =========================
+   AUTO-TITLE HELPERS (unchanged)
+   ========================= */
+function sanitizeTitle(s) {
+  if (!s) return 'New chat';
+  s = String(s).replace(/^["'“”‘’\s]+|["'“”‘’\s]+$/g, '').replace(/\s+/g, ' ').trim();
+  s = s.replace(/[.:;!?]$/g, '');
+  if (s.length > 60) s = s.slice(0, 60).trim();
+  return s || 'New chat';
+}
+function toTitleCase(s) {
+  return s.replace(/\w\S*/g, w => w[0].toUpperCase() + w.slice(1).toLowerCase());
+}
+async function generateShortTitle(userText, assistantText) {
+  try {
+    const prompt = [
+      'Create a very short, descriptive chat title for a math tutoring conversation.',
+      'Max 6 words. Title Case. No trailing punctuation. Avoid quotes.',
+      '',
+      'User message:',
+      userText?.slice(0, 400) || '(photo)',
+      '',
+      'Assistant reply (excerpt):',
+      assistantText?.slice(0, 400) || '',
+      '',
+      'Return ONLY the title.'
+    ].join('\n');
+
+    const r = await axios.post('https://api.openai.com/v1/chat/completions', {
+      model: OPENAI_MODEL,
+      messages: [
+        { role: 'system', content: 'You generate concise titles for chats.' },
+        { role: 'user', content: prompt }
+      ],
+      max_tokens: 20,
+      temperature: 0.2
+    }, {
+      headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+      timeout: 15000
+    });
+
+    let title = r.data?.choices?.[0]?.message?.content || '';
+    title = sanitizeTitle(title);
+    title = toTitleCase(title);
+    return title;
+  } catch {
+    const base = (userText || 'New chat').split('\n')[0].slice(0, 50);
+    return toTitleCase(sanitizeTitle(base));
+  }
+}
+async function maybeAutoTitleConversation(email, conversationId, userText, assistantText) {
+  const conv = await getConversation(conversationId);
+  if (!conv || conv.user_email !== email) return;
+  const msgCount = await getMessageCount(conversationId);
+  if (msgCount > 2) return;
+  const current = (conv.title || '').trim().toLowerCase();
+  const isDefault = !current || current === 'new chat' || current === 'photo problem' || current.startsWith('new chat') || current.length < 5;
+  if (!isDefault) return;
+  const title = await generateShortTitle(userText, assistantText);
+  if (title) await updateConversationTitle(conversationId, title);
+}
+
+/* =========================
+   UTIL
+   ========================= */
+function currencySymbol(code) {
+  switch ((code || '').toUpperCase()) {
+    case 'NGN': return '₦';
+    case 'GHS': return 'GH₵';
+    case 'USD': return '$';
+    case 'ZAR': return 'R';
+    default: return code || '';
+  }
+}
+function safeApiError(res, err, fallbackMsg) {
+  const status = err?.response?.status || 500;
+  const data = err?.response?.data;
+  console.error('[server error]', { status, message: err?.message, data: data?.error || data });
+  return res.status(500).json({
+    error: fallbackMsg,
+    detail: data?.message || data?.error?.message || err?.message || 'Unknown error'
+  });
+}
 
 /* =========================
    START SERVER
