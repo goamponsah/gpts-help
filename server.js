@@ -361,13 +361,75 @@ async function buildChatMessagesForModel(convId, gptType) {
    Basic pages
 ---------------------------------- */
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-app.get('/payment-success', (req, res) => {
-  res.type('html').send(`<!doctype html><html><head><meta charset="utf-8"><title>Payment Success</title></head>
-  <body style="font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 40px;">
-    <h1>Payment Successful</h1>
-    <p>Thank you! Your payment was successful. You can now return to the app.</p>
-    <p><a href="/index.html">Back to Account</a></p>
-  </body></html>`);
+
+/* Auto-open chat after successful Paystack payment */
+app.get('/payment-success', async (req, res) => {
+  try {
+    const reference = req.query.reference || req.query.trxref;
+    if (!reference) {
+      return res.type('html').send(`<!doctype html><html><head><meta charset="utf-8"><title>Payment</title></head>
+      <body style="font-family:system-ui,-apple-system,Segoe UI,Roboto; padding:40px;">
+        <h2>Thanks!</h2>
+        <p>We didn't find a payment reference in the URL. If you finished paying, your bank may still be processing.</p>
+        <p><a href="/chat.html">Continue to Chat</a></p>
+      </body></html>`);
+    }
+
+    // Verify with Paystack to fetch status + customer email
+    const verify = await axios.get(
+      `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
+      { headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}` }, timeout: 20000 }
+    );
+
+    const data = verify.data?.data;
+    const status = data?.status; // 'success' | others
+    const email = data?.customer?.email || data?.customer_email || null;
+
+    if (status === 'success' && email) {
+      await upsertUserSubscribed(email, 'monthly', new Date(data.paid_at || Date.now()));
+      await markPaymentStatus(reference, 'charge.success', verify.data);
+
+      return res.type('html').send(`<!doctype html>
+<html><head>
+  <meta charset="utf-8" />
+  <meta http-equiv="refresh" content="2; url=/chat.html" />
+  <title>Payment Successful</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto;display:grid;place-items:center;height:100vh;margin:0}
+    .card{max-width:520px;border:1px solid #e7e7ef;border-radius:12px;padding:24px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.06)}
+    .muted{color:#6b7280}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Payment Successful 🎉</h2>
+    <p class="muted">We’re setting up your account and opening the chat…</p>
+    <p class="muted">If nothing happens, <a href="/chat.html">click here</a>.</p>
+  </div>
+  <script>
+    try { localStorage.setItem('userEmail', ${JSON.stringify(email)}); } catch(e) {}
+    setTimeout(function(){ window.location.replace('/chat.html'); }, 800);
+  </script>
+</body></html>`);
+    }
+
+    await markPaymentStatus(reference, status || 'verify.failed', verify.data);
+    return res.type('html').send(`<!doctype html><html><head><meta charset="utf-8"><title>Payment</title></head>
+    <body style="font-family:system-ui,-apple-system,Segoe UI,Roboto; padding:40px;">
+      <h2>Payment ${status ? status : 'Not Verified'}</h2>
+      <p>If you completed payment, your bank may still be processing it. You can still proceed to chat.</p>
+      <p><a href="/chat.html">Continue to Chat</a></p>
+    </body></html>`);
+
+  } catch (err) {
+    console.error('payment-success error:', err?.response?.data || err.message);
+    return res.type('html').send(`<!doctype html><html><head><meta charset="utf-8"><title>Payment</title></head>
+    <body style="font-family:system-ui,-apple-system,Segoe UI,Roboto; padding:40px;">
+      <h2>Verification Error</h2>
+      <p>We couldn't verify the transaction right now. If you paid, you should still be able to access the chat shortly.</p>
+      <p><a href="/chat.html">Continue to Chat</a></p>
+    </body></html>`);
+  }
 });
 
 /* ---------------------------------
