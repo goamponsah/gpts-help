@@ -23,9 +23,10 @@
       font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,sans-serif;
     }
 
-    /* Layout */
+    /* App layout */
     .app{
-      height:calc(var(--vh));
+      height:100svh;              /* modern viewport units */
+      height:calc(var(--vh));     /* JS-updated fallback for mobile */
       display:grid;
       grid-template-columns:var(--sidebar-w) 1fr;
     }
@@ -36,60 +37,67 @@
       display:grid; grid-template-rows:auto 1fr auto;
       border-right:1px solid var(--border); background:#0f1117; min-height:0;
     }
-    .side-top{ padding:12px; border-bottom:1px solid var(--border);
-      display:flex; gap:8px; align-items:center; justify-content:space-between }
+    .side-top{
+      padding:12px; border-bottom:1px solid var(--border);
+      display:flex; gap:8px; align-items:center; justify-content:space-between
+    }
     .logo{ font-weight:700; letter-spacing:.2px }
-    .new-chat{ background:var(--panel); color:var(--text); border:1px solid var(--border);
-      border-radius:10px; padding:8px 10px; cursor:pointer; font-size:13px }
+    .new-chat{
+      background:var(--panel); color:var(--text); border:1px solid var(--border);
+      border-radius:10px; padding:8px 10px; cursor:pointer; font-size:13px
+    }
     .side-list{ overflow-y:auto; padding:10px 8px 10px 12px; min-height:0 }
-    .conv{ position:relative; display:flex; align-items:center; gap:8px; padding:8px 10px;
+    .conv{
+      position:relative; display:flex; align-items:center; gap:8px; padding:8px 10px;
       border-radius:10px; border:1px solid transparent; font-size:14px; margin-bottom:6px;
-      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer }
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer
+    }
     .conv:hover{ background:#151824; border-color:#1b1f2b }
     .conv.active{ background:#171b28; border-color:#2a3352 }
     .conv-title{ flex:1; overflow:hidden; text-overflow:ellipsis }
     .conv-menu-btn{ opacity:0; transition:opacity .15s; border:0; background:transparent; color:var(--muted); cursor:pointer; padding:2px 4px; border-radius:6px }
     .conv:hover .conv-menu-btn{ opacity:1 }
-    .menu{ position:absolute; right:8px; top:32px; background:var(--panel); border:1px solid var(--border); border-radius:10px; overflow:hidden; display:none; z-index:10 }
+    .menu{
+      position:absolute; right:8px; top:32px; background:var(--panel);
+      border:1px solid var(--border); border-radius:10px; overflow:hidden; display:none; z-index:10
+    }
     .menu.open{ display:block }
     .menu button{ display:block; width:160px; text-align:left; background:transparent; color:var(--text); border:0; padding:10px 12px; cursor:pointer; font-size:14px }
     .menu button:hover{ background:#1a1d2a }
 
-    /* Account button bottom-left (sticky) */
-    .side-bottom{ position:sticky; bottom:0; padding:10px; border-top:1px solid var(--border); background:#0f1117 }
+    /* Bottom-left account area (shows user name) */
+    .side-bottom{
+      position:sticky; bottom:0; z-index:1;
+      padding:10px; border-top:1px solid var(--border); background:#0f1117
+    }
     .account-btn{
       width:100%; display:flex; align-items:center; gap:10px;
       background:transparent; border:1px solid var(--border); color:var(--text);
       padding:9px 10px; border-radius:10px; cursor:pointer; font-size:13px; position:relative;
     }
     .avatar{ width:22px; height:22px; border-radius:9999px; background:#222638; display:inline-flex; align-items:center; justify-content:center; font-size:12px }
-    .caret{ margin-left:auto; color:var(--muted) }
+    .acct-name{ flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+    .caret{ color:var(--muted) }
     .account-menu{
-      position:absolute; left:10px; right:10px; bottom:52px;
-      background:var(--panel); border:1px solid var(--border); border-radius:10px; overflow:hidden; display:none; z-index:20;
+      position:absolute; left:10px; right:10px; bottom:52px; z-index:20;
+      background:var(--panel); border:1px solid var(--border); border-radius:10px; overflow:hidden; display:none;
     }
     .account-menu.open{ display:block }
-    .account-menu button{
-      display:block; width:100%; text-align:left; background:transparent; color:var(--text);
-      border:0; padding:10px 12px; cursor:pointer; font-size:14px;
-    }
+    .account-menu button{ display:block; width:100%; text-align:left; background:transparent; color:var(--text); border:0; padding:10px 12px; cursor:pointer; font-size:14px }
     .account-menu button:hover{ background:#1a1d2a }
 
     /* Main: Topbar | Messages | Composer */
     .main{ display:grid; grid-template-rows:auto 1fr auto; min-height:0 }
-
     .topbar{
       display:flex; align-items:center; gap:8px; padding:10px 14px;
       border-bottom:1px solid var(--border); background:#0f1117;
     }
     .title{ flex:1; opacity:.9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
-    .top-actions{ display:flex; gap:8px }
     .tiny-btn{
       height:32px; padding:0 10px; border-radius:8px; border:1px solid var(--border);
       background:#141722; color:#dfe3ec; cursor:pointer; font-size:13px;
     }
     .tiny-btn:hover{ background:#192034 }
-    .tiny-btn.primary{ background:var(--brand); color:#fff; border-color:transparent }
 
     .messages{
       overflow-y:auto; padding:20px 18px; min-height:0; scroll-behavior:smooth;
@@ -104,8 +112,9 @@
     .msg small{ display:block; color:var(--muted); margin-bottom:6px }
     .thumb{ display:block; max-width:240px; height:auto; border-radius:8px; margin-top:8px; border:1px solid var(--border) }
 
-    /* Composer — compact */
+    /* Composer — compact & always visible */
     .composer{
+      position:sticky; bottom:0; z-index:5;            /* stays visible above content */
       border-top:1px solid var(--border);
       background:linear-gradient(#0e0f13,#0f1117);
       padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));
@@ -122,7 +131,7 @@
     .ta-wrap{ flex:1; display:flex; flex-direction:column; }
     .meta{ display:flex; gap:8px; align-items:center; color:var(--muted); font-size:11px; margin:2px 2px 4px 6px; }
     select{
-      background:#0f1117; color:var(--text); border:1px solid var(--border);
+      background:#0f1117; color:#e7eaf1; border:1px solid var(--border);
       border-radius:8px; padding:4px 6px; font-size:11px;
     }
     textarea{
@@ -152,9 +161,9 @@
       <div class="side-list" id="convList"></div>
 
       <div class="side-bottom">
-        <button class="account-btn" id="accountBtn" type="button" aria-haspopup="menu" aria-expanded="false">
+        <button class="account-btn" id="accountBtn" type="button" aria-haspopup="menu" aria-expanded="false" title="">
           <span class="avatar" id="acctAvatar">U</span>
-          <span id="acctLabel">User</span>
+          <span class="acct-name" id="acctLabel">User</span>
           <span class="caret">▾</span>
           <div class="account-menu" id="accountMenu" role="menu">
             <button id="menuPlan">My plan</button>
@@ -167,18 +176,13 @@
 
     <!-- Main -->
     <main class="main">
-      <!-- Topbar -->
       <div class="topbar">
         <div class="title" id="topTitle">New chat</div>
-        <div class="top-actions">
-          <button class="tiny-btn" id="shareBtn" title="Share conversation">Share</button>
-        </div>
+        <button class="tiny-btn" id="shareBtn" title="Share conversation">Share</button>
       </div>
 
-      <!-- Messages -->
       <div class="messages" id="messages"></div>
 
-      <!-- Composer -->
       <form class="composer" id="composer">
         <div class="row">
           <div class="input">
@@ -206,7 +210,7 @@
   </div>
 
   <script>
-    /* mobile 100vh fix */
+    /* 100vh fix for mobile keyboards */
     function setVh(){ const vh = window.innerHeight * 0.01; document.documentElement.style.setProperty('--vh', `${vh*100}px`); }
     setVh(); window.addEventListener('resize', setVh);
 
@@ -241,13 +245,11 @@
     const accountMenu = document.getElementById('accountMenu');
     const acctLabel = document.getElementById('acctLabel');
     const acctAvatar = document.getElementById('acctAvatar');
-    const menuPlan = document.getElementById('menuPlan');
-    const menuSettings = document.getElementById('menuSettings');
-    const menuSignout = document.getElementById('menuSignout');
 
     const shareBtn = document.getElementById('shareBtn');
 
     let userEmail = localStorage.getItem('userEmail') || '';
+    let userName  = localStorage.getItem('userName')  || ''; // optional: set this elsewhere after signup
     let currentConvId = null;
     let convTitleMap = new Map();
 
@@ -293,10 +295,15 @@
       const second = parts[1]?.[0] || '';
       return (first + second).toUpperCase();
     }
-
+    function friendlyName(email){
+      if (userName && userName.trim()) return userName.trim();
+      const local = (email||'User').split('@')[0].replace(/[\._-]/g,' ').trim();
+      return local ? local[0].toUpperCase() + local.slice(1) : 'User';
+    }
     function updateAccountUI(){
-      acctLabel.textContent = userEmail || 'User';
+      acctLabel.textContent = friendlyName(userEmail);
       acctAvatar.textContent = initialsFromEmail(userEmail);
+      accountBtn.title = userEmail; // tooltip with full email
     }
 
     function updateTopbarTitle(){
@@ -321,11 +328,7 @@
         bShare.addEventListener('click',e=>{
           e.stopPropagation();
           const url=`${location.origin}/chat.html?c=${c.id}`;
-          navigator.clipboard.writeText(url).then(()=> {
-            // small in-place feedback
-            shareBtn.textContent = 'Copied!';
-            setTimeout(()=> shareBtn.textContent='Share', 1200);
-          }).catch(()=>{});
+          navigator.clipboard.writeText(url).catch(()=>{});
           menu.classList.remove('open');
         });
 
@@ -377,7 +380,7 @@
       scrollToBottom();
     }
 
-    /* Auto-resize + Enter to send */
+    /* Auto-resize + Enter to send; keep composer visible on focus */
     function autoresize(){
       promptEl.style.height='auto';
       promptEl.style.height=Math.min(120,promptEl.scrollHeight)+'px';
@@ -388,6 +391,10 @@
         e.preventDefault();
         if(!sendBtn.disabled) composerEl.requestSubmit();
       }
+    });
+    promptEl.addEventListener('focus', ()=>{
+      // helps on iOS to ensure composer is not hidden by the keyboard
+      setTimeout(()=> promptEl.scrollIntoView({ block:'end', behavior:'smooth' }), 150);
     });
 
     /* Submit text */
@@ -474,25 +481,20 @@
       if(!accountBtn.contains(e.target)) closeAccountMenu();
     }, { capture:true });
 
-    menuPlan.addEventListener('click', ()=>{ closeAccountMenu(); window.location.href='/index.html#plan'; });
-    menuSettings.addEventListener('click', ()=>{ closeAccountMenu(); alert('Settings coming soon.'); });
-    menuSignout.addEventListener('click', ()=>{
+    document.getElementById('menuPlan').addEventListener('click', ()=>{ closeAccountMenu(); window.location.href='/index.html#plan'; });
+    document.getElementById('menuSettings').addEventListener('click', ()=>{ closeAccountMenu(); alert('Settings coming soon.'); });
+    document.getElementById('menuSignout').addEventListener('click', ()=>{
       closeAccountMenu();
       localStorage.removeItem('userEmail');
       window.location.replace('/index.html');
     });
 
-    /* Share button (top-right) */
+    /* Share button */
     shareBtn.addEventListener('click', ()=>{
-      if(!currentConvId){
-        // if no chat yet, create one quickly
-        alert('Send a message first to create a sharable conversation.');
-        return;
-      }
+      if(!currentConvId){ alert('Send a message first to create a sharable conversation.'); return; }
       const url = `${location.origin}/chat.html?c=${currentConvId}`;
       navigator.clipboard.writeText(url).then(()=>{
-        shareBtn.textContent='Copied!';
-        setTimeout(()=> shareBtn.textContent='Share', 1200);
+        shareBtn.textContent='Copied!'; setTimeout(()=> shareBtn.textContent='Share', 1200);
       }).catch(()=>{ alert(url); });
     });
 
@@ -506,8 +508,9 @@
       await loadConversations(fromUrl?Number(fromUrl):null);
       if(fromUrl){ currentConvId=Number(fromUrl); updateTopbarTitle(); await showConversation(currentConvId); }
 
-      promptEl.focus(); 
-      (function autoresizeStart(){ promptEl.style.height='auto'; promptEl.style.height='24px'; })();
+      promptEl.focus();
+      // initial compact height
+      promptEl.style.height='24px';
     })();
   </script>
 </body>
