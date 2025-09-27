@@ -1,215 +1,228 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>GPTs Help — Account</title>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <meta charset="utf-8" />
+  <title>GPTs Help — All-in-One AI Tools</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet" />
   <style>
-    :root{--primary:#4e54c8;--secondary:#6a11cb;--light:#f8f9fa;--dark:#343a40}
-    *{margin:0;padding:0;box-sizing:border-box;font-family:system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif}
-    body{background:linear-gradient(135deg,var(--secondary) 0%,var(--primary) 100%);min-height:100vh;color:#222;padding:20px}
-    .container{max-width:1100px;margin:0 auto}
-    header{display:flex;justify-content:space-between;align-items:center;margin:10px 0 24px}
-    .logo{color:#fff;font-weight:800;font-size:1.6rem}
-    .nav button{background:none;border:none;color:#fff;font-weight:600;margin-left:16px;cursor:pointer}
-    .hero{color:#fff;text-align:center;margin:40px 0}
-    .hero h1{font-size:2.4rem;margin-bottom:10px}
-    .price{display:inline-block;background:#fff;color:#4e54c8;font-weight:800;border-radius:999px;padding:10px 18px;margin:14px 0}
-    .grid{display:grid;gap:20px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));margin-top:28px}
-    .card{background:#fff;border-radius:16px;box-shadow:0 6px 16px rgba(0,0,0,.12);padding:20px}
-    .gpt-icon{height:110px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:2rem;color:#fff;margin-bottom:12px}
-    .math{background:linear-gradient(135deg,#4e54c8,#6a11cb)} .content{background:linear-gradient(135deg,#4ECDC4,#6de0d9)}
-    .btn{background:#4e54c8;color:#fff;border:none;border-radius:10px;padding:12px 18px;font-weight:700;cursor:pointer}
-    .btn.secondary{background:#222}
+    :root{
+      --primary:#4e54c8;
+      --secondary:#6a11cb;
+      --bg:#0e0f13; --text:#e7eaf1; --muted:#a6afbf;
+      --panel:#13141a; --panel2:#171926; --border:#232634;
+      --brand:#7c5cff; --brand2:#5a7bff; --ok:#22c55e; --warn:#f59e0b; --danger:#ef4444;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;
+      color:var(--text);
+      background: linear-gradient(135deg, var(--secondary), var(--primary));
+      background-attachment: fixed;
+    }
+    .container{max-width:1100px;margin:0 auto;padding:24px}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+    .logo{font-weight:700;letter-spacing:.2px}
+    .btn-link{background:none;border:0;color:#fff;font-weight:600;cursor:pointer}
+    .btn{
+      display:inline-flex;align-items:center;justify-content:center;gap:8px;
+      height:44px;padding:0 18px;border-radius:12px;border:0;cursor:pointer;
+      font-weight:700;color:#fff;background:linear-gradient(135deg,var(--brand),var(--brand2));
+    }
+    .btn.secondary{background:#ffffff1a;border:1px solid #ffffff2a}
+    .btn.block{width:100%}
+    .card{
+      background:#ffffff10;backdrop-filter:saturate(160%) blur(6px);
+      border:1px solid #ffffff2a;border-radius:16px;padding:22px;
+    }
+    .hero{display:grid;gap:14px;justify-items:center;text-align:center;margin:40px 0}
+    .hero h1{margin:0;font-size:40px;line-height:1.1}
+    .hero p{margin:0;color:#f0f3ff;opacity:.95}
+    .price{display:inline-block;background:#fff;color:var(--primary);font-weight:800;border-radius:999px;padding:10px 20px;margin-top:6px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;margin-top:26px}
+    .feature{background:#0e0f13cc;border:1px solid #ffffff14;border-radius:14px;padding:16px}
+    .feature h3{margin:0 0 6px 0}
+
+    /* Auth drawer */
+    .drawer{
+      max-width:520px;margin:22px auto;background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:20px;
+      display:none;
+    }
+    .drawer.show{display:block}
+    .row{display:grid;gap:8px;margin-top:10px}
+    label{font-size:13px;color:#cfd5e3}
+    input[type="email"]{
+      width:100%;height:44px;border-radius:10px;border:1px solid var(--border);
+      background:var(--panel2);color:var(--text);padding:0 12px;font-size:14px;outline:none;
+    }
+    .hint{color:var(--muted);font-size:12px;margin-top:6px}
+    .status{margin-top:12px;font-size:13px}
+    .ok{color:var(--ok)} .warn{color:var(--warn)} .danger{color:var(--danger)}
+    .actions{display:grid;grid-template-columns:1fr;gap:10px;margin-top:14px}
+    .sep{margin:14px 0;border-top:1px solid var(--border)}
     .center{text-align:center}
-    .stack{display:grid;gap:12px}
-    .field label{font-weight:700;margin-bottom:6px;display:block}
-    .field input{width:100%;padding:12px;border-radius:10px;border:1px solid #e5e7eb}
-    .muted{color:#666;font-size:.9rem}
-    .hidden{display:none}
-    .badge{display:inline-block;font-size:.8rem;font-weight:800;padding:4px 8px;border-radius:8px;background:#111;color:#fff}
-    .badge.test{background:#8b5cf6}
-    code{background:#f3f4f6;padding:2px 6px;border-radius:6px}
-    table{width:100%;border-collapse:collapse;margin-top:10px}
-    th,td{padding:8px;border-bottom:1px solid #eee;font-size:.95rem}
-    #err { color:#b91c1c; margin-top:8px; white-space:pre-wrap; }
+    a.muted{color:#cfd5e3}
+    .mini{font-size:12px;color:#aab1c2}
   </style>
 </head>
 <body>
   <div class="container">
     <header>
       <div class="logo">GPTs Help</div>
-      <div class="nav">
-        <button id="nav-chat">Chat</button>
-        <button id="nav-signout" class="hidden">Sign Out</button>
+      <div>
+        <button class="btn-link" id="openAuth">Log In</button>
+        <a class="btn" id="goChatBtn" href="/chat.html">Go to Chat</a>
       </div>
     </header>
 
     <section class="hero">
-      <h1>One Subscription. All AI Tools.</h1>
-      <p>Unlimited access to specialized AI assistants</p>
-      <div class="price" id="price">$9.99 / month</div>
-      <div class="center" style="margin-top:14px;">
-        <button class="btn" id="cta-get-started">Get Started</button>
+      <h1>One subscription. All the AI help you need.</h1>
+      <p>Math GPT tutoring + ContentGPT creation — in one place.</p>
+      <div class="price">$9.99 / month</div>
+      <div>
+        <button class="btn" id="getStarted">Get Started</button>
       </div>
     </section>
 
-    <section class="grid">
-      <div class="card">
-        <div class="gpt-icon math"><i class="fas fa-square-root-alt"></i></div>
+    <div class="grid">
+      <div class="feature">
         <h3>Math GPT</h3>
-        <p>Your patient AI math tutor—step-by-step help from arithmetic to calculus.</p>
+        <div>Step-by-step tutoring, photo solve, adaptive practice, diagnostic → personalized plan.</div>
       </div>
-      <div class="card">
-        <div class="gpt-icon content"><i class="fas fa-pen-fancy"></i></div>
-        <h3>Content GPT</h3>
-        <p>Create engaging content for posts, blogs, and business—fast.</p>
+      <div class="feature">
+        <h3>ContentGPT</h3>
+        <div>Multi-format generation: blog → LinkedIn → thread → email → YouTube/TikTok, with export to Word/PDF/PPTX/HTML/MD.</div>
       </div>
-    </section>
+    </div>
 
-    <section class="card" id="account" style="max-width:520px;margin:28px auto 0;">
-      <h2>Subscribe / Sign In <span id="mode-badge" class="badge hidden"></span></h2>
-      <p class="muted">Use your email to subscribe and unlock chat.</p>
-      <div class="stack" style="margin-top:12px">
-        <div class="field">
-          <label for="email">Email</label>
-          <input id="email" type="email" placeholder="you@example.com">
-        </div>
-        <div class="stack" style="grid-template-columns:1fr 1fr">
-          <button class="btn" id="btn-subscribe">Subscribe</button>
-          <button class="btn secondary" id="btn-refresh">I’ve Paid — Refresh Access</button>
-        </div>
-        <div id="err"></div>
-        <p class="muted">7-day money-back guarantee</p>
-        <hr/>
-        <div class="stack" style="grid-template-columns:1fr 1fr">
-          <button class="btn secondary" id="btn-debug">Debug Login (Testing)</button>
-          <button class="btn" id="btn-go-chat">Go to Chat</button>
-        </div>
-        <small class="muted">Debug is for testing only—remove in production.</small>
-        <div id="sub-status" class="muted" style="margin-top:6px">Status: (not checked)</div>
+    <!-- Auth / Subscribe Drawer -->
+    <div class="drawer" id="authDrawer">
+      <h2 style="margin-top:0">Access your tools</h2>
+      <div class="row">
+        <label for="email">Your email</label>
+        <input id="email" type="email" placeholder="you@example.com" />
+        <div class="mini">We store this locally to open your chats and verify subscription.</div>
       </div>
-    </section>
+      <div class="actions">
+        <button class="btn secondary" id="saveEmailBtn">Save email</button>
+        <button class="btn" id="subscribeBtn">Subscribe — $9.99 / month</button>
+        <button class="btn secondary" id="goChatBtn2">Go to Chat</button>
+      </div>
+      <div class="sep"></div>
+      <div class="row">
+        <div class="status" id="statusMsg"></div>
+        <div class="mini">Already paid? Click “Go to Chat”. We’ll confirm your subscription automatically.</div>
+      </div>
+      <div class="sep"></div>
+      <div class="center">
+        <button class="btn-link" id="devEnable">Dev: quick enable (debug)</button>
+      </div>
+    </div>
 
-    <!-- TEST CARDS (auto-visible when using sk_test...) -->
-    <section id="test-cards" class="card hidden" style="max-width:900px;margin:16px auto 0;">
-      <h2>Paystack Test Cards <span class="badge test">TEST MODE</span></h2>
-      <p class="muted">Use these only with test keys. Expiry can be <strong>any future date</strong>.</p>
-      <table>
-        <thead><tr><th>Scenario</th><th>Card Number</th><th>CVV</th><th>Expiry</th><th>PIN / Notes</th></tr></thead>
-        <tbody>
-          <tr><td>Successful Payment (no extra validation)</td><td><code>4084 0840 8408 4081</code></td><td><code>408</code></td><td>Any future</td><td>—</td></tr>
-          <tr><td>Successful (PIN validation)</td><td><code>5078 5078 5078 5078 12</code></td><td><code>081</code></td><td>Any future</td><td>PIN <code>1111</code></td></tr>
-          <tr><td>Successful (PIN + OTP)</td><td><code>5060 6666 6666 6666 666</code></td><td><code>123</code></td><td>Any future</td><td>PIN <code>1234</code>, OTP <code>123456</code></td></tr>
-          <tr><td>Declined (simulate bank error)</td><td><code>4084 0800 0000 5408</code></td><td><code>001</code></td><td>Any future</td><td>—</td></tr>
-          <tr><td>Insufficient Funds</td><td><code>4084 0800 0067 0037</code></td><td><code>787</code></td><td>Any future</td><td>—</td></tr>
-        </tbody>
-      </table>
-      <p class="muted" style="margin-top:8px">
-        Enter these on the Paystack Checkout page after clicking <em>Subscribe</em>.
-      </p>
-    </section>
+    <div class="center" style="margin-top:30px">
+      <a class="muted" href="/chat.html">Open chat directly</a>
+    </div>
   </div>
 
   <script>
-    const API_BASE = 'https://gpts-help-production.up.railway.app';
-    const $ = s => document.querySelector(s);
-
-    const saveEmail = e => localStorage.setItem('gpts_email', e);
-    const getEmail = () => localStorage.getItem('gpts_email') || '';
-
-    // Will be set from /api/config
-    let PLAN = { amount: 9.99, currency: 'GHS', symbol: 'GH₵' };
-
-    function fmtPrice(a, sym){ return `${sym}${a.toFixed(2)} / month`; }
-
-    async function loadConfig() {
-      try {
-        const cfg = await fetch(`${API_BASE}/api/config`).then(r => r.json());
-        PLAN.currency = (cfg.currencyDefault || 'GHS').toUpperCase();
-        PLAN.symbol   = cfg.currencySymbol || (PLAN.currency === 'NGN' ? '₦' : PLAN.currency === 'USD' ? '$' : 'GH₵');
-        // (Keep amount 9.99 for test; adjust per currency if desired)
-        document.getElementById('price').textContent = fmtPrice(PLAN.amount, PLAN.symbol);
-        // Show TEST mode panel
-        if (cfg.paystackTestMode) {
-          document.getElementById('test-cards').classList.remove('hidden');
-          const badge = document.getElementById('mode-badge');
-          badge.textContent = 'TEST MODE';
-          badge.classList.remove('hidden');
-        }
-      } catch {}
-      // Update button text
-      document.getElementById('btn-subscribe').textContent = `${fmtPrice(PLAN.amount, PLAN.symbol).replace(' / month','')} — Subscribe`;
+    // ===== Helpers =====
+    const $ = (id)=>document.getElementById(id);
+    function setStatus(msg, cls=''){ const s=$('statusMsg'); s.className='status '+cls; s.textContent=msg; }
+    function getEmailInput(){
+      const v = $('email').value.trim();
+      if (!v) { setStatus('Please enter your email.', 'warn'); return null; }
+      return v;
+    }
+    async function checkSubscribed(email){
+      try{
+        const r = await fetch('/api/user/'+encodeURIComponent(email));
+        const j = await r.json();
+        return !!j.subscribed;
+      }catch{ return false; }
+    }
+    function requireEmail(){
+      let email = localStorage.getItem('userEmail');
+      if (!email){
+        email = getEmailInput();
+        if (!email) return null;
+        localStorage.setItem('userEmail', email);
+      }
+      return email;
     }
 
-    async function checkSubscription(email){
-      if(!email) return { subscribed:false };
-      const r = await fetch(`${API_BASE}/api/user/${encodeURIComponent(email)}`);
-      return r.ok ? r.json() : { subscribed:false };
-    }
-    async function createSubscription(email){
-      const r = await fetch(`${API_BASE}/api/create-subscription`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        // server decides currency; we only send amount
-        body: JSON.stringify({ email, amount: PLAN.amount })
-      });
-      const data = await r.json();
-      if(!r.ok) throw new Error((data.error || 'Payment init failed') + (data.detail ? `\nDetail: ${data.detail}` : ''));
-      if(!data.authorization_url) throw new Error('No Paystack URL returned');
-      window.location.href = data.authorization_url;
-    }
-    async function debugLogin(email){
-      const r = await fetch(`${API_BASE}/api/debug-login`, {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ email })
-      });
-      if(!r.ok) throw new Error('Debug failed');
-      return r.json();
-    }
-    async function goChatIfAllowed(){
-      const email = getEmail() || $('#email').value.trim();
-      if(!email){ alert('Enter your email first.'); $('#email').focus(); return; }
-      saveEmail(email);
-      const sub = await checkSubscription(email);
-      if(sub.subscribed) window.location.href = 'chat.html';
-      else { $('#sub-status').textContent = 'Status: NOT ACTIVE'; alert('No active subscription yet. If you just paid, click “Refresh Access”.'); }
-    }
-
-    // Nav
-    $('#nav-chat').onclick = goChatIfAllowed;
-    $('#nav-signout').onclick = () => { localStorage.removeItem('gpts_email'); $('#nav-signout').classList.add('hidden'); alert('Signed out.'); };
-    $('#cta-get-started').onclick = () => $('#email').focus();
-
-    // Account actions
-    $('#btn-subscribe').onclick = async () => {
-      $('#err').textContent = '';
-      const email = $('#email').value.trim(); if(!email) return alert('Enter your email.');
-      saveEmail(email);
-      try{ $('#btn-subscribe').disabled = true; await createSubscription(email); }
-      catch(e){ $('#err').textContent = e.message; }
-      finally{ $('#btn-subscribe').disabled = false; }
+    // ===== UI wiring =====
+    const drawer = $('authDrawer');
+    $('openAuth').onclick = () => { drawer.classList.add('show'); const e=localStorage.getItem('userEmail'); if(e) $('email').value=e; };
+    $('getStarted').onclick = () => { drawer.classList.add('show'); const e=localStorage.getItem('userEmail'); if(e) $('email').value=e; };
+    $('saveEmailBtn').onclick = () => {
+      const v = getEmailInput(); if(!v) return;
+      localStorage.setItem('userEmail', v);
+      setStatus('Email saved. You can subscribe or go to chat.', 'ok');
     };
-    $('#btn-refresh').onclick = async () => {
-      const email = $('#email').value.trim() || getEmail(); if(!email) return alert('Enter your email.');
-      saveEmail(email);
-      const sub = await checkSubscription(email);
-      $('#sub-status').textContent = sub.subscribed ? 'Status: ACTIVE' : 'Status: NOT ACTIVE';
-      if(sub.subscribed){ $('#nav-signout').classList.remove('hidden'); alert('Access active—click Chat to start.'); }
-    };
-    $('#btn-debug').onclick = async () => {
-      const email = $('#email').value.trim(); if(!email) return alert('Enter your email.'); saveEmail(email);
-      try{ await debugLogin(email); $('#sub-status').textContent = 'Status: ACTIVE (debug)'; $('#nav-signout').classList.remove('hidden'); alert('Marked subscribed for testing. Click Chat.'); }
-      catch(e){ alert('Debug failed: '+e.message); }
-    };
-    $('#btn-go-chat').onclick = goChatIfAllowed;
 
-    // Init
-    (async function init(){
-      await loadConfig();
-      const saved = getEmail();
-      if(saved){ $('#email').value = saved; $('#nav-signout').classList.remove('hidden'); const sub=await checkSubscription(saved); $('#sub-status').textContent = sub.subscribed?'Status: ACTIVE':'Status: NOT ACTIVE'; }
-    })();
+    // Go to Chat (top-right)
+    $('goChatBtn').addEventListener('click', async (e) => {
+      e.preventDefault();
+      const email = requireEmail(); if(!email){ drawer.classList.add('show'); return; }
+      const ok = await checkSubscribed(email);
+      if (ok) window.location.assign('/chat.html');
+      else {
+        setStatus('Subscription not active yet. Click Subscribe to start your plan.', 'warn');
+        drawer.classList.add('show');
+      }
+    });
+
+    // Go to Chat (drawer)
+    $('goChatBtn2').addEventListener('click', async (e) => {
+      e.preventDefault();
+      const email = requireEmail(); if(!email) return;
+      const ok = await checkSubscribed(email);
+      if (ok) window.location.assign('/chat.html');
+      else setStatus('Subscription not active. Please subscribe first.', 'warn');
+    });
+
+    // Subscribe with Paystack (server builds callback for current host)
+    $('subscribeBtn').onclick = async () => {
+      const email = requireEmail(); if(!email) return;
+      setStatus('Initializing payment…');
+      try{
+        const r = await fetch('/api/create-subscription', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ email, amount: 9.99 })
+        });
+        const j = await r.json();
+        if (!r.ok || !j.authorization_url) throw new Error(j.error || 'Failed to init payment');
+        // IMPORTANT: email must be in localStorage BEFORE we leave for checkout
+        localStorage.setItem('userEmail', email);
+        window.location.assign(j.authorization_url);
+      }catch(err){
+        console.error(err);
+        setStatus('Payment initialization failed. Please try again.', 'danger');
+      }
+    };
+
+    // Developer quick-enable (marks subscribed on server)
+    $('devEnable').onclick = async () => {
+      const email = requireEmail(); if(!email) return;
+      try{
+        const r = await fetch('/api/debug-login', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ email })
+        });
+        if (!r.ok) throw new Error('debug error');
+        setStatus('Access enabled for development. Opening chat…', 'ok');
+        setTimeout(()=> window.location.assign('/chat.html'), 600);
+      }catch{
+        setStatus('Debug enable failed.', 'danger');
+      }
+    };
+
+    // Prefill email if known
+    const saved = localStorage.getItem('userEmail');
+    if (saved) $('email').value = saved;
   </script>
 </body>
 </html>
