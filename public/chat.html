@@ -4,278 +4,67 @@
   <meta charset="utf-8" />
   <title>GPTs Help — Chat</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg: #0e0f13;
-      --panel: #13141a;
-      --panel-2: #161721;
-      --border: #232634;
-      --muted: #9aa3b2;
-      --text: #e7eaf1;
-      --brand: #7c5cff;
-      --brand-2: #5a7bff;
-      --danger: #ef4444;
-      --green: #22c55e;
+      --bg: #0e0f13; --text: #e7eaf1; --muted: #9aa3b2;
+      --panel: #13141a; --panel-2: #161721; --border: #232634;
+      --brand: #7c5cff; --brand-2: #5a7bff; --danger: #ef4444;
     }
     * { box-sizing: border-box; }
     html, body { height: 100%; }
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-    }
+    body { margin:0; background: var(--bg); color: var(--text); font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
 
-    /* Layout */
-    .app {
-      display: grid;
-      grid-template-columns: 300px 1fr;
-      height: 100vh;
-      overflow: hidden;
-    }
-    .sidebar {
-      background: var(--panel);
-      border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      min-width: 260px;
-    }
-    .sidebar-header {
-      padding: 14px 14px 8px;
-      border-bottom: 1px solid var(--border);
-    }
-    .logo {
-      font-weight: 700;
-      letter-spacing: 0.2px;
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      font-size: 14px;
-      color: #fff;
-    }
-    .sidebar-actions {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 10px;
-      margin-top: 12px;
-    }
-    .btn {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      gap: 8px;
-      height: 36px;
-      padding: 0 12px;
-      border-radius: 10px;
-      border: 1px solid var(--border);
-      background: var(--panel-2);
-      color: var(--text);
-      font-weight: 600;
-      font-size: 13px;
-      cursor: pointer;
-    }
-    .btn:hover { border-color: #2b2f3e; background: #181a25; }
+    .app { display: grid; grid-template-columns: 300px 1fr; height: 100vh; overflow: hidden; }
+
+    /* Sidebar */
+    .sidebar { background: var(--panel); border-right: 1px solid var(--border); display:flex; flex-direction:column; min-width:260px; }
+    .sidebar-header { padding: 14px 14px 8px; border-bottom: 1px solid var(--border); }
+    .logo { font-weight: 700; letter-spacing: 0.2px; font-size: 14px; }
+    .sidebar-actions { display: grid; gap: 10px; margin-top: 12px; }
+    .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; height:36px; padding:0 12px; border-radius:10px; border:1px solid var(--border); background: var(--panel-2); color: var(--text); font-weight:600; font-size:13px; cursor:pointer; }
+    .btn:hover { border-color:#2b2f3e; background:#181a25; }
     .btn.brand { background: linear-gradient(135deg, var(--brand), var(--brand-2)); border: none; }
     .btn.brand:hover { filter: brightness(1.05); }
 
-    .conv-list {
-      padding: 10px;
-      overflow: auto;
-      flex: 1;
-    }
+    .conv-list { padding: 10px; overflow: auto; flex: 1; }
 
-    /* Conversation item — HORIZONTAL row like ChatGPT */
-    .conv-item {
-      position: relative;
-      display: flex;              /* horizontal row */
-      align-items: center;        /* vertical center */
-      gap: 10px;
-      padding: 10px 10px;
-      margin-bottom: 6px;
-      border: 1px solid var(--border);
-      background: var(--panel-2);
-      border-radius: 10px;
-      cursor: pointer;
-    }
-    .conv-item:hover { background: #191b26; }
-    .conv-item.active { border-color: #3a3f55; background: #1b1d2a; }
-    .conv-icon {
-      width: 22px;
-      height: 22px;
-      border-radius: 6px;
-      display: grid;
-      place-items: center;
-      background: #272a3a;
-      font-size: 12px;
-      color: #c2c7d6;
-      flex: 0 0 auto;
-    }
-    .conv-title {
-      flex: 1 1 auto;             /* take remaining width */
-      min-width: 0;               /* allow ellipsis to work */
-      white-space: nowrap;        /* single line */
-      overflow: hidden;
-      text-overflow: ellipsis;    /* show "..." */
-      font-size: 13px;
-    }
-    .conv-dots {
-      flex: 0 0 auto;
-      opacity: 0;
-      transition: opacity .15s ease;
-      width: 28px;
-      height: 28px;
-      border-radius: 8px;
-      display: grid;
-      place-items: center;
-      color: var(--muted);
-    }
-    .conv-item:hover .conv-dots { opacity: 1; background: #202233; }
-    .conv-dots:hover { color: #d7deea; }
+    /* Horizontal conversation rows like ChatGPT */
+    .conv-item { position:relative; display:flex; align-items:center; gap:10px; padding:10px; margin-bottom:6px; border:1px solid var(--border); background:var(--panel-2); border-radius:10px; cursor:pointer; }
+    .conv-item:hover { background:#191b26; }
+    .conv-item.active { border-color:#3a3f55; background:#1b1d2a; }
+    .conv-icon { width:22px; height:22px; border-radius:6px; display:grid; place-items:center; background:#272a3a; font-size:12px; color:#c2c7d6; flex:0 0 auto; }
+    .conv-title { flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:13px; }
+    .conv-dots { flex:0 0 auto; opacity:0; transition:opacity .15s ease; width:28px; height:28px; border-radius:8px; display:grid; place-items:center; color:var(--muted); }
+    .conv-item:hover .conv-dots { opacity:1; background:#202233; }
+    .conv-dots:hover { color:#d7deea; }
+    .conv-rename-input { width:100%; background:transparent; border:1px dashed #3a3f55; color:var(--text); border-radius:8px; font-size:13px; padding:6px 8px; outline:none; }
 
-    /* Inline rename input */
-    .conv-rename-input {
-      width: 100%;
-      background: transparent;
-      border: 1px dashed #3a3f55;
-      color: var(--text);
-      border-radius: 8px;
-      font-size: 13px;
-      padding: 6px 8px;
-      outline: none;
-    }
+    .menu { position:absolute; right:8px; top:38px; z-index:20; background:#0f1016; border:1px solid var(--border); border-radius:10px; min-width:160px; box-shadow:0 6px 26px rgba(0,0,0,.35); overflow:hidden; }
+    .menu button { display:block; width:100%; background:transparent; border:0; color:var(--text); text-align:left; padding:10px 12px; font-size:13px; cursor:pointer; }
+    .menu button:hover { background:#181a25; }
+    .menu .danger { color:#fca5a5; }
 
-    /* Context menu */
-    .menu {
-      position: absolute;
-      right: 8px;
-      top: 38px;
-      z-index: 20;
-      background: #0f1016;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      min-width: 160px;
-      box-shadow: 0 6px 26px rgba(0,0,0,.35);
-      overflow: hidden;
-    }
-    .menu button {
-      display: block;
-      width: 100%;
-      background: transparent;
-      border: 0;
-      color: var(--text);
-      text-align: left;
-      padding: 10px 12px;
-      font-size: 13px;
-      cursor: pointer;
-    }
-    .menu button:hover { background: #181a25; }
-    .menu .danger { color: #fca5a5; }
+    .sidebar-footer { position: sticky; bottom: 0; padding: 10px; background: linear-gradient(to top, var(--panel), rgba(19,20,26,0.6)); border-top: 1px solid var(--border); }
+    .signout { width:100%; background:transparent; border:1px solid var(--border); color:var(--muted); height:36px; border-radius:10px; font-weight:600; cursor:pointer; }
+    .signout:hover { background:#171925; color:#e4e8f2; }
 
-    .sidebar-footer {
-      position: sticky; /* stays when scrolling conversation list */
-      bottom: 0;
-      padding: 10px;
-      background: linear-gradient(to top, var(--panel), rgba(19,20,26,0.6));
-      border-top: 1px solid var(--border);
-    }
-    .signout {
-      width: 100%;
-      background: transparent;
-      border: 1px solid var(--border);
-      color: var(--muted);
-      height: 36px;
-      border-radius: 10px;
-      font-weight: 600;
-      cursor: pointer;
-    }
-    .signout:hover { background: #171925; color: #e4e8f2; }
+    /* Main */
+    .main { display:grid; grid-template-rows:auto 1fr auto; height:100%; }
+    .topbar { height:52px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; padding:0 16px; background:rgba(19,20,26,0.7); backdrop-filter:saturate(180%) blur(8px); }
+    .model { padding:6px 10px; border:1px solid var(--border); border-radius:9px; font-size:12px; color:var(--muted); }
 
-    /* Main chat area */
-    .main {
-      display: grid;
-      grid-template-rows: auto 1fr auto;
-      height: 100%;
-    }
-    .topbar {
-      height: 52px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 0 16px;
-      background: rgba(19,20,26,0.7);
-      backdrop-filter: saturate(180%) blur(8px);
-    }
-    .topbar .model {
-      padding: 6px 10px;
-      border: 1px solid var(--border);
-      border-radius: 9px;
-      font-size: 12px;
-      color: var(--muted);
-    }
+    .thread { overflow:auto; padding:24px 24px 10px; }
+    .msg { max-width:820px; margin:0 auto 18px; padding:14px 16px; border:1px solid var(--border); background:var(--panel); border-radius:14px; line-height:1.6; white-space:pre-wrap; }
+    .msg.user { background:#111219; }
+    .msg.assistant { background:#12131b; }
 
-    .thread {
-      overflow: auto;
-      padding: 24px 24px 10px;
-    }
-    .msg {
-      max-width: 820px;
-      margin: 0 auto 18px;
-      padding: 14px 16px;
-      border: 1px solid var(--border);
-      background: var(--panel);
-      border-radius: 14px;
-      line-height: 1.6;
-      white-space: pre-wrap;
-    }
-    .msg.user { background: #111219; }
-    .msg.assistant { background: #12131b; }
-
-    .composer {
-      padding: 12px 16px 18px;
-      border-top: 1px solid var(--border);
-      background: linear-gradient(to bottom, rgba(14,15,19,0.2), rgba(14,15,19,0.5));
-    }
-    .composer-inner {
-      max-width: 900px;
-      margin: 0 auto;
-      display: flex;
-      gap: 8px;
-    }
-    textarea {
-      flex: 1 1 auto;
-      resize: none;
-      max-height: 180px;
-      min-height: 52px;
-      border-radius: 12px;
-      border: 1px solid var(--border);
-      background: var(--panel-2);
-      color: var(--text);
-      padding: 12px 14px;
-      font-size: 14px;
-      outline: none;
-    }
-    .send {
-      flex: 0 0 auto;
-      min-width: 90px;
-      background: linear-gradient(135deg, var(--brand), var(--brand-2));
-      border: 0;
-      color: #fff;
-      border-radius: 12px;
-      font-weight: 700;
-      cursor: pointer;
-      padding: 0 16px;
-    }
-    .send[disabled] { opacity: .6; cursor: not-allowed; }
-    .hint {
-      text-align: center;
-      color: var(--muted);
-      font-size: 12px;
-      margin-top: 8px;
-    }
+    .composer { padding:12px 16px 18px; border-top:1px solid var(--border); background: linear-gradient(to bottom, rgba(14,15,19,0.2), rgba(14,15,19,0.5)); }
+    .composer-inner { max-width:900px; margin:0 auto; display:flex; gap:8px; }
+    textarea { flex:1 1 auto; resize:none; max-height:180px; min-height:52px; border-radius:12px; border:1px solid var(--border); background:var(--panel-2); color:var(--text); padding:12px 14px; font-size:14px; outline:none; }
+    .send { flex:0 0 auto; min-width:90px; background: linear-gradient(135deg, var(--brand), var(--brand-2)); border:0; color:#fff; border-radius:12px; font-weight:700; cursor:pointer; padding:0 16px; }
+    .send[disabled]{ opacity:.6; cursor:not-allowed; }
+    .hint{ text-align:center; color:var(--muted); font-size:12px; margin-top:8px; }
 
     @media (max-width: 980px) {
       .app { grid-template-columns: 1fr; }
@@ -305,7 +94,7 @@
     <main class="main">
       <div class="topbar">
         <div class="model" id="modelInfo">Math GPT</div>
-        <div class="model" id="convTitleInfo" style="max-width: 60%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;"></div>
+        <div class="model" id="convTitleInfo" style="max-width:60%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
       </div>
 
       <div class="thread" id="thread"></div>
@@ -321,11 +110,11 @@
   </div>
 
   <script>
-    // ======= Config & State =======
-    const API = '';
+    // ===== Config & auth guard =====
     const userEmail = localStorage.getItem('userEmail');
     if (!userEmail) {
-      window.location.href = '/index.html';
+      // No email set → bounce to index to log in / set email
+      window.location.replace('/index.html');
     }
 
     const params = new URLSearchParams(location.search);
@@ -344,141 +133,38 @@
 
     modelInfo.textContent = (gptType === 'content') ? 'ContentGPT' : 'Math GPT';
 
-    // ======= Helpers =======
+    // ===== Helpers =====
     function el(tag, attrs={}, ...children) {
       const n = document.createElement(tag);
-      Object.entries(attrs).forEach(([k,v])=>{
+      for (const [k,v] of Object.entries(attrs)) {
         if (k === 'class') n.className = v;
         else if (k === 'html') n.innerHTML = v;
         else n.setAttribute(k, v);
-      });
+      }
       for (const c of children) n.append(c);
       return n;
     }
     function setActiveConv(id) {
       currentConvId = id;
-      [...document.querySelectorAll('.conv-item')].forEach(it => {
-        it.classList.toggle('active', Number(it.dataset.id) === id);
-      });
+      [...document.querySelectorAll('.conv-item')].forEach(it => it.classList.toggle('active', Number(it.dataset.id) === id));
     }
-    function scrollToBottom() {
-      threadEl.scrollTop = threadEl.scrollHeight;
-    }
-    function copy(text) {
-      return navigator.clipboard?.writeText(text).catch(()=>{});
-    }
-    function showToast(msg) {
-      // minimal toast
-      console.log(msg);
-    }
+    function scrollToBottom(){ threadEl.scrollTop = threadEl.scrollHeight; }
+    function copy(text){ return navigator.clipboard?.writeText(text).catch(()=>{}); }
 
-    // ======= Conversations UI =======
+    // ===== Conversations API =====
     async function fetchConversations() {
       const r = await fetch(`/api/conversations?userId=${encodeURIComponent(userEmail)}`);
       if (!r.ok) return [];
       return r.json();
     }
-    function renderConversations(list) {
-      convListEl.innerHTML = '';
-      list.forEach(c => convListEl.append(renderConvItem(c)));
+    async function fetchMessages(id) {
+      const r = await fetch(`/api/conversations/${id}?userId=${encodeURIComponent(userEmail)}`);
+      if (!r.ok) return { messages: [] };
+      return r.json();
     }
-    function renderConvItem(c) {
-      const item = el('div', { class: 'conv-item', 'data-id': c.id });
-      const icon = el('div', { class: 'conv-icon' }, '💬');
-      const title = el('div', { class: 'conv-title' }, c.title);
-      const dots = el('div', { class: 'conv-dots', title: 'Options' }, '⋯');
-
-      // Inline rename support
-      let renaming = false;
-      function startRename() {
-        if (renaming) return;
-        renaming = true;
-        const input = el('input', { class: 'conv-rename-input', value: c.title });
-        item.replaceChild(input, title);
-        input.focus();
-        input.select();
-        function finish(ok) {
-          input.removeEventListener('keydown', onKey);
-          input.removeEventListener('blur', onBlur);
-          renaming = false;
-          if (ok && input.value.trim() && input.value.trim() !== c.title) {
-            renameConversation(c.id, input.value.trim()).then(() => {
-              c.title = input.value.trim();
-              title.textContent = c.title;
-              item.replaceChild(title, input);
-              if (currentConvId === c.id) convTitleInfo.textContent = c.title;
-            }).catch(() => {
-              item.replaceChild(title, input);
-            });
-          } else {
-            item.replaceChild(title, input);
-          }
-        }
-        function onKey(e) {
-          if (e.key === 'Enter') finish(true);
-          else if (e.key === 'Escape') finish(false);
-        }
-        function onBlur() { finish(true); }
-        input.addEventListener('keydown', onKey);
-        input.addEventListener('blur', onBlur);
-      }
-
-      // Three-dots menu
-      let menu;
-      function openMenu() {
-        closeMenu();
-        menu = el('div', { class: 'menu' });
-        const openBtn = el('button', {}, 'Open');
-        const renameBtn = el('button', {}, 'Rename');
-        const shareBtn = el('button', {}, 'Share link');
-        const delBtn = el('button', { class: 'danger' }, 'Delete');
-
-        openBtn.onclick = () => { selectConversation(c.id); closeMenu(); };
-        renameBtn.onclick = () => { startRename(); closeMenu(); };
-        shareBtn.onclick = () => {
-          const url = `${location.origin}/chat.html?c=${c.id}${gptType==='content' ? '&t=content' : ''}`;
-          copy(url); showToast('Link copied'); closeMenu();
-        };
-        delBtn.onclick = async () => {
-          if (!confirm('Delete this conversation?')) return;
-          await deleteConversation(c.id);
-          await loadConversations();
-          if (currentConvId === c.id) {
-            currentConvId = null;
-            threadEl.innerHTML = '';
-            convTitleInfo.textContent = '';
-          }
-          closeMenu();
-        };
-
-        menu.append(openBtn, renameBtn, shareBtn, delBtn);
-        item.append(menu);
-        const closeOnDoc = (e) => {
-          if (!menu.contains(e.target) && e.target !== dots) { closeMenu(); document.removeEventListener('mousedown', closeOnDoc); }
-        };
-        setTimeout(() => document.addEventListener('mousedown', closeOnDoc), 0);
-      }
-      function closeMenu() {
-        if (menu && menu.parentNode) menu.parentNode.removeChild(menu);
-        menu = null;
-      }
-
-      item.onclick = (e) => {
-        if (e.target === dots) return;
-        if (renaming) return;
-        selectConversation(c.id);
-      };
-      dots.onclick = (e) => { e.stopPropagation(); openMenu(); };
-
-      item.append(icon, title, dots);
-      if (currentConvId === c.id) item.classList.add('active');
-      return item;
-    }
-
     async function renameConversation(id, title) {
       const r = await fetch(`/api/conversations/${id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        method:'PATCH', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ userId: userEmail, title })
       });
       if (!r.ok) throw new Error('rename failed');
@@ -486,24 +172,95 @@
     }
     async function deleteConversation(id) {
       const r = await fetch(`/api/conversations/${id}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
+        method:'DELETE', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({ userId: userEmail })
       });
       if (!r.ok) throw new Error('delete failed');
     }
 
-    // ======= Messages =======
-    async function fetchMessages(id) {
-      const r = await fetch(`/api/conversations/${id}?userId=${encodeURIComponent(userEmail)}`);
-      if (!r.ok) return { messages: [] };
-      return r.json();
+    // ===== Render conv list =====
+    function renderConversations(list) {
+      convListEl.innerHTML = '';
+      list.forEach(c => convListEl.append(renderConvItem(c)));
     }
+    function renderConvItem(c) {
+      const item = el('div', { class:'conv-item', 'data-id': c.id });
+      const icon = el('div', { class:'conv-icon' }, '💬');
+      const title = el('div', { class:'conv-title' }, c.title);
+      const dots = el('div', { class:'conv-dots', title:'Options' }, '⋯');
+
+      // inline rename
+      let renaming = false;
+      const startRename = () => {
+        if (renaming) return; renaming = true;
+        const input = el('input', { class:'conv-rename-input', value: c.title });
+        item.replaceChild(input, title);
+        input.focus(); input.select();
+        const finish = async(ok) => {
+          input.removeEventListener('keydown', onKey);
+          input.removeEventListener('blur', onBlur);
+          renaming = false;
+          if (ok && input.value.trim() && input.value.trim() !== c.title) {
+            try{
+              await renameConversation(c.id, input.value.trim());
+              c.title = input.value.trim();
+              title.textContent = c.title;
+              item.replaceChild(title, input);
+              if (currentConvId === c.id) convTitleInfo.textContent = c.title;
+            }catch{ item.replaceChild(title, input); }
+          } else { item.replaceChild(title, input); }
+        };
+        const onKey = (e) => { if (e.key === 'Enter') finish(true); else if (e.key === 'Escape') finish(false); };
+        const onBlur = () => finish(true);
+        input.addEventListener('keydown', onKey);
+        input.addEventListener('blur', onBlur);
+      };
+
+      // 3-dots menu
+      let menu;
+      function openMenu(){
+        closeMenu();
+        menu = el('div',{class:'menu'});
+        const openBtn = el('button',{},'Open');
+        const renameBtn = el('button',{},'Rename');
+        const shareBtn = el('button',{},'Share link');
+        const delBtn = el('button',{class:'danger'},'Delete');
+        openBtn.onclick = () => { selectConversation(c.id); closeMenu(); };
+        renameBtn.onclick = () => { startRename(); closeMenu(); };
+        shareBtn.onclick = () => {
+          const url = `${location.origin}/chat.html?c=${c.id}${gptType==='content' ? '&t=content' : ''}`;
+          copy(url); closeMenu();
+        };
+        delBtn.onclick = async () => {
+          if (!confirm('Delete this conversation?')) return;
+          await deleteConversation(c.id);
+          await loadConversations();
+          if (currentConvId === c.id) {
+            currentConvId = null; threadEl.innerHTML=''; convTitleInfo.textContent='';
+          }
+          closeMenu();
+        };
+        menu.append(openBtn, renameBtn, shareBtn, delBtn);
+        item.append(menu);
+        const closeOnDoc = (e)=>{ if(!menu.contains(e.target) && e.target!==dots){ closeMenu(); document.removeEventListener('mousedown', closeOnDoc); } };
+        setTimeout(()=> document.addEventListener('mousedown', closeOnDoc), 0);
+      }
+      function closeMenu(){ if(menu && menu.parentNode) menu.parentNode.removeChild(menu); menu=null; }
+
+      item.onclick = (e)=>{ if (e.target===dots || renaming) return; selectConversation(c.id); };
+      dots.onclick = (e)=>{ e.stopPropagation(); openMenu(); };
+
+      item.append(icon, title, dots);
+      if (currentConvId === c.id) item.classList.add('active');
+      return item;
+    }
+
+    // ===== Messages UI =====
     function renderMessages(list) {
       threadEl.innerHTML = '';
       list.forEach(m => {
-        const div = el('div', { class: 'msg ' + (m.role === 'user' ? 'user' : 'assistant') });
-        div.textContent = m.content;
+        const div = el('div', { class:'msg ' + (m.role==='user' ? 'user' : 'assistant') });
+        div.textContent = m.content; // plain text (no ** or ## injected)
         threadEl.append(div);
       });
       scrollToBottom();
@@ -517,7 +274,15 @@
       history.replaceState({}, '', `/chat.html?c=${id}${gptType==='content' ? '&t=content' : ''}`);
     }
 
-    // ======= Send message =======
+    // ===== Composer =====
+    // Shift+Enter → newline, Enter → submit
+    promptEl.addEventListener('keydown', (e)=>{
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        composerForm.requestSubmit();
+      }
+    });
+
     composerForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const text = promptEl.value.trim();
@@ -531,8 +296,7 @@
         if (currentConvId) body.conversationId = currentConvId;
 
         const r = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method:'POST', headers:{'Content-Type':'application/json'},
           body: JSON.stringify(body)
         });
         const data = await r.json();
@@ -543,9 +307,8 @@
           await loadConversations(currentConvId);
         }
         appendAssistant(data.response || '');
-        // Update topbar title if changed server-side
         await updateCurrentTitleInTopbar();
-      } catch (err) {
+      } catch {
         appendAssistant('Sorry, something went wrong.');
       } finally {
         sendBtn.disabled = false;
@@ -553,47 +316,36 @@
       }
     });
 
-    function appendUser(text) {
-      const div = el('div', { class: 'msg user' });
-      div.textContent = text;
-      threadEl.append(div);
-      scrollToBottom();
+    function appendUser(text){
+      const div = el('div',{class:'msg user'}); div.textContent = text; threadEl.append(div); scrollToBottom();
     }
-    function appendAssistant(text) {
-      const div = el('div', { class: 'msg assistant' });
-      div.textContent = text;
-      threadEl.append(div);
-      scrollToBottom();
+    function appendAssistant(text){
+      const div = el('div',{class:'msg assistant'}); div.textContent = text; threadEl.append(div); scrollToBottom();
     }
-
-    async function updateCurrentTitleInTopbar() {
+    async function updateCurrentTitleInTopbar(){
       if (!currentConvId) return;
       const node = document.querySelector(`.conv-item[data-id="${currentConvId}"] .conv-title`);
       if (node) convTitleInfo.textContent = node.textContent;
     }
 
-    // ======= New chat =======
-    newChatBtn.addEventListener('click', async () => {
-      currentConvId = null;
-      convTitleInfo.textContent = '';
-      threadEl.innerHTML = '';
-      promptEl.focus();
+    // ===== New chat =====
+    newChatBtn.addEventListener('click', async ()=>{
+      currentConvId = null; convTitleInfo.textContent=''; threadEl.innerHTML=''; promptEl.focus();
       [...document.querySelectorAll('.conv-item')].forEach(it => it.classList.remove('active'));
       history.replaceState({}, '', `/chat.html${gptType==='content' ? '?t=content' : ''}`);
     });
 
-    // ======= Sign out (sticky bottom-left) =======
+    // ===== Sign out =====
     signoutBtn.addEventListener('click', () => {
       localStorage.removeItem('userEmail');
       window.location.href = '/index.html';
     });
 
-    // ======= Load on start =======
-    async function loadConversations(activateId = null) {
+    // ===== Load on start =====
+    async function loadConversations(activateId=null) {
       const list = await fetchConversations();
       renderConversations(list);
       if (activateId) setActiveConv(activateId);
-      // If we came via ?c=, open it; else open most recent
       const openId = activateId || (currentConvId || (list[0]?.id || null));
       if (openId) selectConversation(openId);
     }
