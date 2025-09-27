@@ -47,9 +47,6 @@ const PAYSTACK_CALLBACK_URL =
 const PAYSTACK_CURRENCY = (process.env.PAYSTACK_CURRENCY || 'GHS').toUpperCase();
 const PAYSTACK_IS_TEST  = (PAYSTACK_SECRET_KEY || '').startsWith('sk_test_');
 
-// Canonical host (so localStorage is consistent across redirects)
-const CANONICAL_HOST = process.env.CANONICAL_HOST || 'gptshelp.online';
-
 /* ---------------------------------
    Database (PostgreSQL)
 ---------------------------------- */
@@ -270,24 +267,6 @@ app.use((req, res, next) => {
 });
 
 /* ---------------------------------
-   Canonical host redirect (keep localStorage origin consistent)
----------------------------------- */
-app.use((req, res, next) => {
-  try {
-    const host = req.headers.host || '';
-    if (!host || !CANONICAL_HOST) return next();
-    const isRailway = /\.up\.railway\.app$/i.test(host);
-    const isWWW = host.toLowerCase() === `www.${CANONICAL_HOST.toLowerCase()}`;
-    const isCanonical = host.toLowerCase() === CANONICAL_HOST.toLowerCase();
-    if ((isRailway || isWWW) && !isCanonical) {
-      const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
-      return res.redirect(301, `${proto}://${CANONICAL_HOST}${req.originalUrl}`);
-    }
-    next();
-  } catch (e) { next(); }
-});
-
-/* ---------------------------------
    Paystack Webhook (raw body)
 ---------------------------------- */
 app.post('/api/paystack-webhook', express.raw({ type: '*/*' }), async (req, res) => {
@@ -300,7 +279,7 @@ app.post('/api/paystack-webhook', express.raw({ type: '*/*' }), async (req, res)
 
     const event = JSON.parse(req.body.toString('utf8'));
     const ref   = event?.data?.reference;
-    const email = event?.data?.customer?.email || event?.data?.customer_email || event?.data?.metadata?.email;
+    const email = event?.data?.customer?.email || event?.data?.customer_email;
 
     if (ref) await markPaymentStatus(ref, event?.event || 'unknown', event);
     if (event?.event === 'charge.success' && email) {
@@ -318,7 +297,6 @@ app.post('/api/paystack-webhook', express.raw({ type: '*/*' }), async (req, res)
    Normal middleware & static
 ---------------------------------- */
 app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // allow simple form fallback
 app.use(express.static('public'));
 
 /* ---------------------------------
@@ -383,162 +361,13 @@ async function buildChatMessagesForModel(convId, gptType) {
    Basic pages
 ---------------------------------- */
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-
-/* Auto-open chat after successful Paystack payment */
-app.get('/payment-success', async (req, res) => {
-  try {
-    const reference = req.query.reference || req.query.trxref;
-    if (!reference) {
-      return res.type('html').send(`<!doctype html><html><head><meta charset="utf-8"><title>Payment</title></head>
-      <body style="font-family:system-ui,-apple-system,Segoe UI,Roboto; padding:40px;">
-        <h2>Thanks!</h2>
-        <p>We didn't find a payment reference in the URL. If you finished paying, your bank may still be processing.</p>
-        <p><a href="/chat.html">Continue to Chat</a></p>
-      </body></html>`);
-    }
-
-    // Verify with Paystack to fetch status + customer email
-    const verify = await axios.get(
-      `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
-      { headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}` }, timeout: 20000 }
-    );
-
-    const data = verify.data?.data;
-    const status = data?.status; // 'success' | others
-    const email =
-      data?.customer?.email ||
-      data?.customer_email ||
-      data?.metadata?.email ||
-      null;
-
-    if (status === 'success') {
-      if (email) {
-        await upsertUserSubscribed(email, 'monthly', new Date(data.paid_at || Date.now()));
-        await markPaymentStatus(reference, 'charge.success', verify.data);
-
-        return res.type('html').send(`<!doctype html>
-<html><head>
-  <meta charset="utf-8" />
-  <meta http-equiv="refresh" content="2; url=/chat.html" />
-  <title>Payment Successful</title>
-  <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto;display:grid;place-items:center;height:100vh;margin:0}
-    .card{max-width:520px;border:1px solid #e7e7ef;border-radius:12px;padding:24px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.06)}
-    .muted{color:#6b7280}
-    input,button{font-size:16px}
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h2>Payment Successful 🎉</h2>
-    <p class="muted">We’re opening the chat…</p>
-    <p class="muted">If nothing happens, <a href="/chat.html">click here</a>.</p>
-  </div>
-  <script>
-    try { localStorage.setItem('userEmail', ${JSON.stringify(email)}); } catch(e) {}
-    setTimeout(function(){ window.location.replace('/chat.html'); }, 800);
-  </script>
-</body></html>`);
-      } else {
-        // Rare fallback: success but no email in payload — ask user to confirm their email
-        await markPaymentStatus(reference, 'charge.success', verify.data);
-        return res.type('html').send(`<!doctype html>
-<html><head>
-  <meta charset="utf-8" />
-  <title>Confirm Email</title>
-  <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto;display:grid;place-items:center;height:100vh;margin:0}
-    .card{max-width:520px;border:1px solid #e7e7ef;border-radius:12px;padding:24px;text-align:center;box-shadow:0 4px 20px rgba(0,0,0,.06)}
-    .muted{color:#6b7280}
-    input{width:100%;padding:10px 12px;margin:10px 0;border:1px solid #d1d5db;border-radius:8px}
-    button{padding:10px 16px;border:0;border-radius:8px;background:#4f46e5;color:#fff;cursor:pointer}
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h2>Payment Successful</h2>
-    <p class="muted">One quick step: confirm your email to open the chat.</p>
-    <form id="f" onsubmit="return false">
-      <input id="email" type="email" required placeholder="you@example.com" />
-      <button id="go">Open Chat</button>
-    </form>
-    <p class="muted" id="msg"></p>
-  </div>
-  <script>
-    const ref = ${JSON.stringify(reference)};
-    document.getElementById('go').onclick = async () => {
-      const email = document.getElementById('email').value.trim();
-      if(!email) return;
-      try{
-        const r = await fetch('/api/complete-login', {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ reference: ref, email })
-        });
-        const t = await r.text();
-        document.open(); document.write(t); document.close();
-      }catch(e){ document.getElementById('msg').textContent='Something went wrong. Try again.'; }
-    };
-  </script>
-</body></html>`);
-      }
-    }
-
-    await markPaymentStatus(reference, status || 'verify.failed', verify.data);
-    return res.type('html').send(`<!doctype html><html><head><meta charset="utf-8"><title>Payment</title></head>
-    <body style="font-family:system-ui,-apple-system,Segoe UI,Roboto; padding:40px;">
-      <h2>Payment ${status ? status : 'Not Verified'}</h2>
-      <p>If you completed payment, your bank may still be processing it. You can still proceed to chat.</p>
-      <p><a href="/chat.html">Continue to Chat</a></p>
-    </body></html>`);
-
-  } catch (err) {
-    console.error('payment-success error:', err?.response?.data || err.message);
-    return res.type('html').send(`<!doctype html><html><head><meta charset="utf-8"><title>Payment</title></head>
-    <body style="font-family:system-ui,-apple-system,Segoe UI,Roboto; padding:40px;">
-      <h2>Verification Error</h2>
-      <p>We couldn't verify the transaction right now. If you paid, you should still be able to access the chat shortly.</p>
-      <p><a href="/chat.html">Continue to Chat</a></p>
-    </body></html>`);
-  }
-});
-
-/* Fallback: complete login when success has no email (or user confirms) */
-app.post('/api/complete-login', async (req, res) => {
-  try {
-    const { reference, email } = req.body || {};
-    if (!reference || !email) return res.status(400).send('Missing reference or email');
-
-    // Check payments table first
-    const { rows } = await dbQuery(`SELECT status FROM payments WHERE reference=$1`, [reference]);
-    let ok = rows[0]?.status === 'charge.success';
-
-    // If not found/ok, verify again just in case
-    if (!ok) {
-      const verify = await axios.get(
-        `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
-        { headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}` }, timeout: 20000 }
-      );
-      ok = verify.data?.data?.status === 'success';
-      if (ok) await markPaymentStatus(reference, 'charge.success', verify.data);
-    }
-
-    if (!ok) return res.status(400).send('Payment not verified');
-
-    await upsertUserSubscribed(email, 'monthly', new Date());
-    return res.type('html').send(`<!doctype html>
-<html><head><meta charset="utf-8" /><title>Opening Chat…</title></head>
-<body style="font-family:system-ui,-apple-system,Segoe UI,Roboto; padding:40px;">
-  <p>Opening chat…</p>
-  <script>
-    try { localStorage.setItem('userEmail', ${JSON.stringify(email)}); } catch(e) {}
-    window.location.replace('/chat.html');
-  </script>
-</body></html>`);
-  } catch (e) {
-    console.error('complete-login error:', e?.response?.data || e.message);
-    return res.status(500).send('Failed to complete login');
-  }
+app.get('/payment-success', (req, res) => {
+  res.type('html').send(`<!doctype html><html><head><meta charset="utf-8"><title>Payment Success</title></head>
+  <body style="font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; padding: 40px;">
+    <h1>Payment Successful</h1>
+    <p>Thank you! Your payment was successful. You can now return to the app.</p>
+    <p><a href="/index.html">Back to Account</a></p>
+  </body></html>`);
 });
 
 /* ---------------------------------
@@ -809,7 +638,7 @@ app.post('/api/create-subscription', async (req, res) => {
       amount: minorUnits,
       currency: PAYSTACK_CURRENCY,
       callback_url: PAYSTACK_CALLBACK_URL,
-      metadata: { plan: 'monthly', email } // include email in metadata as a backup
+      metadata: { plan: 'monthly' }
     }, {
       headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`, 'Content-Type': 'application/json' },
       timeout: 30000
