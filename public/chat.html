@@ -153,6 +153,9 @@
     }
     .msg.user { background: #11131a; }
     .msg small { display:block; color: var(--muted); margin-bottom: 6px; }
+    .thumb {
+      display:block; max-width: 260px; height:auto; border-radius: 8px; margin-top: 8px; border: 1px solid var(--border);
+    }
 
     .composer {
       border-top: 1px solid var(--border);
@@ -163,7 +166,7 @@
       max-width: 900px;
       margin: 0 auto;
       display: grid;
-      grid-template-columns: 1fr auto;
+      grid-template-columns: 1fr auto auto; /* input | photo | send */
       gap: 10px;
       align-items: end;
     }
@@ -188,13 +191,14 @@
       background: transparent; color: var(--text); outline: none; border: 0;
       font: inherit; line-height: 1.5;
     }
-    .send {
+    .send, .photo {
       align-self: stretch;
-      background: var(--brand);
-      border: 0; color: white; padding: 12px 16px; border-radius: 10px; cursor: pointer;
+      border: 0; color: white; padding: 12px 14px; border-radius: 10px; cursor: pointer;
       font-weight: 600;
     }
-    .send:disabled { opacity: .6; cursor: not-allowed; }
+    .send { background: var(--brand); }
+    .photo { background: #2c2f3d; }
+    .send:disabled, .photo:disabled { opacity: .6; cursor: not-allowed; }
 
     /* Mobile */
     @media (max-width: 900px) {
@@ -239,7 +243,10 @@
             </div>
             <textarea id="prompt" placeholder="Message Math GPT…" autocomplete="off"></textarea>
           </div>
+
+          <button class="photo" id="photoBtn" type="button" title="Photo Solve">📷 Photo</button>
           <button class="send" id="sendBtn" type="submit">Send</button>
+          <input type="file" id="photoFile" accept="image/png,image/jpeg,image/jpg,image/webp" hidden />
         </div>
       </form>
     </main>
@@ -273,7 +280,8 @@
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify(payload)
       }).then(r=>r.json()),
-      me: (email) => fetch(`/api/user/${encodeURIComponent(email)}`).then(r=>r.json())
+      me: (email) => fetch(`/api/user/${encodeURIComponent(email)}`).then(r=>r.json()),
+      photoSolve: (formData) => fetch('/api/photo-solve', { method:'POST', body: formData }).then(r=>r.json())
     };
 
     const messagesEl = document.getElementById('messages');
@@ -281,6 +289,8 @@
     const promptEl = document.getElementById('prompt');
     const composerEl = document.getElementById('composer');
     const sendBtn = document.getElementById('sendBtn');
+    const photoBtn = document.getElementById('photoBtn');
+    const photoFile = document.getElementById('photoFile');
     const gptTypeEl = document.getElementById('gptType');
     const statusEl = document.getElementById('status');
 
@@ -292,7 +302,6 @@
 
     async function guardAuth() {
       if (!userEmail) {
-        // try to prompt, or redirect
         window.location.replace('/index.html');
         return false;
       }
@@ -324,18 +333,19 @@
       m.appendChild(document.createTextNode(text));
       messagesEl.appendChild(m);
     }
+    function renderImageMessage(caption, fileObjUrl) {
+      const m = el('div', { class: 'msg user' });
+      m.appendChild(document.createTextNode(caption || '📷 Photo uploaded'));
+      if (fileObjUrl) {
+        const img = el('img', { class:'thumb', src: fileObjUrl, alt:'uploaded image' });
+        m.appendChild(img);
+      }
+      messagesEl.appendChild(m);
+    }
 
     function clearMessages() { messagesEl.innerHTML = ''; }
-
-    function scrollToBottom() {
-      // ensure composer is always visible; we only scroll the messages pane
-      messagesEl.scrollTop = messagesEl.scrollHeight;
-    }
-
-    function timeNow() {
-      const d = new Date();
-      return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
-    }
+    function scrollToBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
+    function timeNow() { const d = new Date(); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
 
     async function loadConversations(selectId = null) {
       const list = await api.listConvs(userEmail);
@@ -394,7 +404,6 @@
 
         menuBtn.addEventListener('click', (e) => {
           e.stopPropagation();
-          // toggle this menu, close others
           document.querySelectorAll('.menu.open').forEach(m => m.classList.remove('open'));
           menu.classList.toggle('open');
         });
@@ -412,7 +421,6 @@
         convListEl.appendChild(row);
       });
 
-      // click outside to close any open menu
       document.addEventListener('click', () => {
         document.querySelectorAll('.menu.open').forEach(m => m.classList.remove('open'));
       }, { capture: true });
@@ -434,17 +442,17 @@
     }
     promptEl.addEventListener('input', autoresize);
 
+    // Text chat submit
     composerEl.addEventListener('submit', async (e) => {
       e.preventDefault();
       const text = (promptEl.value || '').trim();
       if (!text) return;
 
-      // show user message immediately
       renderMessage('user', text, timeNow());
       scrollToBottom();
 
-      // lock UI
       sendBtn.disabled = true;
+      photoBtn.disabled = true;
       promptEl.disabled = true;
       statusEl.textContent = 'Thinking…';
 
@@ -458,12 +466,10 @@
 
         const res = await api.chat(payload);
 
-        // update conv id on first reply
         if (!currentConvId && res.conversationId) {
           currentConvId = res.conversationId;
           await loadConversations(currentConvId);
         } else {
-          // refresh titles (auto-title may have happened)
           await loadConversations(currentConvId || undefined);
         }
 
@@ -476,6 +482,74 @@
         promptEl.value = '';
         autoresize();
         sendBtn.disabled = false;
+        photoBtn.disabled = false;
+        promptEl.disabled = false;
+        promptEl.focus();
+        statusEl.textContent = '';
+      }
+    });
+
+    // Photo Solve handlers
+    photoBtn.addEventListener('click', () => {
+      photoFile.click();
+    });
+
+    photoFile.addEventListener('change', async () => {
+      const file = photoFile.files && photoFile.files[0];
+      if (!file) return;
+      // Basic client validation (server allows up to 6MB)
+      const okTypes = ['image/png','image/jpeg','image/jpg','image/webp'];
+      if (!okTypes.includes(file.type)) {
+        alert('Please choose a PNG, JPG, or WEBP image.');
+        photoFile.value = '';
+        return;
+      }
+      if (file.size > 6 * 1024 * 1024) {
+        alert('Image is larger than 6MB. Please choose a smaller file.');
+        photoFile.value = '';
+        return;
+      }
+
+      const note = prompt('Optional: add a short note (what you tried / assumptions). Leave blank if not needed.') || '';
+
+      // Show immediate preview
+      const objUrl = URL.createObjectURL(file);
+      renderImageMessage(note ? `📷 (with note) ${note}` : '📷 Photo uploaded', objUrl);
+      scrollToBottom();
+
+      // Lock UI
+      sendBtn.disabled = true;
+      photoBtn.disabled = true;
+      promptEl.disabled = true;
+      statusEl.textContent = 'Solving…';
+
+      try {
+        const fd = new FormData();
+        fd.append('image', file);
+        fd.append('userId', userEmail);
+        fd.append('gptType', gptTypeEl.value || 'math');
+        if (note) fd.append('attempt', note);
+        if (currentConvId) fd.append('conversationId', currentConvId);
+
+        const res = await api.photoSolve(fd);
+
+        if (!currentConvId && res.conversationId) {
+          currentConvId = res.conversationId;
+          await loadConversations(currentConvId);
+        } else {
+          await loadConversations(currentConvId || undefined);
+        }
+
+        renderMessage('assistant', res.response || 'No response text returned.');
+        scrollToBottom();
+      } catch (e) {
+        renderMessage('assistant', 'Photo solve failed. Please try another image.');
+        scrollToBottom();
+      } finally {
+        URL.revokeObjectURL(objUrl);
+        photoFile.value = ''; // reset input
+        sendBtn.disabled = false;
+        photoBtn.disabled = false;
         promptEl.disabled = false;
         promptEl.focus();
         statusEl.textContent = '';
@@ -483,7 +557,6 @@
     });
 
     newChatBtn.addEventListener('click', async () => {
-      // create empty conversation (server will title it later when messages arrive)
       const c = await api.createConv(userEmail, 'New chat');
       currentConvId = c.id;
       await loadConversations(currentConvId);
@@ -501,7 +574,6 @@
       const ok = await guardAuth();
       if (!ok) return;
 
-      // select convo via URL ?c=ID if present
       const params = new URLSearchParams(location.search);
       const fromUrl = params.get('c');
       await loadConversations(fromUrl ? Number(fromUrl) : null);
@@ -509,8 +581,6 @@
       if (fromUrl) {
         currentConvId = Number(fromUrl);
         await showConversation(currentConvId);
-      } else {
-        // if there are no conversations yet, leave messages area blank; composer stays visible
       }
 
       promptEl.focus();
