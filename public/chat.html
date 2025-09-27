@@ -5,207 +5,113 @@
   <title>GPTs Help — Chat</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root {
-      --sidebar-w: 280px;
-      --bg: #0e0f13;
-      --panel: #13141a;
-      --muted: #9aa3b2;
-      --text: #e7eaf1;
-      --brand: #5865f2;
-      --border: #232634;
-      --vh: 100vh; /* updated by JS for mobile keyboards */
+    :root{
+      --sidebar-w:280px;
+      --bg:#0e0f13;
+      --panel:#13141a;
+      --muted:#9aa3b2;
+      --text:#e7eaf1;
+      --brand:#5865f2;
+      --border:#232634;
+      --vh:100vh;
+      --radius:14px;
     }
-    * { box-sizing: border-box; }
-    html, body { height: 100%; margin: 0; }
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, sans-serif;
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0}
+    body{
+      background:var(--bg);
+      color:var(--text);
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,sans-serif;
     }
 
-    /* App grid: sidebar | main */
-    .app {
-      height: calc(var(--vh));
-      display: grid;
-      grid-template-columns: var(--sidebar-w) 1fr;
+    /* Layout */
+    .app{
+      height:calc(var(--vh));
+      display:grid;
+      grid-template-columns:var(--sidebar-w) 1fr;
     }
+    @media (max-width:900px){ .app{ grid-template-columns:1fr } .sidebar{ display:none } }
 
     /* Sidebar */
-    .sidebar {
-      display: grid;
-      grid-template-rows: auto 1fr auto;
-      border-right: 1px solid var(--border);
-      background: #0f1117;
-      min-height: 0; /* enable child overflow */
+    .sidebar{
+      display:grid; grid-template-rows:auto 1fr auto;
+      border-right:1px solid var(--border); background:#0f1117; min-height:0;
     }
-    .side-top {
-      padding: 16px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      justify-content: space-between;
-    }
-    .logo { font-weight: 700; letter-spacing: .2px; }
-    .new-chat {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      background: var(--panel);
-      color: var(--text);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px 10px;
-      cursor: pointer;
-      font-size: 14px;
-    }
-    .side-list {
-      overflow-y: auto;
-      padding: 12px 8px 12px 12px;
-      min-height: 0;
-    }
-    .conv {
-      position: relative;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px 10px;
-      border-radius: 8px;
-      border: 1px solid transparent;
-      color: var(--text);
-      text-decoration: none;
-      font-size: 14px;
-      margin-bottom: 6px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      background: transparent;
-      cursor: pointer;
-    }
-    .conv:hover { background: #151824; border-color: #1b1f2b; }
-    .conv.active { background: #171b28; border-color: #2a3352; }
-    .conv-title { flex: 1; overflow: hidden; text-overflow: ellipsis; }
-    .conv-menu-btn {
-      opacity: 0;
-      transition: opacity .15s;
-      border: 0; background: transparent; color: var(--muted);
-      cursor: pointer; padding: 2px 4px; border-radius: 6px;
-    }
-    .conv:hover .conv-menu-btn { opacity: 1; }
-    .menu {
-      position: absolute;
-      right: 8px; top: 36px;
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      overflow: hidden;
-      display: none;
-      z-index: 10;
-    }
-    .menu.open { display: block; }
-    .menu button {
-      display: block; width: 160px; text-align: left;
-      background: transparent; color: var(--text);
-      border: 0; padding: 10px 12px; cursor: pointer; font-size: 14px;
-    }
-    .menu button:hover { background: #1a1d2a; }
+    .side-top{ padding:12px 12px; border-bottom:1px solid var(--border);
+      display:flex; gap:8px; align-items:center; justify-content:space-between }
+    .logo{ font-weight:700; letter-spacing:.2px }
+    .new-chat{ background:var(--panel); color:var(--text); border:1px solid var(--border);
+      border-radius:10px; padding:8px 10px; cursor:pointer; font-size:13px }
+    .side-list{ overflow-y:auto; padding:10px 8px 10px 12px; min-height:0 }
+    .conv{ position:relative; display:flex; align-items:center; gap:8px; padding:8px 10px;
+      border-radius:10px; border:1px solid transparent; font-size:14px; margin-bottom:6px;
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer }
+    .conv:hover{ background:#151824; border-color:#1b1f2b }
+    .conv.active{ background:#171b28; border-color:#2a3352 }
+    .conv-title{ flex:1; overflow:hidden; text-overflow:ellipsis }
+    .conv-menu-btn{ opacity:0; transition:opacity .15s; border:0; background:transparent; color:var(--muted); cursor:pointer; padding:2px 4px; border-radius:6px }
+    .conv:hover .conv-menu-btn{ opacity:1 }
+    .menu{ position:absolute; right:8px; top:32px; background:var(--panel); border:1px solid var(--border); border-radius:10px; overflow:hidden; display:none; z-index:10 }
+    .menu.open{ display:block }
+    .menu button{ display:block; width:160px; text-align:left; background:transparent; color:var(--text); border:0; padding:10px 12px; cursor:pointer; font-size:14px }
+    .menu button:hover{ background:#1a1d2a }
+    .side-bottom{ position:sticky; bottom:0; padding:10px; border-top:1px solid var(--border); background:#0f1117 }
+    .logout{ width:100%; background:transparent; border:1px solid var(--border); color:var(--text); padding:9px 10px; border-radius:10px; cursor:pointer; font-size:13px }
+    .logout:hover{ background:#151824 }
 
-    .side-bottom {
-      position: sticky; bottom: 0;
-      padding: 12px;
-      border-top: 1px solid var(--border);
-      background: #0f1117;
+    /* Main area: messages (1fr) + composer (auto) */
+    .main{ display:grid; grid-template-rows:1fr auto; min-height:0 }
+    .messages{
+      overflow-y:auto; padding:20px 18px; min-height:0; scroll-behavior:smooth;
+      background:radial-gradient(1200px 400px at 50% -200px, rgba(88,101,242,.08), transparent 60%);
     }
-    .logout {
-      width: 100%;
-      background: transparent;
-      border: 1px solid var(--border);
-      color: var(--text);
-      padding: 10px 12px;
-      border-radius: 8px;
-      cursor: pointer;
+    .msg{
+      max-width:900px; margin:0 auto 12px auto; padding:12px 14px;
+      border:1px solid var(--border); border-radius:12px; background:var(--panel);
+      white-space:pre-wrap; line-height:1.55; font-size:15px;
     }
-    .logout:hover { background: #151824; }
+    .msg.user{ background:#11131a }
+    .msg small{ display:block; color:var(--muted); margin-bottom:6px }
+    .thumb{ display:block; max-width:240px; height:auto; border-radius:8px; margin-top:8px; border:1px solid var(--border) }
 
-    /* Main chat: messages (1fr) + composer (auto) */
-    .main {
-      display: grid;
-      grid-template-rows: 1fr auto;
-      min-height: 0;
+    /* Composer — compact, ChatGPT-like */
+    .composer{
+      border-top:1px solid var(--border);
+      background:linear-gradient(#0e0f13,#0f1117);
+      padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));
     }
-
-    .messages {
-      overflow-y: auto;
-      padding: 24px 20px;
-      min-height: 0;
-      scroll-behavior: smooth;
-      background: radial-gradient(1200px 400px at 50% -200px, rgba(88,101,242,.08), transparent 60%);
+    .row{
+      max-width:900px; margin:0 auto;
+      display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center;
     }
-    .msg {
-      max-width: 900px;
-      margin: 0 auto 16px auto;
-      padding: 14px 16px;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      background: var(--panel);
-      white-space: pre-wrap;
-      line-height: 1.5;
+    .input{
+      display:flex; align-items:flex-end; gap:8px;
+      background:#0f1117; border:1px solid var(--border);
+      border-radius:9999px; padding:6px 10px;
+      min-height:42px;
     }
-    .msg.user { background: #11131a; }
-    .msg small { display:block; color: var(--muted); margin-bottom: 6px; }
-    .thumb {
-      display:block; max-width: 260px; height:auto; border-radius: 8px; margin-top: 8px; border: 1px solid var(--border);
+    .ta-wrap{ flex:1; display:flex; flex-direction:column; }
+    .meta{
+      display:flex; gap:8px; align-items:center; color:var(--muted); font-size:11px; margin:2px 2px 4px 6px;
     }
-
-    .composer {
-      border-top: 1px solid var(--border);
-      background: linear-gradient(#0e0f13, #0f1117);
-      padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    select{
+      background:#0f1117; color:var(--text); border:1px solid var(--border);
+      border-radius:8px; padding:4px 6px; font-size:11px;
     }
-    .row {
-      max-width: 900px;
-      margin: 0 auto;
-      display: grid;
-      grid-template-columns: 1fr auto auto; /* input | photo | send */
-      gap: 10px;
-      align-items: end;
+    textarea{
+      width:100%; resize:none; min-height:24px; max-height:120px;
+      background:transparent; color:var(--text); outline:none; border:0; font:inherit; line-height:1.45; padding:0 4px 2px 6px;
     }
-    .input {
-      background: #0f1117;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-      padding: 10px 12px;
-      display: grid;
-      grid-template-rows: auto auto;
-      gap: 8px;
+    .controls{
+      display:inline-flex; gap:6px;
     }
-    .meta {
-      display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 12px;
+    .icon-btn{
+      width:36px; height:36px; display:inline-flex; align-items:center; justify-content:center;
+      border-radius:9999px; border:1px solid var(--border); background:#141722; color:#dfe3ec;
+      cursor:pointer; font-size:16px; line-height:1;
     }
-    select {
-      background: #0f1117; color: var(--text);
-      border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px;
-    }
-    textarea {
-      width: 100%; resize: none; min-height: 48px; max-height: 180px;
-      background: transparent; color: var(--text); outline: none; border: 0;
-      font: inherit; line-height: 1.5;
-    }
-    .send, .photo {
-      align-self: stretch;
-      border: 0; color: white; padding: 12px 14px; border-radius: 10px; cursor: pointer;
-      font-weight: 600;
-    }
-    .send { background: var(--brand); }
-    .photo { background: #2c2f3d; }
-    .send:disabled, .photo:disabled { opacity: .6; cursor: not-allowed; }
-
-    /* Mobile */
-    @media (max-width: 900px) {
-      .app { grid-template-columns: 1fr; }
-      .sidebar { display: none; }
-      .messages, .row { padding-left: 12px; padding-right: 12px; }
-    }
+    .icon-btn.primary{ background:var(--brand); color:#fff; border-color:transparent }
+    .icon-btn:disabled{ opacity:.6; cursor:not-allowed }
   </style>
 </head>
 <body>
@@ -217,73 +123,62 @@
         <button class="new-chat" id="newChatBtn">+ New Chat</button>
       </div>
 
-      <div class="side-list" id="convList">
-        <!-- conversations injected here -->
-      </div>
+      <div class="side-list" id="convList"></div>
 
       <div class="side-bottom">
         <button class="logout" id="logoutBtn">Sign out</button>
       </div>
     </aside>
 
-    <!-- Main chat -->
+    <!-- Main -->
     <main class="main">
       <div class="messages" id="messages"></div>
 
       <form class="composer" id="composer">
         <div class="row">
+          <!-- compact pill input -->
           <div class="input">
-            <div class="meta">
-              <label for="gptType">Assistant:</label>
-              <select id="gptType">
-                <option value="math">Math GPT</option>
-                <option value="content">ContentGPT</option>
-              </select>
-              <span id="status" style="margin-left:auto;"></span>
+            <div class="ta-wrap">
+              <div class="meta">
+                <label for="gptType">Assistant</label>
+                <select id="gptType">
+                  <option value="math">Math GPT</option>
+                  <option value="content">ContentGPT</option>
+                </select>
+                <span id="status" style="margin-left:auto;"></span>
+              </div>
+              <textarea id="prompt" placeholder="Message Math GPT…" autocomplete="off"></textarea>
             </div>
-            <textarea id="prompt" placeholder="Message Math GPT…" autocomplete="off"></textarea>
           </div>
 
-          <button class="photo" id="photoBtn" type="button" title="Photo Solve">📷 Photo</button>
-          <button class="send" id="sendBtn" type="submit">Send</button>
-          <input type="file" id="photoFile" accept="image/png,image/jpeg,image/jpg,image/webp" hidden />
+          <div class="controls">
+            <button class="icon-btn" id="photoBtn" type="button" title="Photo Solve" aria-label="Photo Solve">📷</button>
+            <button class="icon-btn primary" id="sendBtn" type="submit" title="Send" aria-label="Send">➤</button>
+            <input type="file" id="photoFile" accept="image/png,image/jpeg,image/jpg,image/webp" hidden />
+          </div>
         </div>
       </form>
     </main>
   </div>
 
   <script>
-    // Fix 100vh on mobile (keyboard safe)
-    function setVh() {
-      const vh = window.innerHeight * 0.01;
-      document.documentElement.style.setProperty('--vh', `${vh * 100}px`);
-    }
-    setVh();
-    window.addEventListener('resize', setVh);
+    /* mobile 100vh fix */
+    function setVh(){ const vh = window.innerHeight * 0.01; document.documentElement.style.setProperty('--vh', `${vh*100}px`); }
+    setVh(); window.addEventListener('resize', setVh);
 
+    /* API */
     const api = {
-      listConvs: (email) => fetch(`/api/conversations?userId=${encodeURIComponent(email)}`).then(r=>r.json()),
-      createConv: (email, title) => fetch('/api/conversations', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ userId: email, title })
-      }).then(r=>r.json()),
-      renameConv: (email, id, title) => fetch(`/api/conversations/${id}`, {
-        method:'PATCH', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ userId: email, title })
-      }).then(r=>r.json()),
-      deleteConv: (email, id) => fetch(`/api/conversations/${id}`, {
-        method:'DELETE', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ userId: email })
-      }).then(r=>r.json()),
-      getConvMsgs: (email, id) => fetch(`/api/conversations/${id}?userId=${encodeURIComponent(email)}`).then(r=>r.json()),
-      chat: (payload) => fetch('/api/chat', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify(payload)
-      }).then(r=>r.json()),
-      me: (email) => fetch(`/api/user/${encodeURIComponent(email)}`).then(r=>r.json()),
-      photoSolve: (formData) => fetch('/api/photo-solve', { method:'POST', body: formData }).then(r=>r.json())
+      listConvs: (email)=>fetch(`/api/conversations?userId=${encodeURIComponent(email)}`).then(r=>r.json()),
+      createConv:(email,title)=>fetch('/api/conversations',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:email,title})}).then(r=>r.json()),
+      renameConv:(email,id,title)=>fetch(`/api/conversations/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:email,title})}).then(r=>r.json()),
+      deleteConv:(email,id)=>fetch(`/api/conversations/${id}`,{method:'DELETE',headers:{'Content-Type':'application/json'},body:JSON.stringify({userId:email})}).then(r=>r.json()),
+      getConvMsgs:(email,id)=>fetch(`/api/conversations/${id}?userId=${encodeURIComponent(email)}`).then(r=>r.json()),
+      chat:(payload)=>fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(r=>r.json()),
+      me:(email)=>fetch(`/api/user/${encodeURIComponent(email)}`).then(r=>r.json()),
+      photoSolve:(fd)=>fetch('/api/photo-solve',{method:'POST',body:fd}).then(r=>r.json())
     };
 
+    /* Elements */
     const messagesEl = document.getElementById('messages');
     const convListEl = document.getElementById('convList');
     const promptEl = document.getElementById('prompt');
@@ -293,298 +188,205 @@
     const photoFile = document.getElementById('photoFile');
     const gptTypeEl = document.getElementById('gptType');
     const statusEl = document.getElementById('status');
-
     const newChatBtn = document.getElementById('newChatBtn');
     const logoutBtn = document.getElementById('logoutBtn');
 
     let userEmail = localStorage.getItem('userEmail') || '';
     let currentConvId = null;
 
-    async function guardAuth() {
-      if (!userEmail) {
-        window.location.replace('/index.html');
-        return false;
-      }
+    /* Auth guard */
+    async function guardAuth(){
+      if(!userEmail){ window.location.replace('/index.html'); return false; }
       const u = await api.me(userEmail);
-      if (!u.subscribed) {
-        window.location.replace('/index.html');
-        return false;
-      }
+      if(!u.subscribed){ window.location.replace('/index.html'); return false; }
       return true;
     }
 
-    function el(tag, attrs={}, ...children) {
-      const e = document.createElement(tag);
-      Object.entries(attrs).forEach(([k,v]) => {
-        if (k === 'class') e.className = v;
-        else if (k.startsWith('on') && typeof v === 'function') e.addEventListener(k.substring(2), v);
-        else if (v != null) e.setAttribute(k, v);
+    /* Helpers */
+    function el(tag, attrs={}, ...children){
+      const e=document.createElement(tag);
+      Object.entries(attrs).forEach(([k,v])=>{
+        if(k==='class') e.className=v;
+        else if(k.startsWith('on') && typeof v==='function') e.addEventListener(k.substring(2), v);
+        else if(v!=null) e.setAttribute(k,v);
       });
-      children.forEach(c => {
-        if (typeof c === 'string') e.appendChild(document.createTextNode(c));
-        else if (c) e.appendChild(c);
-      });
+      children.forEach(c=> typeof c==='string' ? e.appendChild(document.createTextNode(c)) : c && e.appendChild(c));
       return e;
     }
-
-    function renderMessage(role, text, when = '') {
-      const m = el('div', { class: `msg ${role}` });
-      if (when) m.appendChild(el('small', {}, when));
+    function renderMessage(role,text,when=''){
+      const m=el('div',{class:`msg ${role}`});
+      if(when) m.appendChild(el('small',{},when));
       m.appendChild(document.createTextNode(text));
       messagesEl.appendChild(m);
     }
-    function renderImageMessage(caption, fileObjUrl) {
-      const m = el('div', { class: 'msg user' });
-      m.appendChild(document.createTextNode(caption || '📷 Photo uploaded'));
-      if (fileObjUrl) {
-        const img = el('img', { class:'thumb', src: fileObjUrl, alt:'uploaded image' });
-        m.appendChild(img);
-      }
+    function renderImageMessage(caption,url){
+      const m=el('div',{class:'msg user'});
+      m.appendChild(document.createTextNode(caption||'📷 Photo uploaded'));
+      if(url){ m.appendChild(el('img',{class:'thumb',src:url,alt:'uploaded image'})); }
       messagesEl.appendChild(m);
     }
+    function clearMessages(){ messagesEl.innerHTML=''; }
+    function scrollToBottom(){ messagesEl.scrollTop = messagesEl.scrollHeight; }
+    function now(){ return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
 
-    function clearMessages() { messagesEl.innerHTML = ''; }
-    function scrollToBottom() { messagesEl.scrollTop = messagesEl.scrollHeight; }
-    function timeNow() { const d = new Date(); return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
+    /* Conversations UI */
+    async function loadConversations(selectId=null){
+      const list=await api.listConvs(userEmail);
+      convListEl.innerHTML='';
+      list.forEach(c=>{
+        const row=el('div',{class:`conv ${c.id===selectId?'active':''}`});
+        const title=el('div',{class:'conv-title'},c.title);
+        const menuBtn=el('button',{class:'conv-menu-btn',title:'Options'},'⋯');
+        const menu=el('div',{class:'menu'});
+        const bShare=el('button',{},'Share link');
+        const bRename=el('button',{},'Rename');
+        const bDelete=el('button',{},'Delete');
 
-    async function loadConversations(selectId = null) {
-      const list = await api.listConvs(userEmail);
-      convListEl.innerHTML = '';
-      list.forEach(c => {
-        const row = el('div', { class: `conv ${c.id === selectId ? 'active' : ''}` });
-        const title = el('div', { class:'conv-title' }, c.title);
-        const menuBtn = el('button', { class:'conv-menu-btn', title:'Options' }, '⋯');
-        const menu = el('div', { class:'menu' });
-        const btnShare = el('button', {}, 'Share link');
-        const btnRename = el('button', {}, 'Rename');
-        const btnDelete = el('button', {}, 'Delete');
-
-        btnShare.addEventListener('click', (e) => {
+        bShare.addEventListener('click',e=>{
           e.stopPropagation();
-          const url = `${location.origin}/chat.html?c=${c.id}`;
+          const url=`${location.origin}/chat.html?c=${c.id}`;
           navigator.clipboard.writeText(url).catch(()=>{});
           menu.classList.remove('open');
         });
 
-        btnRename.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          menu.classList.remove('open');
-          // inline rename
-          const input = el('input', { value: c.title, style:'width:100%; background:#12131a; color:#e7eaf1; border:1px solid #232634; border-radius:6px; padding:6px 8px;'});
-          row.replaceChild(input, title);
-          input.focus();
-          const commit = async () => {
-            const newTitle = (input.value || 'New chat').trim();
-            await api.renameConv(userEmail, c.id, newTitle);
-            await loadConversations(c.id);
+        bRename.addEventListener('click',async e=>{
+          e.stopPropagation(); menu.classList.remove('open');
+          const input=el('input',{value:c.title,style:'width:100%; background:#12131a; color:#e7eaf1; border:1px solid #232634; border-radius:6px; padding:6px 8px;'});
+          row.replaceChild(input,title); input.focus();
+          const commit=async ()=>{
+            const t=(input.value||'New chat').trim();
+            await api.renameConv(userEmail,c.id,t); await loadConversations(c.id);
           };
-          input.addEventListener('keydown', (ke) => {
-            if (ke.key === 'Enter') commit();
-            if (ke.key === 'Escape') loadConversations(c.id);
-          });
-          input.addEventListener('blur', commit);
+          input.addEventListener('keydown',ke=>{ if(ke.key==='Enter') commit(); if(ke.key==='Escape') loadConversations(c.id); });
+          input.addEventListener('blur',commit);
         });
 
-        btnDelete.addEventListener('click', async (e) => {
-          e.stopPropagation();
-          menu.classList.remove('open');
-          if (confirm('Delete this chat?')) {
-            await api.deleteConv(userEmail, c.id);
-            if (currentConvId === c.id) {
-              currentConvId = null;
-              clearMessages();
-            }
-            await loadConversations();
-          }
+        bDelete.addEventListener('click',async e=>{
+          e.stopPropagation(); menu.classList.remove('open');
+          if(confirm('Delete this chat?')){ await api.deleteConv(userEmail,c.id); if(currentConvId===c.id){ currentConvId=null; clearMessages(); } await loadConversations(); }
         });
 
-        menu.appendChild(btnShare);
-        menu.appendChild(btnRename);
-        menu.appendChild(btnDelete);
-
-        menuBtn.addEventListener('click', (e) => {
+        menu.appendChild(bShare); menu.appendChild(bRename); menu.appendChild(bDelete);
+        menuBtn.addEventListener('click',e=>{
           e.stopPropagation();
-          document.querySelectorAll('.menu.open').forEach(m => m.classList.remove('open'));
+          document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'));
           menu.classList.toggle('open');
         });
 
-        row.addEventListener('click', async () => {
-          currentConvId = c.id;
-          document.querySelectorAll('.conv').forEach(n => n.classList.remove('active'));
+        row.addEventListener('click',async ()=>{
+          currentConvId=c.id;
+          document.querySelectorAll('.conv').forEach(n=>n.classList.remove('active'));
           row.classList.add('active');
           await showConversation(c.id);
         });
 
-        row.appendChild(title);
-        row.appendChild(menuBtn);
-        row.appendChild(menu);
+        row.appendChild(title); row.appendChild(menuBtn); row.appendChild(menu);
         convListEl.appendChild(row);
       });
 
-      document.addEventListener('click', () => {
-        document.querySelectorAll('.menu.open').forEach(m => m.classList.remove('open'));
-      }, { capture: true });
+      document.addEventListener('click',()=>{ document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open')); },{capture:true});
     }
 
-    async function showConversation(id) {
+    async function showConversation(id){
       clearMessages();
-      const r = await api.getConvMsgs(userEmail, id);
-      (r.messages || []).forEach(m => {
-        renderMessage(m.role === 'user' ? 'user' : 'assistant', m.content);
-      });
+      const r=await api.getConvMsgs(userEmail,id);
+      (r.messages||[]).forEach(m=> renderMessage(m.role==='user'?'user':'assistant', m.content));
       scrollToBottom();
     }
 
-    // Auto-resize textarea
-    function autoresize() {
-      promptEl.style.height = 'auto';
-      promptEl.style.height = Math.min(180, promptEl.scrollHeight) + 'px';
+    /* Auto-resize + Enter to send */
+    function autoresize(){
+      promptEl.style.height='auto';
+      promptEl.style.height=Math.min(120,promptEl.scrollHeight)+'px';
     }
     promptEl.addEventListener('input', autoresize);
+    promptEl.addEventListener('keydown', (e)=>{
+      if(e.key==='Enter' && !e.shiftKey && !e.isComposing){
+        e.preventDefault();
+        if(!sendBtn.disabled) composerEl.requestSubmit();
+      }
+    });
 
-    // Text chat submit
-    composerEl.addEventListener('submit', async (e) => {
+    /* Submit text */
+    composerEl.addEventListener('submit', async (e)=>{
       e.preventDefault();
-      const text = (promptEl.value || '').trim();
-      if (!text) return;
+      const text=(promptEl.value||'').trim();
+      if(!text) return;
 
-      renderMessage('user', text, timeNow());
-      scrollToBottom();
+      renderMessage('user', text, now()); scrollToBottom();
 
-      sendBtn.disabled = true;
-      photoBtn.disabled = true;
-      promptEl.disabled = true;
-      statusEl.textContent = 'Thinking…';
+      sendBtn.disabled=true; photoBtn.disabled=true; promptEl.disabled=true; statusEl.textContent='Thinking…';
+      try{
+        const payload={ message:text, gptType:gptTypeEl.value||'math', userId:userEmail };
+        if(currentConvId) payload.conversationId=currentConvId;
+        const res=await api.chat(payload);
 
-      try {
-        const payload = {
-          message: text,
-          gptType: gptTypeEl.value || 'math',
-          userId: userEmail
-        };
-        if (currentConvId) payload.conversationId = currentConvId;
+        if(!currentConvId && res.conversationId){ currentConvId=res.conversationId; await loadConversations(currentConvId); }
+        else { await loadConversations(currentConvId||undefined); }
 
-        const res = await api.chat(payload);
-
-        if (!currentConvId && res.conversationId) {
-          currentConvId = res.conversationId;
-          await loadConversations(currentConvId);
-        } else {
-          await loadConversations(currentConvId || undefined);
-        }
-
-        renderMessage('assistant', res.response || '');
+        renderMessage('assistant', res.response||'');
         scrollToBottom();
-      } catch (err) {
-        renderMessage('assistant', 'Sorry, something went wrong. Please try again.');
-        scrollToBottom();
-      } finally {
-        promptEl.value = '';
-        autoresize();
-        sendBtn.disabled = false;
-        photoBtn.disabled = false;
-        promptEl.disabled = false;
-        promptEl.focus();
-        statusEl.textContent = '';
+      }catch(err){
+        renderMessage('assistant','Sorry, something went wrong. Please try again.'); scrollToBottom();
+      }finally{
+        promptEl.value=''; autoresize();
+        sendBtn.disabled=false; photoBtn.disabled=false; promptEl.disabled=false; promptEl.focus(); statusEl.textContent='';
       }
     });
 
-    // Photo Solve handlers
-    photoBtn.addEventListener('click', () => {
-      photoFile.click();
-    });
-
-    photoFile.addEventListener('change', async () => {
+    /* Photo Solve */
+    document.getElementById('photoBtn').addEventListener('click',()=> photoFile.click());
+    photoFile.addEventListener('change', async ()=>{
       const file = photoFile.files && photoFile.files[0];
-      if (!file) return;
-      // Basic client validation (server allows up to 6MB)
-      const okTypes = ['image/png','image/jpeg','image/jpg','image/webp'];
-      if (!okTypes.includes(file.type)) {
-        alert('Please choose a PNG, JPG, or WEBP image.');
-        photoFile.value = '';
-        return;
-      }
-      if (file.size > 6 * 1024 * 1024) {
-        alert('Image is larger than 6MB. Please choose a smaller file.');
-        photoFile.value = '';
-        return;
-      }
+      if(!file) return;
+      const okTypes=['image/png','image/jpeg','image/jpg','image/webp'];
+      if(!okTypes.includes(file.type)){ alert('Please choose a PNG, JPG, or WEBP image.'); photoFile.value=''; return; }
+      if(file.size>6*1024*1024){ alert('Image is larger than 6MB.'); photoFile.value=''; return; }
 
-      const note = prompt('Optional: add a short note (what you tried / assumptions). Leave blank if not needed.') || '';
+      const note = prompt('Optional: add a short note (what you tried). Leave blank if not needed.') || '';
 
-      // Show immediate preview
-      const objUrl = URL.createObjectURL(file);
+      const objUrl=URL.createObjectURL(file);
       renderImageMessage(note ? `📷 (with note) ${note}` : '📷 Photo uploaded', objUrl);
       scrollToBottom();
 
-      // Lock UI
-      sendBtn.disabled = true;
-      photoBtn.disabled = true;
-      promptEl.disabled = true;
-      statusEl.textContent = 'Solving…';
-
-      try {
-        const fd = new FormData();
+      sendBtn.disabled=true; photoBtn.disabled=true; promptEl.disabled=true; statusEl.textContent='Solving…';
+      try{
+        const fd=new FormData();
         fd.append('image', file);
         fd.append('userId', userEmail);
-        fd.append('gptType', gptTypeEl.value || 'math');
-        if (note) fd.append('attempt', note);
-        if (currentConvId) fd.append('conversationId', currentConvId);
+        fd.append('gptType', gptTypeEl.value||'math');
+        if(note) fd.append('attempt', note);
+        if(currentConvId) fd.append('conversationId', currentConvId);
 
-        const res = await api.photoSolve(fd);
+        const res=await api.photoSolve(fd);
 
-        if (!currentConvId && res.conversationId) {
-          currentConvId = res.conversationId;
-          await loadConversations(currentConvId);
-        } else {
-          await loadConversations(currentConvId || undefined);
-        }
+        if(!currentConvId && res.conversationId){ currentConvId=res.conversationId; await loadConversations(currentConvId); }
+        else { await loadConversations(currentConvId||undefined); }
 
-        renderMessage('assistant', res.response || 'No response text returned.');
+        renderMessage('assistant', res.response||'No response text returned.');
         scrollToBottom();
-      } catch (e) {
-        renderMessage('assistant', 'Photo solve failed. Please try another image.');
-        scrollToBottom();
-      } finally {
-        URL.revokeObjectURL(objUrl);
-        photoFile.value = ''; // reset input
-        sendBtn.disabled = false;
-        photoBtn.disabled = false;
-        promptEl.disabled = false;
-        promptEl.focus();
-        statusEl.textContent = '';
+      }catch(e){
+        renderMessage('assistant','Photo solve failed. Please try another image.'); scrollToBottom();
+      }finally{
+        URL.revokeObjectURL(objUrl); photoFile.value='';
+        sendBtn.disabled=false; photoBtn.disabled=false; promptEl.disabled=false; promptEl.focus(); statusEl.textContent='';
       }
     });
 
-    newChatBtn.addEventListener('click', async () => {
-      const c = await api.createConv(userEmail, 'New chat');
-      currentConvId = c.id;
-      await loadConversations(currentConvId);
-      clearMessages();
-      promptEl.focus();
+    /* New chat & logout */
+    newChatBtn.addEventListener('click', async ()=>{
+      const c=await api.createConv(userEmail,'New chat');
+      currentConvId=c.id; await loadConversations(currentConvId); clearMessages(); promptEl.focus();
     });
+    logoutBtn.addEventListener('click', ()=>{ localStorage.removeItem('userEmail'); window.location.replace('/index.html'); });
 
-    logoutBtn.addEventListener('click', () => {
-      localStorage.removeItem('userEmail');
-      window.location.replace('/index.html');
-    });
-
-    // Initialize
-    (async function init() {
-      const ok = await guardAuth();
-      if (!ok) return;
-
-      const params = new URLSearchParams(location.search);
-      const fromUrl = params.get('c');
-      await loadConversations(fromUrl ? Number(fromUrl) : null);
-
-      if (fromUrl) {
-        currentConvId = Number(fromUrl);
-        await showConversation(currentConvId);
-      }
-
-      promptEl.focus();
-      autoresize();
+    /* Init */
+    (async function init(){
+      const ok=await guardAuth(); if(!ok) return;
+      const p=new URLSearchParams(location.search); const fromUrl=p.get('c');
+      await loadConversations(fromUrl?Number(fromUrl):null);
+      if(fromUrl){ currentConvId=Number(fromUrl); await showConversation(currentConvId); }
+      promptEl.focus(); autoresize();
     })();
   </script>
 </body>
