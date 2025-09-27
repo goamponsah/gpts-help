@@ -1,74 +1,206 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="utf-8" />
   <title>GPTs Help — Chat</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg: #0e0f13; --text: #e7eaf1; --muted: #9aa3b2;
-      --panel: #13141a; --panel-2: #161721; --border: #232634;
-      --brand: #7c5cff; --brand-2: #5a7bff; --danger: #ef4444;
+      --sidebar-w: 280px;
+      --bg: #0e0f13;
+      --panel: #13141a;
+      --muted: #9aa3b2;
+      --text: #e7eaf1;
+      --brand: #5865f2;
+      --border: #232634;
+      --vh: 100vh; /* updated by JS for mobile keyboards */
     }
     * { box-sizing: border-box; }
-    html, body { height: 100%; }
-    body { margin:0; background: var(--bg); color: var(--text); font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, sans-serif;
+    }
 
-    .app { display: grid; grid-template-columns: 300px 1fr; height: 100vh; overflow: hidden; }
+    /* App grid: sidebar | main */
+    .app {
+      height: calc(var(--vh));
+      display: grid;
+      grid-template-columns: var(--sidebar-w) 1fr;
+    }
 
     /* Sidebar */
-    .sidebar { background: var(--panel); border-right: 1px solid var(--border); display:flex; flex-direction:column; min-width:260px; }
-    .sidebar-header { padding: 14px 14px 8px; border-bottom: 1px solid var(--border); }
-    .logo { font-weight: 700; letter-spacing: 0.2px; font-size: 14px; }
-    .sidebar-actions { display: grid; gap: 10px; margin-top: 12px; }
-    .btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; height:36px; padding:0 12px; border-radius:10px; border:1px solid var(--border); background: var(--panel-2); color: var(--text); font-weight:600; font-size:13px; cursor:pointer; }
-    .btn:hover { border-color:#2b2f3e; background:#181a25; }
-    .btn.brand { background: linear-gradient(135deg, var(--brand), var(--brand-2)); border: none; }
-    .btn.brand:hover { filter: brightness(1.05); }
+    .sidebar {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      border-right: 1px solid var(--border);
+      background: #0f1117;
+      min-height: 0; /* enable child overflow */
+    }
+    .side-top {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .logo { font-weight: 700; letter-spacing: .2px; }
+    .new-chat {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+    .side-list {
+      overflow-y: auto;
+      padding: 12px 8px 12px 12px;
+      min-height: 0;
+    }
+    .conv {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 10px;
+      border-radius: 8px;
+      border: 1px solid transparent;
+      color: var(--text);
+      text-decoration: none;
+      font-size: 14px;
+      margin-bottom: 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      background: transparent;
+      cursor: pointer;
+    }
+    .conv:hover { background: #151824; border-color: #1b1f2b; }
+    .conv.active { background: #171b28; border-color: #2a3352; }
+    .conv-title { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+    .conv-menu-btn {
+      opacity: 0;
+      transition: opacity .15s;
+      border: 0; background: transparent; color: var(--muted);
+      cursor: pointer; padding: 2px 4px; border-radius: 6px;
+    }
+    .conv:hover .conv-menu-btn { opacity: 1; }
+    .menu {
+      position: absolute;
+      right: 8px; top: 36px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      display: none;
+      z-index: 10;
+    }
+    .menu.open { display: block; }
+    .menu button {
+      display: block; width: 160px; text-align: left;
+      background: transparent; color: var(--text);
+      border: 0; padding: 10px 12px; cursor: pointer; font-size: 14px;
+    }
+    .menu button:hover { background: #1a1d2a; }
 
-    .conv-list { padding: 10px; overflow: auto; flex: 1; }
+    .side-bottom {
+      position: sticky; bottom: 0;
+      padding: 12px;
+      border-top: 1px solid var(--border);
+      background: #0f1117;
+    }
+    .logout {
+      width: 100%;
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 10px 12px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+    .logout:hover { background: #151824; }
 
-    /* Horizontal conversation rows like ChatGPT */
-    .conv-item { position:relative; display:flex; align-items:center; gap:10px; padding:10px; margin-bottom:6px; border:1px solid var(--border); background:var(--panel-2); border-radius:10px; cursor:pointer; }
-    .conv-item:hover { background:#191b26; }
-    .conv-item.active { border-color:#3a3f55; background:#1b1d2a; }
-    .conv-icon { width:22px; height:22px; border-radius:6px; display:grid; place-items:center; background:#272a3a; font-size:12px; color:#c2c7d6; flex:0 0 auto; }
-    .conv-title { flex:1 1 auto; min-width:0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:13px; }
-    .conv-dots { flex:0 0 auto; opacity:0; transition:opacity .15s ease; width:28px; height:28px; border-radius:8px; display:grid; place-items:center; color:var(--muted); }
-    .conv-item:hover .conv-dots { opacity:1; background:#202233; }
-    .conv-dots:hover { color:#d7deea; }
-    .conv-rename-input { width:100%; background:transparent; border:1px dashed #3a3f55; color:var(--text); border-radius:8px; font-size:13px; padding:6px 8px; outline:none; }
+    /* Main chat: messages (1fr) + composer (auto) */
+    .main {
+      display: grid;
+      grid-template-rows: 1fr auto;
+      min-height: 0;
+    }
 
-    .menu { position:absolute; right:8px; top:38px; z-index:20; background:#0f1016; border:1px solid var(--border); border-radius:10px; min-width:160px; box-shadow:0 6px 26px rgba(0,0,0,.35); overflow:hidden; }
-    .menu button { display:block; width:100%; background:transparent; border:0; color:var(--text); text-align:left; padding:10px 12px; font-size:13px; cursor:pointer; }
-    .menu button:hover { background:#181a25; }
-    .menu .danger { color:#fca5a5; }
+    .messages {
+      overflow-y: auto;
+      padding: 24px 20px;
+      min-height: 0;
+      scroll-behavior: smooth;
+      background: radial-gradient(1200px 400px at 50% -200px, rgba(88,101,242,.08), transparent 60%);
+    }
+    .msg {
+      max-width: 900px;
+      margin: 0 auto 16px auto;
+      padding: 14px 16px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--panel);
+      white-space: pre-wrap;
+      line-height: 1.5;
+    }
+    .msg.user { background: #11131a; }
+    .msg small { display:block; color: var(--muted); margin-bottom: 6px; }
 
-    .sidebar-footer { position: sticky; bottom: 0; padding: 10px; background: linear-gradient(to top, var(--panel), rgba(19,20,26,0.6)); border-top: 1px solid var(--border); }
-    .signout { width:100%; background:transparent; border:1px solid var(--border); color:var(--muted); height:36px; border-radius:10px; font-weight:600; cursor:pointer; }
-    .signout:hover { background:#171925; color:#e4e8f2; }
+    .composer {
+      border-top: 1px solid var(--border);
+      background: linear-gradient(#0e0f13, #0f1117);
+      padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px));
+    }
+    .row {
+      max-width: 900px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: end;
+    }
+    .input {
+      background: #0f1117;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px 12px;
+      display: grid;
+      grid-template-rows: auto auto;
+      gap: 8px;
+    }
+    .meta {
+      display: flex; gap: 8px; align-items: center; color: var(--muted); font-size: 12px;
+    }
+    select {
+      background: #0f1117; color: var(--text);
+      border: 1px solid var(--border); border-radius: 8px; padding: 6px 8px;
+    }
+    textarea {
+      width: 100%; resize: none; min-height: 48px; max-height: 180px;
+      background: transparent; color: var(--text); outline: none; border: 0;
+      font: inherit; line-height: 1.5;
+    }
+    .send {
+      align-self: stretch;
+      background: var(--brand);
+      border: 0; color: white; padding: 12px 16px; border-radius: 10px; cursor: pointer;
+      font-weight: 600;
+    }
+    .send:disabled { opacity: .6; cursor: not-allowed; }
 
-    /* Main */
-    .main { display:grid; grid-template-rows:auto 1fr auto; height:100%; }
-    .topbar { height:52px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; padding:0 16px; background:rgba(19,20,26,0.7); backdrop-filter:saturate(180%) blur(8px); }
-    .model { padding:6px 10px; border:1px solid var(--border); border-radius:9px; font-size:12px; color:var(--muted); }
-
-    .thread { overflow:auto; padding:24px 24px 10px; }
-    .msg { max-width:820px; margin:0 auto 18px; padding:14px 16px; border:1px solid var(--border); background:var(--panel); border-radius:14px; line-height:1.6; white-space:pre-wrap; }
-    .msg.user { background:#111219; }
-    .msg.assistant { background:#12131b; }
-
-    .composer { padding:12px 16px 18px; border-top:1px solid var(--border); background: linear-gradient(to bottom, rgba(14,15,19,0.2), rgba(14,15,19,0.5)); }
-    .composer-inner { max-width:900px; margin:0 auto; display:flex; gap:8px; }
-    textarea { flex:1 1 auto; resize:none; max-height:180px; min-height:52px; border-radius:12px; border:1px solid var(--border); background:var(--panel-2); color:var(--text); padding:12px 14px; font-size:14px; outline:none; }
-    .send { flex:0 0 auto; min-width:90px; background: linear-gradient(135deg, var(--brand), var(--brand-2)); border:0; color:#fff; border-radius:12px; font-weight:700; cursor:pointer; padding:0 16px; }
-    .send[disabled]{ opacity:.6; cursor:not-allowed; }
-    .hint{ text-align:center; color:var(--muted); font-size:12px; margin-top:8px; }
-
-    @media (max-width: 980px) {
+    /* Mobile */
+    @media (max-width: 900px) {
       .app { grid-template-columns: 1fr; }
       .sidebar { display: none; }
+      .messages, .row { padding-left: 12px; padding-right: 12px; }
     }
   </style>
 </head>
@@ -76,280 +208,314 @@
   <div class="app">
     <!-- Sidebar -->
     <aside class="sidebar">
-      <div class="sidebar-header">
+      <div class="side-top">
         <div class="logo">GPTs Help</div>
-        <div class="sidebar-actions">
-          <button class="btn brand" id="newChatBtn">+ New chat</button>
-        </div>
+        <button class="new-chat" id="newChatBtn">+ New Chat</button>
       </div>
 
-      <div class="conv-list" id="convList"></div>
+      <div class="side-list" id="convList">
+        <!-- conversations injected here -->
+      </div>
 
-      <div class="sidebar-footer">
-        <button class="signout" id="signoutBtn">Sign out</button>
+      <div class="side-bottom">
+        <button class="logout" id="logoutBtn">Sign out</button>
       </div>
     </aside>
 
-    <!-- Main -->
+    <!-- Main chat -->
     <main class="main">
-      <div class="topbar">
-        <div class="model" id="modelInfo">Math GPT</div>
-        <div class="model" id="convTitleInfo" style="max-width:60%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
-      </div>
+      <div class="messages" id="messages"></div>
 
-      <div class="thread" id="thread"></div>
-
-      <div class="composer">
-        <form class="composer-inner" id="composerForm">
-          <textarea id="prompt" placeholder="Message Math GPT…" autocomplete="off"></textarea>
+      <form class="composer" id="composer">
+        <div class="row">
+          <div class="input">
+            <div class="meta">
+              <label for="gptType">Assistant:</label>
+              <select id="gptType">
+                <option value="math">Math GPT</option>
+                <option value="content">ContentGPT</option>
+              </select>
+              <span id="status" style="margin-left:auto;"></span>
+            </div>
+            <textarea id="prompt" placeholder="Message Math GPT…" autocomplete="off"></textarea>
+          </div>
           <button class="send" id="sendBtn" type="submit">Send</button>
-        </form>
-        <div class="hint">Responses appear above. Press Shift+Enter for a new line.</div>
-      </div>
+        </div>
+      </form>
     </main>
   </div>
 
   <script>
-    // ===== Config & auth guard =====
-    const userEmail = localStorage.getItem('userEmail');
-    if (!userEmail) {
-      // No email set → bounce to index to log in / set email
-      window.location.replace('/index.html');
+    // Fix 100vh on mobile (keyboard safe)
+    function setVh() {
+      const vh = window.innerHeight * 0.01;
+      document.documentElement.style.setProperty('--vh', `${vh * 100}px`);
     }
+    setVh();
+    window.addEventListener('resize', setVh);
 
-    const params = new URLSearchParams(location.search);
-    let currentConvId = params.get('c') ? Number(params.get('c')) : null;
-    let gptType = params.get('t') === 'content' ? 'content' : 'math';
-
-    const convListEl = document.getElementById('convList');
-    const threadEl = document.getElementById('thread');
-    const promptEl = document.getElementById('prompt');
-    const sendBtn = document.getElementById('sendBtn');
-    const composerForm = document.getElementById('composerForm');
-    const newChatBtn = document.getElementById('newChatBtn');
-    const signoutBtn = document.getElementById('signoutBtn');
-    const modelInfo = document.getElementById('modelInfo');
-    const convTitleInfo = document.getElementById('convTitleInfo');
-
-    modelInfo.textContent = (gptType === 'content') ? 'ContentGPT' : 'Math GPT';
-
-    // ===== Helpers =====
-    function el(tag, attrs={}, ...children) {
-      const n = document.createElement(tag);
-      for (const [k,v] of Object.entries(attrs)) {
-        if (k === 'class') n.className = v;
-        else if (k === 'html') n.innerHTML = v;
-        else n.setAttribute(k, v);
-      }
-      for (const c of children) n.append(c);
-      return n;
-    }
-    function setActiveConv(id) {
-      currentConvId = id;
-      [...document.querySelectorAll('.conv-item')].forEach(it => it.classList.toggle('active', Number(it.dataset.id) === id));
-    }
-    function scrollToBottom(){ threadEl.scrollTop = threadEl.scrollHeight; }
-    function copy(text){ return navigator.clipboard?.writeText(text).catch(()=>{}); }
-
-    // ===== Conversations API =====
-    async function fetchConversations() {
-      const r = await fetch(`/api/conversations?userId=${encodeURIComponent(userEmail)}`);
-      if (!r.ok) return [];
-      return r.json();
-    }
-    async function fetchMessages(id) {
-      const r = await fetch(`/api/conversations/${id}?userId=${encodeURIComponent(userEmail)}`);
-      if (!r.ok) return { messages: [] };
-      return r.json();
-    }
-    async function renameConversation(id, title) {
-      const r = await fetch(`/api/conversations/${id}`, {
+    const api = {
+      listConvs: (email) => fetch(`/api/conversations?userId=${encodeURIComponent(email)}`).then(r=>r.json()),
+      createConv: (email, title) => fetch('/api/conversations', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ userId: email, title })
+      }).then(r=>r.json()),
+      renameConv: (email, id, title) => fetch(`/api/conversations/${id}`, {
         method:'PATCH', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ userId: userEmail, title })
-      });
-      if (!r.ok) throw new Error('rename failed');
-      return r.json();
-    }
-    async function deleteConversation(id) {
-      const r = await fetch(`/api/conversations/${id}`, {
+        body: JSON.stringify({ userId: email, title })
+      }).then(r=>r.json()),
+      deleteConv: (email, id) => fetch(`/api/conversations/${id}`, {
         method:'DELETE', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ userId: userEmail })
-      });
-      if (!r.ok) throw new Error('delete failed');
-    }
+        body: JSON.stringify({ userId: email })
+      }).then(r=>r.json()),
+      getConvMsgs: (email, id) => fetch(`/api/conversations/${id}?userId=${encodeURIComponent(email)}`).then(r=>r.json()),
+      chat: (payload) => fetch('/api/chat', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      }).then(r=>r.json()),
+      me: (email) => fetch(`/api/user/${encodeURIComponent(email)}`).then(r=>r.json())
+    };
 
-    // ===== Render conv list =====
-    function renderConversations(list) {
-      convListEl.innerHTML = '';
-      list.forEach(c => convListEl.append(renderConvItem(c)));
-    }
-    function renderConvItem(c) {
-      const item = el('div', { class:'conv-item', 'data-id': c.id });
-      const icon = el('div', { class:'conv-icon' }, '💬');
-      const title = el('div', { class:'conv-title' }, c.title);
-      const dots = el('div', { class:'conv-dots', title:'Options' }, '⋯');
+    const messagesEl = document.getElementById('messages');
+    const convListEl = document.getElementById('convList');
+    const promptEl = document.getElementById('prompt');
+    const composerEl = document.getElementById('composer');
+    const sendBtn = document.getElementById('sendBtn');
+    const gptTypeEl = document.getElementById('gptType');
+    const statusEl = document.getElementById('status');
 
-      // inline rename
-      let renaming = false;
-      const startRename = () => {
-        if (renaming) return; renaming = true;
-        const input = el('input', { class:'conv-rename-input', value: c.title });
-        item.replaceChild(input, title);
-        input.focus(); input.select();
-        const finish = async(ok) => {
-          input.removeEventListener('keydown', onKey);
-          input.removeEventListener('blur', onBlur);
-          renaming = false;
-          if (ok && input.value.trim() && input.value.trim() !== c.title) {
-            try{
-              await renameConversation(c.id, input.value.trim());
-              c.title = input.value.trim();
-              title.textContent = c.title;
-              item.replaceChild(title, input);
-              if (currentConvId === c.id) convTitleInfo.textContent = c.title;
-            }catch{ item.replaceChild(title, input); }
-          } else { item.replaceChild(title, input); }
-        };
-        const onKey = (e) => { if (e.key === 'Enter') finish(true); else if (e.key === 'Escape') finish(false); };
-        const onBlur = () => finish(true);
-        input.addEventListener('keydown', onKey);
-        input.addEventListener('blur', onBlur);
-      };
+    const newChatBtn = document.getElementById('newChatBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
 
-      // 3-dots menu
-      let menu;
-      function openMenu(){
-        closeMenu();
-        menu = el('div',{class:'menu'});
-        const openBtn = el('button',{},'Open');
-        const renameBtn = el('button',{},'Rename');
-        const shareBtn = el('button',{},'Share link');
-        const delBtn = el('button',{class:'danger'},'Delete');
-        openBtn.onclick = () => { selectConversation(c.id); closeMenu(); };
-        renameBtn.onclick = () => { startRename(); closeMenu(); };
-        shareBtn.onclick = () => {
-          const url = `${location.origin}/chat.html?c=${c.id}${gptType==='content' ? '&t=content' : ''}`;
-          copy(url); closeMenu();
-        };
-        delBtn.onclick = async () => {
-          if (!confirm('Delete this conversation?')) return;
-          await deleteConversation(c.id);
-          await loadConversations();
-          if (currentConvId === c.id) {
-            currentConvId = null; threadEl.innerHTML=''; convTitleInfo.textContent='';
-          }
-          closeMenu();
-        };
-        menu.append(openBtn, renameBtn, shareBtn, delBtn);
-        item.append(menu);
-        const closeOnDoc = (e)=>{ if(!menu.contains(e.target) && e.target!==dots){ closeMenu(); document.removeEventListener('mousedown', closeOnDoc); } };
-        setTimeout(()=> document.addEventListener('mousedown', closeOnDoc), 0);
+    let userEmail = localStorage.getItem('userEmail') || '';
+    let currentConvId = null;
+
+    async function guardAuth() {
+      if (!userEmail) {
+        // try to prompt, or redirect
+        window.location.replace('/index.html');
+        return false;
       }
-      function closeMenu(){ if(menu && menu.parentNode) menu.parentNode.removeChild(menu); menu=null; }
-
-      item.onclick = (e)=>{ if (e.target===dots || renaming) return; selectConversation(c.id); };
-      dots.onclick = (e)=>{ e.stopPropagation(); openMenu(); };
-
-      item.append(icon, title, dots);
-      if (currentConvId === c.id) item.classList.add('active');
-      return item;
+      const u = await api.me(userEmail);
+      if (!u.subscribed) {
+        window.location.replace('/index.html');
+        return false;
+      }
+      return true;
     }
 
-    // ===== Messages UI =====
-    function renderMessages(list) {
-      threadEl.innerHTML = '';
-      list.forEach(m => {
-        const div = el('div', { class:'msg ' + (m.role==='user' ? 'user' : 'assistant') });
-        div.textContent = m.content; // plain text (no ** or ## injected)
-        threadEl.append(div);
+    function el(tag, attrs={}, ...children) {
+      const e = document.createElement(tag);
+      Object.entries(attrs).forEach(([k,v]) => {
+        if (k === 'class') e.className = v;
+        else if (k.startsWith('on') && typeof v === 'function') e.addEventListener(k.substring(2), v);
+        else if (v != null) e.setAttribute(k, v);
+      });
+      children.forEach(c => {
+        if (typeof c === 'string') e.appendChild(document.createTextNode(c));
+        else if (c) e.appendChild(c);
+      });
+      return e;
+    }
+
+    function renderMessage(role, text, when = '') {
+      const m = el('div', { class: `msg ${role}` });
+      if (when) m.appendChild(el('small', {}, when));
+      m.appendChild(document.createTextNode(text));
+      messagesEl.appendChild(m);
+    }
+
+    function clearMessages() { messagesEl.innerHTML = ''; }
+
+    function scrollToBottom() {
+      // ensure composer is always visible; we only scroll the messages pane
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function timeNow() {
+      const d = new Date();
+      return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    }
+
+    async function loadConversations(selectId = null) {
+      const list = await api.listConvs(userEmail);
+      convListEl.innerHTML = '';
+      list.forEach(c => {
+        const row = el('div', { class: `conv ${c.id === selectId ? 'active' : ''}` });
+        const title = el('div', { class:'conv-title' }, c.title);
+        const menuBtn = el('button', { class:'conv-menu-btn', title:'Options' }, '⋯');
+        const menu = el('div', { class:'menu' });
+        const btnShare = el('button', {}, 'Share link');
+        const btnRename = el('button', {}, 'Rename');
+        const btnDelete = el('button', {}, 'Delete');
+
+        btnShare.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const url = `${location.origin}/chat.html?c=${c.id}`;
+          navigator.clipboard.writeText(url).catch(()=>{});
+          menu.classList.remove('open');
+        });
+
+        btnRename.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          menu.classList.remove('open');
+          // inline rename
+          const input = el('input', { value: c.title, style:'width:100%; background:#12131a; color:#e7eaf1; border:1px solid #232634; border-radius:6px; padding:6px 8px;'});
+          row.replaceChild(input, title);
+          input.focus();
+          const commit = async () => {
+            const newTitle = (input.value || 'New chat').trim();
+            await api.renameConv(userEmail, c.id, newTitle);
+            await loadConversations(c.id);
+          };
+          input.addEventListener('keydown', (ke) => {
+            if (ke.key === 'Enter') commit();
+            if (ke.key === 'Escape') loadConversations(c.id);
+          });
+          input.addEventListener('blur', commit);
+        });
+
+        btnDelete.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          menu.classList.remove('open');
+          if (confirm('Delete this chat?')) {
+            await api.deleteConv(userEmail, c.id);
+            if (currentConvId === c.id) {
+              currentConvId = null;
+              clearMessages();
+            }
+            await loadConversations();
+          }
+        });
+
+        menu.appendChild(btnShare);
+        menu.appendChild(btnRename);
+        menu.appendChild(btnDelete);
+
+        menuBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          // toggle this menu, close others
+          document.querySelectorAll('.menu.open').forEach(m => m.classList.remove('open'));
+          menu.classList.toggle('open');
+        });
+
+        row.addEventListener('click', async () => {
+          currentConvId = c.id;
+          document.querySelectorAll('.conv').forEach(n => n.classList.remove('active'));
+          row.classList.add('active');
+          await showConversation(c.id);
+        });
+
+        row.appendChild(title);
+        row.appendChild(menuBtn);
+        row.appendChild(menu);
+        convListEl.appendChild(row);
+      });
+
+      // click outside to close any open menu
+      document.addEventListener('click', () => {
+        document.querySelectorAll('.menu.open').forEach(m => m.classList.remove('open'));
+      }, { capture: true });
+    }
+
+    async function showConversation(id) {
+      clearMessages();
+      const r = await api.getConvMsgs(userEmail, id);
+      (r.messages || []).forEach(m => {
+        renderMessage(m.role === 'user' ? 'user' : 'assistant', m.content);
       });
       scrollToBottom();
     }
-    async function selectConversation(id) {
-      setActiveConv(id);
-      const { messages } = await fetchMessages(id);
-      const titleNode = document.querySelector(`.conv-item[data-id="${id}"] .conv-title`);
-      convTitleInfo.textContent = titleNode ? titleNode.textContent : '';
-      renderMessages(messages || []);
-      history.replaceState({}, '', `/chat.html?c=${id}${gptType==='content' ? '&t=content' : ''}`);
+
+    // Auto-resize textarea
+    function autoresize() {
+      promptEl.style.height = 'auto';
+      promptEl.style.height = Math.min(180, promptEl.scrollHeight) + 'px';
     }
+    promptEl.addEventListener('input', autoresize);
 
-    // ===== Composer =====
-    // Shift+Enter → newline, Enter → submit
-    promptEl.addEventListener('keydown', (e)=>{
-      if (e.key === 'Enter' && !e.shiftKey) {
-        e.preventDefault();
-        composerForm.requestSubmit();
-      }
-    });
-
-    composerForm.addEventListener('submit', async (e) => {
+    composerEl.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const text = promptEl.value.trim();
+      const text = (promptEl.value || '').trim();
       if (!text) return;
-      promptEl.value = '';
-      appendUser(text);
 
+      // show user message immediately
+      renderMessage('user', text, timeNow());
+      scrollToBottom();
+
+      // lock UI
       sendBtn.disabled = true;
+      promptEl.disabled = true;
+      statusEl.textContent = 'Thinking…';
+
       try {
-        const body = { message: text, gptType, userId: userEmail };
-        if (currentConvId) body.conversationId = currentConvId;
+        const payload = {
+          message: text,
+          gptType: gptTypeEl.value || 'math',
+          userId: userEmail
+        };
+        if (currentConvId) payload.conversationId = currentConvId;
 
-        const r = await fetch('/api/chat', {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify(body)
-        });
-        const data = await r.json();
-        if (!r.ok) throw new Error(data.error || 'AI error');
+        const res = await api.chat(payload);
 
-        if (!currentConvId && data.conversationId) {
-          currentConvId = data.conversationId;
+        // update conv id on first reply
+        if (!currentConvId && res.conversationId) {
+          currentConvId = res.conversationId;
           await loadConversations(currentConvId);
+        } else {
+          // refresh titles (auto-title may have happened)
+          await loadConversations(currentConvId || undefined);
         }
-        appendAssistant(data.response || '');
-        await updateCurrentTitleInTopbar();
-      } catch {
-        appendAssistant('Sorry, something went wrong.');
-      } finally {
-        sendBtn.disabled = false;
+
+        renderMessage('assistant', res.response || '');
         scrollToBottom();
+      } catch (err) {
+        renderMessage('assistant', 'Sorry, something went wrong. Please try again.');
+        scrollToBottom();
+      } finally {
+        promptEl.value = '';
+        autoresize();
+        sendBtn.disabled = false;
+        promptEl.disabled = false;
+        promptEl.focus();
+        statusEl.textContent = '';
       }
     });
 
-    function appendUser(text){
-      const div = el('div',{class:'msg user'}); div.textContent = text; threadEl.append(div); scrollToBottom();
-    }
-    function appendAssistant(text){
-      const div = el('div',{class:'msg assistant'}); div.textContent = text; threadEl.append(div); scrollToBottom();
-    }
-    async function updateCurrentTitleInTopbar(){
-      if (!currentConvId) return;
-      const node = document.querySelector(`.conv-item[data-id="${currentConvId}"] .conv-title`);
-      if (node) convTitleInfo.textContent = node.textContent;
-    }
-
-    // ===== New chat =====
-    newChatBtn.addEventListener('click', async ()=>{
-      currentConvId = null; convTitleInfo.textContent=''; threadEl.innerHTML=''; promptEl.focus();
-      [...document.querySelectorAll('.conv-item')].forEach(it => it.classList.remove('active'));
-      history.replaceState({}, '', `/chat.html${gptType==='content' ? '?t=content' : ''}`);
+    newChatBtn.addEventListener('click', async () => {
+      // create empty conversation (server will title it later when messages arrive)
+      const c = await api.createConv(userEmail, 'New chat');
+      currentConvId = c.id;
+      await loadConversations(currentConvId);
+      clearMessages();
+      promptEl.focus();
     });
 
-    // ===== Sign out =====
-    signoutBtn.addEventListener('click', () => {
+    logoutBtn.addEventListener('click', () => {
       localStorage.removeItem('userEmail');
-      window.location.href = '/index.html';
+      window.location.replace('/index.html');
     });
 
-    // ===== Load on start =====
-    async function loadConversations(activateId=null) {
-      const list = await fetchConversations();
-      renderConversations(list);
-      if (activateId) setActiveConv(activateId);
-      const openId = activateId || (currentConvId || (list[0]?.id || null));
-      if (openId) selectConversation(openId);
-    }
-    loadConversations(currentConvId);
+    // Initialize
+    (async function init() {
+      const ok = await guardAuth();
+      if (!ok) return;
+
+      // select convo via URL ?c=ID if present
+      const params = new URLSearchParams(location.search);
+      const fromUrl = params.get('c');
+      await loadConversations(fromUrl ? Number(fromUrl) : null);
+
+      if (fromUrl) {
+        currentConvId = Number(fromUrl);
+        await showConversation(currentConvId);
+      } else {
+        // if there are no conversations yet, leave messages area blank; composer stays visible
+      }
+
+      promptEl.focus();
+      autoresize();
+    })();
   </script>
 </body>
 </html>
