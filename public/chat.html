@@ -14,7 +14,6 @@
       --brand:#5865f2;
       --border:#232634;
       --vh:100vh;
-      --radius:14px;
     }
     *{box-sizing:border-box}
     html,body{height:100%;margin:0}
@@ -37,7 +36,7 @@
       display:grid; grid-template-rows:auto 1fr auto;
       border-right:1px solid var(--border); background:#0f1117; min-height:0;
     }
-    .side-top{ padding:12px 12px; border-bottom:1px solid var(--border);
+    .side-top{ padding:12px; border-bottom:1px solid var(--border);
       display:flex; gap:8px; align-items:center; justify-content:space-between }
     .logo{ font-weight:700; letter-spacing:.2px }
     .new-chat{ background:var(--panel); color:var(--text); border:1px solid var(--border);
@@ -55,12 +54,43 @@
     .menu.open{ display:block }
     .menu button{ display:block; width:160px; text-align:left; background:transparent; color:var(--text); border:0; padding:10px 12px; cursor:pointer; font-size:14px }
     .menu button:hover{ background:#1a1d2a }
-    .side-bottom{ position:sticky; bottom:0; padding:10px; border-top:1px solid var(--border); background:#0f1117 }
-    .logout{ width:100%; background:transparent; border:1px solid var(--border); color:var(--text); padding:9px 10px; border-radius:10px; cursor:pointer; font-size:13px }
-    .logout:hover{ background:#151824 }
 
-    /* Main area: messages (1fr) + composer (auto) */
-    .main{ display:grid; grid-template-rows:1fr auto; min-height:0 }
+    /* Account button bottom-left (sticky) */
+    .side-bottom{ position:sticky; bottom:0; padding:10px; border-top:1px solid var(--border); background:#0f1117 }
+    .account-btn{
+      width:100%; display:flex; align-items:center; gap:10px;
+      background:transparent; border:1px solid var(--border); color:var(--text);
+      padding:9px 10px; border-radius:10px; cursor:pointer; font-size:13px; position:relative;
+    }
+    .avatar{ width:22px; height:22px; border-radius:9999px; background:#222638; display:inline-flex; align-items:center; justify-content:center; font-size:12px }
+    .caret{ margin-left:auto; color:var(--muted) }
+    .account-menu{
+      position:absolute; left:10px; right:10px; bottom:52px;
+      background:var(--panel); border:1px solid var(--border); border-radius:10px; overflow:hidden; display:none; z-index:20;
+    }
+    .account-menu.open{ display:block }
+    .account-menu button{
+      display:block; width:100%; text-align:left; background:transparent; color:var(--text);
+      border:0; padding:10px 12px; cursor:pointer; font-size:14px;
+    }
+    .account-menu button:hover{ background:#1a1d2a }
+
+    /* Main: Topbar | Messages | Composer */
+    .main{ display:grid; grid-template-rows:auto 1fr auto; min-height:0 }
+
+    .topbar{
+      display:flex; align-items:center; gap:8px; padding:10px 14px;
+      border-bottom:1px solid var(--border); background:#0f1117;
+    }
+    .title{ flex:1; opacity:.9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
+    .top-actions{ display:flex; gap:8px }
+    .tiny-btn{
+      height:32px; padding:0 10px; border-radius:8px; border:1px solid var(--border);
+      background:#141722; color:#dfe3ec; cursor:pointer; font-size:13px;
+    }
+    .tiny-btn:hover{ background:#192034 }
+    .tiny-btn.primary{ background:var(--brand); color:#fff; border-color:transparent }
+
     .messages{
       overflow-y:auto; padding:20px 18px; min-height:0; scroll-behavior:smooth;
       background:radial-gradient(1200px 400px at 50% -200px, rgba(88,101,242,.08), transparent 60%);
@@ -74,7 +104,7 @@
     .msg small{ display:block; color:var(--muted); margin-bottom:6px }
     .thumb{ display:block; max-width:240px; height:auto; border-radius:8px; margin-top:8px; border:1px solid var(--border) }
 
-    /* Composer — compact, ChatGPT-like */
+    /* Composer — compact */
     .composer{
       border-top:1px solid var(--border);
       background:linear-gradient(#0e0f13,#0f1117);
@@ -87,24 +117,20 @@
     .input{
       display:flex; align-items:flex-end; gap:8px;
       background:#0f1117; border:1px solid var(--border);
-      border-radius:9999px; padding:6px 10px;
-      min-height:42px;
+      border-radius:9999px; padding:6px 10px; min-height:42px;
     }
     .ta-wrap{ flex:1; display:flex; flex-direction:column; }
-    .meta{
-      display:flex; gap:8px; align-items:center; color:var(--muted); font-size:11px; margin:2px 2px 4px 6px;
-    }
+    .meta{ display:flex; gap:8px; align-items:center; color:var(--muted); font-size:11px; margin:2px 2px 4px 6px; }
     select{
       background:#0f1117; color:var(--text); border:1px solid var(--border);
       border-radius:8px; padding:4px 6px; font-size:11px;
     }
     textarea{
       width:100%; resize:none; min-height:24px; max-height:120px;
-      background:transparent; color:var(--text); outline:none; border:0; font:inherit; line-height:1.45; padding:0 4px 2px 6px;
+      background:transparent; color:var(--text); outline:none; border:0;
+      font:inherit; line-height:1.45; padding:0 4px 2px 6px;
     }
-    .controls{
-      display:inline-flex; gap:6px;
-    }
+    .controls{ display:inline-flex; gap:6px }
     .icon-btn{
       width:36px; height:36px; display:inline-flex; align-items:center; justify-content:center;
       border-radius:9999px; border:1px solid var(--border); background:#141722; color:#dfe3ec;
@@ -126,17 +152,35 @@
       <div class="side-list" id="convList"></div>
 
       <div class="side-bottom">
-        <button class="logout" id="logoutBtn">Sign out</button>
+        <button class="account-btn" id="accountBtn" type="button" aria-haspopup="menu" aria-expanded="false">
+          <span class="avatar" id="acctAvatar">U</span>
+          <span id="acctLabel">User</span>
+          <span class="caret">▾</span>
+          <div class="account-menu" id="accountMenu" role="menu">
+            <button id="menuPlan">My plan</button>
+            <button id="menuSettings">Settings</button>
+            <button id="menuSignout">Sign out</button>
+          </div>
+        </button>
       </div>
     </aside>
 
     <!-- Main -->
     <main class="main">
+      <!-- Topbar -->
+      <div class="topbar">
+        <div class="title" id="topTitle">New chat</div>
+        <div class="top-actions">
+          <button class="tiny-btn" id="shareBtn" title="Share conversation">Share</button>
+        </div>
+      </div>
+
+      <!-- Messages -->
       <div class="messages" id="messages"></div>
 
+      <!-- Composer -->
       <form class="composer" id="composer">
         <div class="row">
-          <!-- compact pill input -->
           <div class="input">
             <div class="ta-wrap">
               <div class="meta">
@@ -181,6 +225,8 @@
     /* Elements */
     const messagesEl = document.getElementById('messages');
     const convListEl = document.getElementById('convList');
+    const topTitleEl = document.getElementById('topTitle');
+
     const promptEl = document.getElementById('prompt');
     const composerEl = document.getElementById('composer');
     const sendBtn = document.getElementById('sendBtn');
@@ -188,11 +234,22 @@
     const photoFile = document.getElementById('photoFile');
     const gptTypeEl = document.getElementById('gptType');
     const statusEl = document.getElementById('status');
+
     const newChatBtn = document.getElementById('newChatBtn');
-    const logoutBtn = document.getElementById('logoutBtn');
+
+    const accountBtn = document.getElementById('accountBtn');
+    const accountMenu = document.getElementById('accountMenu');
+    const acctLabel = document.getElementById('acctLabel');
+    const acctAvatar = document.getElementById('acctAvatar');
+    const menuPlan = document.getElementById('menuPlan');
+    const menuSettings = document.getElementById('menuSettings');
+    const menuSignout = document.getElementById('menuSignout');
+
+    const shareBtn = document.getElementById('shareBtn');
 
     let userEmail = localStorage.getItem('userEmail') || '';
     let currentConvId = null;
+    let convTitleMap = new Map();
 
     /* Auth guard */
     async function guardAuth(){
@@ -229,9 +286,28 @@
     function scrollToBottom(){ messagesEl.scrollTop = messagesEl.scrollHeight; }
     function now(){ return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
 
+    function initialsFromEmail(email){
+      const base = (email||'U').split('@')[0].replace(/[^a-z0-9]/gi,' ').trim();
+      const parts = base.split(/\s+/);
+      const first = parts[0]?.[0] || 'U';
+      const second = parts[1]?.[0] || '';
+      return (first + second).toUpperCase();
+    }
+
+    function updateAccountUI(){
+      acctLabel.textContent = userEmail || 'User';
+      acctAvatar.textContent = initialsFromEmail(userEmail);
+    }
+
+    function updateTopbarTitle(){
+      const t = convTitleMap.get(currentConvId) || 'New chat';
+      topTitleEl.textContent = t;
+    }
+
     /* Conversations UI */
     async function loadConversations(selectId=null){
       const list=await api.listConvs(userEmail);
+      convTitleMap = new Map(list.map(c=>[c.id, c.title]));
       convListEl.innerHTML='';
       list.forEach(c=>{
         const row=el('div',{class:`conv ${c.id===selectId?'active':''}`});
@@ -245,7 +321,11 @@
         bShare.addEventListener('click',e=>{
           e.stopPropagation();
           const url=`${location.origin}/chat.html?c=${c.id}`;
-          navigator.clipboard.writeText(url).catch(()=>{});
+          navigator.clipboard.writeText(url).then(()=> {
+            // small in-place feedback
+            shareBtn.textContent = 'Copied!';
+            setTimeout(()=> shareBtn.textContent='Share', 1200);
+          }).catch(()=>{});
           menu.classList.remove('open');
         });
 
@@ -256,6 +336,7 @@
           const commit=async ()=>{
             const t=(input.value||'New chat').trim();
             await api.renameConv(userEmail,c.id,t); await loadConversations(c.id);
+            if(currentConvId===c.id){ updateTopbarTitle(); }
           };
           input.addEventListener('keydown',ke=>{ if(ke.key==='Enter') commit(); if(ke.key==='Escape') loadConversations(c.id); });
           input.addEventListener('blur',commit);
@@ -263,7 +344,7 @@
 
         bDelete.addEventListener('click',async e=>{
           e.stopPropagation(); menu.classList.remove('open');
-          if(confirm('Delete this chat?')){ await api.deleteConv(userEmail,c.id); if(currentConvId===c.id){ currentConvId=null; clearMessages(); } await loadConversations(); }
+          if(confirm('Delete this chat?')){ await api.deleteConv(userEmail,c.id); if(currentConvId===c.id){ currentConvId=null; clearMessages(); updateTopbarTitle(); } await loadConversations(); }
         });
 
         menu.appendChild(bShare); menu.appendChild(bRename); menu.appendChild(bDelete);
@@ -277,6 +358,7 @@
           currentConvId=c.id;
           document.querySelectorAll('.conv').forEach(n=>n.classList.remove('active'));
           row.classList.add('active');
+          updateTopbarTitle();
           await showConversation(c.id);
         });
 
@@ -285,6 +367,7 @@
       });
 
       document.addEventListener('click',()=>{ document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open')); },{capture:true});
+      updateTopbarTitle();
     }
 
     async function showConversation(id){
@@ -373,20 +456,58 @@
       }
     });
 
-    /* New chat & logout */
+    /* New chat */
     newChatBtn.addEventListener('click', async ()=>{
       const c=await api.createConv(userEmail,'New chat');
       currentConvId=c.id; await loadConversations(currentConvId); clearMessages(); promptEl.focus();
     });
-    logoutBtn.addEventListener('click', ()=>{ localStorage.removeItem('userEmail'); window.location.replace('/index.html'); });
+
+    /* Account dropdown */
+    function closeAccountMenu(){ accountMenu.classList.remove('open'); accountBtn.setAttribute('aria-expanded','false'); }
+    function toggleAccountMenu(e){
+      e?.stopPropagation();
+      const open = accountMenu.classList.toggle('open');
+      accountBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    }
+    accountBtn.addEventListener('click', toggleAccountMenu);
+    document.addEventListener('click', (e)=>{
+      if(!accountBtn.contains(e.target)) closeAccountMenu();
+    }, { capture:true });
+
+    menuPlan.addEventListener('click', ()=>{ closeAccountMenu(); window.location.href='/index.html#plan'; });
+    menuSettings.addEventListener('click', ()=>{ closeAccountMenu(); alert('Settings coming soon.'); });
+    menuSignout.addEventListener('click', ()=>{
+      closeAccountMenu();
+      localStorage.removeItem('userEmail');
+      window.location.replace('/index.html');
+    });
+
+    /* Share button (top-right) */
+    shareBtn.addEventListener('click', ()=>{
+      if(!currentConvId){
+        // if no chat yet, create one quickly
+        alert('Send a message first to create a sharable conversation.');
+        return;
+      }
+      const url = `${location.origin}/chat.html?c=${currentConvId}`;
+      navigator.clipboard.writeText(url).then(()=>{
+        shareBtn.textContent='Copied!';
+        setTimeout(()=> shareBtn.textContent='Share', 1200);
+      }).catch(()=>{ alert(url); });
+    });
 
     /* Init */
     (async function init(){
       const ok=await guardAuth(); if(!ok) return;
+
+      updateAccountUI();
+
       const p=new URLSearchParams(location.search); const fromUrl=p.get('c');
       await loadConversations(fromUrl?Number(fromUrl):null);
-      if(fromUrl){ currentConvId=Number(fromUrl); await showConversation(currentConvId); }
-      promptEl.focus(); autoresize();
+      if(fromUrl){ currentConvId=Number(fromUrl); updateTopbarTitle(); await showConversation(currentConvId); }
+
+      promptEl.focus(); 
+      (function autoresizeStart(){ promptEl.style.height='auto'; promptEl.style.height='24px'; })();
     })();
   </script>
 </body>
