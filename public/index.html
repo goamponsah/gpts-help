@@ -62,7 +62,7 @@
   <script>
     const genRef = () => "gptshelp_" + Date.now() + "_" + Math.random().toString(36).slice(2,8);
 
-    // TODO: Replace with your real plan codes from Paystack Dashboard
+    // Your real plan codes
     const PLAN_CODE_PLUS_MONTHLY = "PLN_t8tii7sryvwsxxf"; 
     const PLAN_CODE_PRO_ANNUAL  = "PLN_3gkd3qo1pv8rylt";
 
@@ -83,7 +83,7 @@
 
     function subscribeWithPlan(planCode, label) {
       const email = requireEmail(); if (!email) return;
-      if (!PAYSTACK_PUBLIC_KEY) { alert("Payment key not loaded. Try again in a sec."); return; }
+      if (!PAYSTACK_PUBLIC_KEY) { alert("Payment key not loaded. Try again."); return; }
 
       const popup = new PaystackPop();
       popup.newTransaction({
@@ -113,7 +113,21 @@
     }
 
     function goFree() {
-      window.location.href = "/chat.html";
+      // Free onboarding – create a free account or redirect to signup
+      fetch("/api/signup-free", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: requireEmail() })
+      })
+      .then(r => r.json())
+      .then(res => {
+        if (res.status === "success") {
+          alert("Free account created!");
+          window.location.href = "/chat.html";
+        } else {
+          alert("Error: " + res.message);
+        }
+      });
     }
 
     function subscribePlusMonthly() {
@@ -128,3 +142,4 @@
   </script>
 </body>
 </html>
+
