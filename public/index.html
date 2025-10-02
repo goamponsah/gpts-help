@@ -135,7 +135,7 @@
   <script>
     const genRef = () => "gptshelp_" + Date.now() + "_" + Math.random().toString(36).slice(2,8);
 
-    // Real plan codes
+    // Plan codes
     const PLAN_CODE_PLUS_MONTHLY = "PLN_t8tii7sryvwsxxf"; 
     const PLAN_CODE_PRO_ANNUAL  = "PLN_3gkd3qo1pv8rylt";
 
@@ -153,6 +153,26 @@
       return email;
     }
 
+    // Free signup
+    function goFree() {
+      const email = requireEmail(); if (!email) return;
+      fetch("/api/signup-free", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include", // store session cookie
+        body: JSON.stringify({ email })
+      })
+      .then(r => r.json())
+      .then(res => {
+        if (res.status === "success") {
+          setTimeout(()=>window.location.assign("/chat.html"), 150);
+        } else {
+          alert("Error: " + res.message);
+        }
+      });
+    }
+
+    // Paid subscriptions
     function subscribeWithPlan(planCode, label) {
       const email = requireEmail(); if (!email) return;
       if (!PAYSTACK_PUBLIC_KEY) { alert("Payment key not loaded."); return; }
@@ -168,6 +188,7 @@
           fetch("/api/paystack/verify", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            credentials: "include",
             body: JSON.stringify({ reference: response.reference })
           })
           .then(r => r.json())
@@ -176,29 +197,11 @@
               alert(label + " subscription activated!");
               window.location.href = "/chat.html";
             } else {
-              alert("Verification failed or pending. Ref: " + response.reference);
+              alert("Verification failed. Ref: " + response.reference);
             }
           });
         },
         onCancel: () => alert("Payment cancelled.")
-      });
-    }
-
-    function goFree() {
-      const email = requireEmail(); if (!email) return;
-      fetch("/api/signup-free", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email })
-      })
-      .then(r => r.json())
-      .then(res => {
-        if (res.status === "success") {
-          alert("Free account created!");
-          window.location.href = "/chat.html";
-        } else {
-          alert("Error: " + res.message);
-        }
       });
     }
 
