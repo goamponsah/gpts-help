@@ -4,286 +4,95 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>GPTs Help – AI Tutoring & Content Creation</title>
-  <meta name="description" content="Master Math and create content with AI. Try free, then subscribe for step-by-step math tutoring and powerful content generation." />
-  <link rel="preconnect" href="https://js.paystack.co">
-
+  <meta name="description" content="Master Math and create content with AI. Subscribe to Plus or Pro plans for step-by-step math tutoring and content creation." />
   <style>
-    /* ---------- Base / Reset ---------- */
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    :root {
-      --brand: #6f42c1;        /* purple */
-      --brand-2: #7a5cff;
-      --accent: #ffc107;       /* amber */
-      --text: #212529;
-      --muted: #6c757d;
-      --bg: #f8f9fa;
-      --card: #ffffff;
-      --border: #e9ecef;
-    }
-    body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: var(--text); background: var(--bg); line-height: 1.6; }
-    a { color: #0066ff; text-decoration: none; }
-    h1,h2,h3 { line-height: 1.25; margin-bottom: .6rem; }
-    p { margin-bottom: 1rem; color: #2b2f33; }
-
-    /* ---------- Layout ---------- */
-    .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
-    header { position: sticky; top:0; z-index: 10; background: #fff; border-bottom: 1px solid var(--border); }
-    .nav { display:flex; align-items:center; justify-content:space-between; padding: 1rem 2rem; }
-    .nav ul { list-style:none; display:flex; gap:1.25rem; }
-    .logo { font-weight: 800; }
-    .hero { background: radial-gradient(circle at 50% 50%, var(--brand-2), var(--brand)); color:#fff; padding: 4rem 2rem; text-align:center; }
-    .hero h1 { font-size: clamp(2rem, 4vw, 3rem); margin-bottom: .75rem; }
-    .hero p { font-size: clamp(1rem, 1.6vw, 1.25rem); max-width: 720px; margin: 0.5rem auto 1.5rem; opacity: .95; }
-    .cta { display:flex; justify-content:center; gap: .8rem; flex-wrap: wrap; }
-
-    .btn { padding: .8rem 1.3rem; font-weight: 700; border-radius: 8px; border: 0; cursor: pointer; display:inline-flex; align-items:center; gap:.35rem; transition: transform .05s ease; }
-    .btn:active { transform: translateY(1px); }
-    .btn-primary { background: var(--accent); color: #151515; }
-    .btn-secondary { background: #fff; color: var(--brand); border:2px solid #fff; }
-    .btn-outline { background: transparent; color: #fff; border: 2px solid #fff; }
-
-    .section { padding: 3rem 0; }
-    .features { display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1.5rem; margin-top: 1.5rem; }
-    .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 1.4rem; box-shadow: 0 6px 16px rgba(0,0,0,.04); }
-    .card h3 { color: var(--brand); margin-bottom: .5rem; }
-
-    .pricing { background:#fff; border:1px solid var(--border); border-radius:16px; padding:2rem; }
-    .plans { display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:1.25rem; }
-    .plan { background: #fbfbff; border:1px solid var(--border); border-radius:14px; padding:1.4rem; position:relative; }
-    .plan.popular { outline: 2px solid var(--brand); background:#f6f5ff; }
-    .price { font-size: 2rem; color: var(--brand); margin: .25rem 0 1rem; }
-    .plan ul { list-style:none; margin: .5rem 0 1rem; }
-    .plan li { margin:.35rem 0; }
-
-    .badge { position:absolute; top:12px; right:12px; background: var(--brand); color:#fff; font-size:.75rem; padding:.25rem .5rem; border-radius: 999px; }
-
-    .input-row { display:flex; gap:.5rem; align-items:center; flex-wrap: wrap; margin: .75rem 0 1rem; }
-    input[type="email"] { padding:.7rem .9rem; border:1px solid var(--border); border-radius:10px; min-width:260px; }
-
-    .social-proof .testimonial { margin-top:.75rem; }
-    .footer { text-align:center; padding: 2rem; color: var(--muted); }
-    .tiny { font-size: .82rem; color: var(--muted); }
-
-    @media (max-width: 640px) {
-      .nav { padding: .85rem 1rem; }
-      .container { padding: 1.3rem; }
-    }
+    body { font-family: Inter, system-ui, sans-serif; background:#f8f9fa; margin:0; }
+    header, footer { background:#fff; padding:1rem 2rem; border-bottom:1px solid #eee; }
+    h1,h2,h3 { margin:.5rem 0; }
+    .container { max-width:960px; margin:0 auto; padding:1rem; }
+    .plan { background:#fff; border:1px solid #eee; border-radius:12px; padding:1.5rem; margin:1rem 0; }
+    .btn { padding:.75rem 1.25rem; border:none; border-radius:8px; cursor:pointer; font-weight:600; }
+    .btn-primary { background:#6f42c1; color:#fff; }
+    .input-row { margin:1rem 0; }
+    input[type="email"] { padding:.65rem .9rem; border:1px solid #ccc; border-radius:8px; width:100%; max-width:300px; }
   </style>
 </head>
 <body>
-
-  <!-- ---------- NAV ---------- -->
   <header>
-    <div class="nav container">
-      <div class="logo">GPTs Help</div>
-      <nav>
-        <ul>
-          <li><a href="#features">Features</a></li>
-          <li><a href="#pricing">Pricing</a></li>
-          <li><a href="#testimonials">Testimonials</a></li>
-          <li><a href="/chat.html">Login</a></li>
-        </ul>
-      </nav>
-    </div>
+    <div class="container"><strong>GPTs Help</strong></div>
   </header>
 
-  <!-- ---------- HERO ---------- -->
-  <section class="hero" id="top">
-    <div class="container">
-      <h1>Master Math & Create Content with AI</h1>
-      <p>Solve problems step-by-step, prep for exams, and generate polished content in minutes. Try it free, then upgrade when you love it.</p>
-      <div class="cta">
-        <a href="#pricing" class="btn btn-primary">Start Free Trial</a>
-        <a href="#features" class="btn btn-outline">See how it works</a>
-      </div>
+  <main class="container">
+    <h1>Choose your plan</h1>
+    <p>Enter your email and pick a subscription. All payments are processed by Paystack.</p>
+
+    <!-- Email input -->
+    <div class="input-row">
+      <input id="payerEmail" type="email" placeholder="Enter your email" required>
     </div>
-  </section>
 
-  <!-- ---------- FEATURES ---------- -->
-  <section class="section" id="features">
-    <div class="container">
-      <h2>Why students & creators choose GPTs Help</h2>
-      <div class="features">
-        <div class="card"><h3>Step-by-Step Math</h3><p>Clear worked solutions with hints, proofs, and multiple methods.</p></div>
-        <div class="card"><h3>Exam-Ready Practice</h3><p>Adaptive practice sets & instant feedback to fix weak spots fast.</p></div>
-        <div class="card"><h3>Content Suite</h3><p>Drafts, outlines and rewrites for blogs, emails and scripts.</p></div>
-        <div class="card"><h3>Fast & Private</h3><p>Secure payment via Paystack. You control your data and exports.</p></div>
-      </div>
+    <!-- Free Plan -->
+    <div class="plan">
+      <h3>Free Plan</h3>
+      <p>₵0 / month – limited access</p>
+      <button class="btn btn-primary" onclick="goFree()">Sign Up Free</button>
     </div>
-  </section>
 
-  <!-- ---------- PRICING (with email + Paystack buttons) ---------- -->
-  <section class="section">
-    <div class="container pricing" id="pricing">
-      <h2>Pricing</h2>
-      <p class="tiny">All payments are processed securely by Paystack. Amounts shown below assume Ghana Cedi (GHS).</p>
-
-      <!-- Email needed for receipts & customer record -->
-      <div class="input-row">
-        <label for="payerEmail" class="tiny">Email for receipt</label>
-        <input id="payerEmail" type="email" placeholder="you@email.com" required />
-      </div>
-
-      <div class="plans">
-        <!-- Free -->
-        <div class="plan">
-          <h3>Free</h3>
-          <div class="price">₵0 / mo</div>
-          <ul>
-            <li>Up to 10 math problems per month</li>
-            <li>Basic AI explanations</li>
-            <li>Limited content exports</li>
-          </ul>
-          <button class="btn btn-secondary" onclick="goFree()">Sign Up Free</button>
-        </div>
-
-        <!-- Plus Monthly -->
-        <div class="plan popular">
-          <div class="badge">Popular</div>
-          <h3>Plus</h3>
-          <div class="price">₵99 / mo</div>
-          <ul>
-            <li>Unlimited problem solving</li>
-            <li>Advanced explanations & proofs</li>
-            <li>Full content suite</li>
-            <li>Priority support</li>
-          </ul>
-          <!-- One-time charge version (non-recurring) -->
-          <button class="btn btn-primary" onclick="buyPlusMonthly()">Start Free Trial → Plus</button>
-          <p class="tiny">Charges in pesewas via Paystack (GHS 99.00 → 9900)</p>
-
-          <!-- Recurring plan version (uncomment if using Paystack Plans)
-          <button class="btn btn-primary" onclick="subscribePlusMonthly()">Subscribe (Recurring)</button>
-          <p class="tiny">Uses Paystack plan_code for monthly rebilling.</p>
-          -->
-        </div>
-
-        <!-- Pro Annual -->
-        <div class="plan">
-          <h3>Pro</h3>
-          <div class="price">₵790 / yr</div>
-          <ul>
-            <li>Everything in Plus</li>
-            <li>Annual discount (save 34%)</li>
-            <li>Team sharing & collaboration</li>
-            <li>Dedicated account manager</li>
-          </ul>
-          <button class="btn btn-primary" onclick="buyProAnnual()">Get Annual</button>
-          <p class="tiny">Charges in pesewas via Paystack (GHS 790.00 → 79000)</p>
-        </div>
-      </div>
+    <!-- Plus Monthly -->
+    <div class="plan">
+      <h3>Plus Monthly</h3>
+      <p>₵99 / month – unlimited math problem solving & content creation</p>
+      <button class="btn btn-primary" onclick="subscribePlusMonthly()">Subscribe Monthly</button>
     </div>
-  </section>
 
-  <!-- ---------- SOCIAL PROOF ---------- -->
-  <section class="section" id="testimonials">
-    <div class="container social-proof">
-      <h2>Learners are getting results</h2>
-      <div class="card testimonial">
-        <p>“I finally understood calculus limits—your hints + step-by-step solved it.”</p>
-        <span>— Ama A., UEW</span>
-      </div>
-      <div class="card testimonial">
-        <p>“We cut blog production time by 70%. The content suite is a lifesaver.”</p>
-        <span>— Michael T., Creator</span>
-      </div>
+    <!-- Pro Annual -->
+    <div class="plan">
+      <h3>Pro Annual</h3>
+      <p>₵790 / year – everything in Plus, with annual discount & extras</p>
+      <button class="btn btn-primary" onclick="subscribeProAnnual()">Subscribe Annually</button>
     </div>
-  </section>
+  </main>
 
-  <footer class="footer">
-    <div class="container tiny">© <span id="year"></span> GPTs Help. All rights reserved.</div>
+  <footer>
+    <div class="container">&copy; <span id="year"></span> GPTs Help</div>
   </footer>
 
   <!-- Paystack Inline v2 -->
   <script src="https://js.paystack.co/v2/inline.js"></script>
   <script>
-    // ---------------- CONFIG LOADING (from Railway) ----------------
-    let PAYSTACK_PUBLIC_KEY = null;  // fetched from /api/public-config (safe to expose)
-    let CURRENCY = "GHS";
-    let PAYSTACK_PLAN_PLUS_MONTHLY = null; // set if using recurring plans
+    const genRef = () => "gptshelp_" + Date.now() + "_" + Math.random().toString(36).slice(2,8);
 
+    // TODO: Replace with your real plan codes from Paystack Dashboard
+    const PLAN_CODE_PLUS_MONTHLY = "PLN_t8tii7sryvwsxxf"; 
+    const PLAN_CODE_PRO_ANNUAL  = "PLN_3gkd3qo1pv8rylt";
+
+    // Load Paystack public key from server config
+    let PAYSTACK_PUBLIC_KEY = null;
     async function loadConfig() {
-      try {
-        const res = await fetch("/api/public-config", { cache: "no-store" });
-        const cfg = await res.json();
-        PAYSTACK_PUBLIC_KEY = cfg.paystackPublicKey || null;
-        CURRENCY = cfg.currency || "GHS";
-        PAYSTACK_PLAN_PLUS_MONTHLY = cfg.planPlusMonthly || null; // if you expose it from server
-      } catch (e) {
-        console.warn("Could not load public config", e);
-      }
+      const res = await fetch("/api/public-config");
+      const cfg = await res.json();
+      PAYSTACK_PUBLIC_KEY = cfg.paystackPublicKey;
     }
     loadConfig();
 
-    // ---------------- HELPERS ----------------
-    const genRef = () => "gptshelp_" + Date.now() + "_" + Math.random().toString(36).slice(2,8);
-
     function requireEmail() {
-      const email = (document.getElementById("payerEmail") || {}).value?.trim();
-      if (!email) { alert("Please enter your email for the receipt."); return null; }
+      const email = document.getElementById("payerEmail").value.trim();
+      if (!email) { alert("Please enter your email"); return null; }
       return email;
     }
 
-    function ensureKeyLoaded() {
-      if (!PAYSTACK_PUBLIC_KEY) {
-        alert("Payment key not loaded yet. Please wait 1–2 seconds and try again.");
-        return false;
-      }
-      return true;
-    }
-
-    // ---------------- FRONT-END PAYMENT FLOWS ----------------
-    // One-time charge (non-recurring)
-    function payOnce(amountPesewas, metadata = {}) {
+    function subscribeWithPlan(planCode, label) {
       const email = requireEmail(); if (!email) return;
-      if (!ensureKeyLoaded()) return;
-
-      const popup = new PaystackPop();
-      popup.newTransaction({
-        key: PAYSTACK_PUBLIC_KEY,          // must be pk_live_xxx or pk_test_xxx
-        email,
-        amount: amountPesewas,             // pesewas (GHS 99.00 => 9900)
-        currency: CURRENCY,                // "GHS"
-        reference: genRef(),
-        metadata,
-        callback: function (response) {
-          // Verify on server before unlocking premium
-          fetch("/api/paystack/verify", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ reference: response.reference })
-          })
-          .then(r => r.json())
-          .then(r => {
-            if (r.status === "success") {
-              alert("Payment verified. Welcome to Plus!");
-              window.location.href = "/chat.html";
-            } else {
-              alert("Verification pending/failed. If charged, contact support with ref: " + response.reference);
-            }
-          })
-          .catch(() => alert("Network error verifying payment."));
-        },
-        onCancel: function () {
-          alert("Payment cancelled.");
-        }
-      });
-    }
-
-    // Recurring subscription using Paystack Plan (uncomment when you have plan_code)
-    function payWithPlan(planCode, metadata = {}) {
-      const email = requireEmail(); if (!email) return;
-      if (!ensureKeyLoaded()) return;
+      if (!PAYSTACK_PUBLIC_KEY) { alert("Payment key not loaded. Try again in a sec."); return; }
 
       const popup = new PaystackPop();
       popup.newTransaction({
         key: PAYSTACK_PUBLIC_KEY,
         email,
-        currency: CURRENCY,
-        plan: planCode,                    // e.g., PLN_xxxxxxxxx
+        currency: "GHS",
+        plan: planCode,
         reference: genRef(),
-        metadata,
-        callback: function (response) {
+        callback: (response) => {
           fetch("/api/paystack/verify", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -292,39 +101,30 @@
           .then(r => r.json())
           .then(r => {
             if (r.status === "success") {
-              alert("Subscription activated!");
+              alert(label + " subscription activated!");
               window.location.href = "/chat.html";
             } else {
-              alert("Subscription verification pending/failed.");
+              alert("Verification failed or pending. Ref: " + response.reference);
             }
-          })
-          .catch(() => alert("Network error verifying subscription."));
-        }
+          });
+        },
+        onCancel: () => alert("Payment cancelled.")
       });
     }
 
-    // ---------- BUTTON HANDLERS ----------
     function goFree() {
-      // Free onboarding – create a free account or redirect to signup
       window.location.href = "/chat.html";
     }
 
-    // One-time amounts (TEST these first, then switch to live prices)
-    function buyPlusMonthly() {  // GHS 99.00
-      payOnce(9900, { plan: "plus_monthly_onetime" });
-    }
-    function buyProAnnual() {    // GHS 790.00
-      payOnce(79000, { plan: "pro_annual_onetime" });
+    function subscribePlusMonthly() {
+      subscribeWithPlan(PLAN_CODE_PLUS_MONTHLY, "Plus Monthly");
     }
 
-    // Recurring (uncomment if using Plans and you expose plan code)
-    // function subscribePlusMonthly() {
-    //   if (!PAYSTACK_PLAN_PLUS_MONTHLY) { alert("Plan not configured on server."); return; }
-    //   payWithPlan(PAYSTACK_PLAN_PLUS_MONTHLY, { plan: "plus_monthly_recurring" });
-    // }
+    function subscribeProAnnual() {
+      subscribeWithPlan(PLAN_CODE_PRO_ANNUAL, "Pro Annual");
+    }
 
-    // small nicety
-    document.getElementById('year').textContent = new Date().getFullYear();
+    document.getElementById("year").textContent = new Date().getFullYear();
   </script>
 </body>
 </html>
