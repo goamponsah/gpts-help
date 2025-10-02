@@ -1,48 +1,94 @@
+// server.js
 import express from "express";
-import fetch from "node-fetch";
+import bodyParser from "body-parser";
+// If you're using Prisma or another ORM, import it here
+// import { PrismaClient } from "@prisma/client";
+// const prisma = new PrismaClient();
 
 const app = express();
-app.use(express.json());
-app.use(express.static("public")); // serves index.html, chat.html, etc.
+app.use(bodyParser.json());
+app.use(express.static("public")); // serve index.html, chat.html, etc.
 
-const { PAYSTACK_PUBLIC_KEY, PAYSTACK_SECRET_KEY } = process.env;
+// Load env vars from Railway
+const {
+  PAYSTACK_PUBLIC_KEY,
+  PAYSTACK_SECRET_KEY,
+  PLAN_CODE_PLUS_MONTHLY,
+  PLAN_CODE_PRO_ANNUAL,
+} = process.env;
 
-// 1) Public config endpoint (safe to expose public key)
+// ---------- 1) Public config (safe for frontend) ----------
 app.get("/api/public-config", (_req, res) => {
   res.json({
     paystackPublicKey: PAYSTACK_PUBLIC_KEY,
-    currency: "GHS"
+    currency: "GHS",
+    planPlusMonthly: PLAN_CODE_PLUS_MONTHLY,
+    planProAnnual: PLAN_CODE_PRO_ANNUAL,
   });
 });
 
-// 2) Payment verification (server-side, uses SECRET key)
+// ---------- 2) Free signup ----------
+app.post("/api/signup-free", async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return res.status(400).json({ status: "error", message: "Email required" });
+    }
+
+    // Example with Prisma (replace with your DB logic)
+    /*
+    const user = await prisma.user.upsert({
+      where: { email },
+      update: { plan: "FREE" },
+      create: { email, plan: "FREE" },
+    });
+    */
+
+    console.log(`Free user signup: ${email}`);
+    return res.json({ status: "success", message: "Free account created" });
+  } catch (err) {
+    console.error("Error signing up free user", err);
+    return res.status(500).json({ status: "error", message: "Could not create free user" });
+  }
+});
+
+// ---------- 3) Verify Paystack transaction ----------
 app.post("/api/paystack/verify", async (req, res) => {
   try {
     const { reference } = req.body;
-    if (!reference) return res.status(400).json({ status: "error", message: "Missing reference" });
+    if (!reference) {
+      return res.status(400).json({ status: "error", message: "Missing reference" });
+    }
 
-    const ps = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
-      headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}` }
+    const psRes = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
+      headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}` },
     });
-    const data = await ps.json();
+
+    const data = await psRes.json();
 
     if (data?.status && data?.data?.status === "success") {
-      // TODO: mark subscription active in your DB (Prisma/SQL)
-      // TODO: store plan, customer email, Paystack customer id, next renewal date (if plan)
-      return res.json({ status: "success", data: { reference } });
+      const email = data.data.customer.email;
+      const plan = data.data.plan ? data.data.plan.plan_code : "ONE_TIME";
+
+      // Example: mark subscription active in DB
+      /*
+      await prisma.user.upsert({
+        where: { email },
+        update: { plan },
+        create: { email, plan },
+      });
+      */
+
+      return res.json({ status: "success", email, plan, reference });
     }
+
     return res.json({ status: "pending", data });
   } catch (e) {
+    console.error("Verification error:", e);
     return res.status(500).json({ status: "error", message: "Verification failed" });
   }
 });
 
-// 3) (Optional) Webhook to auto-sync renewals, charge.success etc.
-app.post("/api/paystack/webhook", express.raw({ type: "*/*" }), (req, res) => {
-  // You can validate the signature if you store the raw body to compute HMAC.
-  // Update your DB based on event type: charge.success, invoice.create, subscription.disable, etc.
-  res.sendStatus(200);
-});
-
-app.listen(process.env.PORT || 3000, () => console.log("Server running"));
-
+// ---------- Start server ----------
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
