@@ -2,186 +2,50 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>GPTs Help – AI Tutoring & Content Creation</title>
-<style>
-  /* Reset & base styles */
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    font-family: 'Inter', Arial, sans-serif;
-    line-height: 1.6;
-    color: #212529;
-    background: #f8f9fa;
-  }
-  a { color: #0066ff; text-decoration: none; }
-  h1, h2, h3 { margin-bottom: 0.6rem; }
-  p { margin-bottom: 1rem; }
-
-  /* Layout */
-  header {
-    background: #ffffff;
-    padding: 1rem 2rem;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid #e9ecef;
-  }
-  header nav ul {
-    list-style: none;
-    display: flex;
-    gap: 1.5rem;
-  }
-  .container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 2rem;
-  }
-  .hero {
-    background: radial-gradient(circle at 50% 50%, #7a5cff, #6f42c1);
-    color: #ffffff;
-    padding: 4rem 2rem;
-    text-align: center;
-  }
-  .hero h1 {
-    font-size: 2.5rem;
-    margin-bottom: 1rem;
-  }
-  .hero p {
-    font-size: 1.25rem;
-    max-width: 700px;
-    margin: 0.5rem auto 2rem;
-  }
-  .hero .cta {
-    display: flex;
-    justify-content: center;
-    gap: 1rem;
-  }
-  .btn {
-    padding: 0.75rem 1.5rem;
-    border-radius: 4px;
-    font-weight: 600;
-    cursor: pointer;
-    border: none;
-    text-decoration: none;
-    display: inline-block;
-    transition: background 0.3s ease;
-  }
-  .btn-primary {
-    background: #ffc107;
-    color: #212529;
-  }
-  .btn-primary:hover {
-    background: #e0a800;
-  }
-  .btn-secondary {
-    background: #ffffff;
-    color: #6f42c1;
-    border: 2px solid #ffffff;
-  }
-  .btn-secondary:hover {
-    background: #f1f1f1;
-  }
-  .features {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 2rem;
-    margin: 3rem 0;
-  }
-  .feature-card {
-    flex: 1 1 300px;
-    background: #ffffff;
-    border-radius: 8px;
-    padding: 2rem;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
-    transition: transform 0.2s ease;
-  }
-  .feature-card:hover {
-    transform: translateY(-4px);
-  }
-  .feature-card h3 {
-    margin-bottom: 1rem;
-    color: #6f42c1;
-  }
-  .pricing {
-    background: #ffffff;
-    padding: 3rem 2rem;
-    border-radius: 8px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
-  }
-  .pricing h2 {
-    text-align: center;
-    margin-bottom: 2rem;
-  }
-  .price-table {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 2rem;
-  }
-  .price-plan {
-    flex: 1 1 250px;
-    border: 1px solid #e9ecef;
-    border-radius: 8px;
-    padding: 1.5rem;
-    text-align: center;
-    background: #f9f9fa;
-  }
-  .price-plan h3 {
-    margin-bottom: 1rem;
-  }
-  .price-plan .price {
-    font-size: 2rem;
-    margin-bottom: 1rem;
-    color: #6f42c1;
-  }
-  .price-plan ul {
-    list-style: none;
-    margin-bottom: 1rem;
-  }
-  .price-plan ul li {
-    margin: 0.5rem 0;
-  }
-  .social-proof {
-    margin: 3rem 0;
-  }
-  .testimonial {
-    background: #ffffff;
-    padding: 2rem;
-    border-radius: 8px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05);
-    margin-bottom: 1rem;
-  }
-  .testimonial p {
-    font-style: italic;
-    margin-bottom: 0.5rem;
-  }
-  .testimonial span {
-    font-weight: 700;
-    color: #6f42c1;
-  }
-  .cta-section {
-    background: #6f42c1;
-    color: #ffffff;
-    padding: 3rem 2rem;
-    text-align: center;
-    border-radius: 8px;
-    margin: 3rem 0;
-  }
-  .cta-section h2 {
-    margin-bottom: 1rem;
-  }
-  .footer {
-    text-align: center;
-    padding: 2rem;
-    color: #6c757d;
-  }
-  /* Responsive adjustments */
-  @media (max-width: 768px) {
-    .features, .price-table { flex-direction: column; align-items: center; }
-    .hero h1 { font-size: 2rem; }
-  }
-</style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GPTs Help – AI Tutoring & Content Creation</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', Arial, sans-serif; line-height: 1.6; color: #212529; background: #f8f9fa; }
+    a { color: #0066ff; text-decoration: none; }
+    h1, h2, h3 { margin-bottom: 0.6rem; }
+    p { margin-bottom: 1rem; }
+    header { background: #ffffff; padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e9ecef; }
+    header nav ul { list-style: none; display: flex; gap: 1.5rem; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+    .hero { background: radial-gradient(circle at 50% 50%, #7a5cff, #6f42c1); color: #ffffff; padding: 4rem 2rem; text-align: center; }
+    .hero h1 { font-size: 2.5rem; margin-bottom: 1rem; }
+    .hero p { font-size: 1.25rem; max-width: 700px; margin: 0.5rem auto 2rem; }
+    .cta { display: flex; justify-content: center; gap: 1rem; }
+    .btn { padding: 0.75rem 1.5rem; border-radius: 4px; font-weight: 600; cursor: pointer; border: none; display: inline-block; transition: background 0.3s ease; }
+    .btn-primary { background: #ffc107; color: #212529; }
+    .btn-primary:hover { background: #e0a800; }
+    .btn-secondary { background: #ffffff; color: #6f42c1; border: 2px solid #ffffff; }
+    .btn-secondary:hover { background: #f1f1f1; }
+    .features { display: flex; flex-wrap: wrap; gap: 2rem; margin: 3rem 0; }
+    .feature-card { flex: 1 1 300px; background: #ffffff; border-radius: 8px; padding: 2rem; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05); transition: transform 0.2s ease; }
+    .feature-card:hover { transform: translateY(-4px); }
+    .feature-card h3 { margin-bottom: 1rem; color: #6f42c1; }
+    .pricing { background: #ffffff; padding: 3rem 2rem; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05); }
+    .pricing h2 { text-align: center; margin-bottom: 2rem; }
+    .email-input { text-align: center; margin-bottom: 2rem; }
+    .email-input input { width: 320px; padding: 0.75rem; border: 1px solid #ced4da; border-radius: 4px; }
+    .price-table { display: flex; flex-wrap: wrap; justify-content: center; gap: 2rem; }
+    .price-plan { flex: 1 1 250px; border: 1px solid #e9ecef; border-radius: 8px; padding: 1.5rem; text-align: center; background: #f9f9fa; }
+    .price-plan h3 { margin-bottom: 1rem; }
+    .price-plan .price { font-size: 2rem; margin-bottom: 1rem; color: #6f42c1; }
+    .price-plan ul { list-style: none; margin-bottom: 1rem; }
+    .price-plan ul li { margin: 0.5rem 0; }
+    .social-proof { margin: 3rem 0; }
+    .testimonial { background: #ffffff; padding: 2rem; border-radius: 8px; box-shadow: 0 4px 8px rgba(0, 0, 0, 0.05); margin-bottom: 1rem; }
+    .testimonial p { font-style: italic; margin-bottom: 0.5rem; }
+    .testimonial span { font-weight: 700; color: #6f42c1; }
+    .cta-section { background: #6f42c1; color: #ffffff; padding: 3rem 2rem; text-align: center; border-radius: 8px; margin: 3rem 0; }
+    .cta-section h2 { margin-bottom: 1rem; }
+    .footer { text-align: center; padding: 2rem; color: #6c757d; }
+    @media (max-width: 768px) { .features, .price-table { flex-direction: column; align-items: center; } .hero h1 { font-size: 2rem; } }
+  </style>
 </head>
 <body>
 <header>
@@ -231,6 +95,10 @@
 
 <section id="pricing" class="container pricing">
   <h2>Pricing</h2>
+  <div class="email-input">
+    <p>Enter your email to start a plan</p>
+    <input type="email" id="customer-email" placeholder="you@example.com" required />
+  </div>
   <div class="price-table">
     <div class="price-plan">
       <h3>Free</h3>
@@ -240,7 +108,7 @@
         <li>Limited content exports</li>
         <li>Basic AI explanations</li>
       </ul>
-      <a href="#" class="btn btn-primary">Sign Up Free</a>
+      <button class="btn btn-primary" onclick="alert('You have registered for the free plan!');">Sign Up Free</button>
     </div>
     <div class="price-plan" style="border:2px solid #ffc107;">
       <h3>Plus</h3>
@@ -251,7 +119,7 @@
         <li>Full content generation suite</li>
         <li>Priority support &amp; progress tracking</li>
       </ul>
-      <a href="#" class="btn btn-primary">Start Free Trial</a>
+      <button class="btn btn-primary" onclick="payWithPaystack(9.99);">Start Free Trial</button>
     </div>
     <div class="price-plan">
       <h3>Pro</h3>
@@ -262,7 +130,7 @@
         <li>Team sharing &amp; collaboration</li>
         <li>Dedicated account manager</li>
       </ul>
-      <a href="#" class="btn btn-primary">Get Annual</a>
+      <button class="btn btn-primary" onclick="payWithPaystack(79);">Get Annual</button>
     </div>
   </div>
 </section>
@@ -283,26 +151,40 @@
   </div>
 </section>
 
-<section class="container" id="demo">
-  <h2>Try a Sample Problem</h2>
-  <p>Paste or upload a math problem below and see a preview of GPTs Help’s step‑by‑step solution.</p>
-  <form>
-    <textarea rows="4" style="width:100%; padding:1rem; border:1px solid #ced4da; border-radius:4px;" placeholder="e.g., Solve for x: 3x^2 – 2x – 8 = 0"></textarea>
-    <input type="file" style="margin: 1rem 0;" />
-    <div>
-      <button type="button" class="btn btn-primary">Preview Solution</button>
-    </div>
-  </form>
-</section>
-
 <section class="container cta-section">
   <h2>Ready to Get Started?</h2>
   <p>Join thousands of learners and creators who trust GPTs Help to master math and produce standout content.</p>
-  <a href="#pricing" class="btn btn-secondary" style="margin-top:1rem;">Start Free Trial Today</a>
+  <button class="btn btn-secondary" onclick="document.getElementById('customer-email').scrollIntoView({behavior: 'smooth'});" style="margin-top:1rem;">Start Free Trial Today</button>
 </section>
 
 <footer class="footer">
   <p>&copy; 2025 GPTs Help. All rights reserved.</p>
 </footer>
+
+<!-- Paystack Inline Script -->
+<script src="https://js.paystack.co/v1/inline.js"></script>
+<script>
+function payWithPaystack(amount) {
+  var emailField = document.getElementById('customer-email');
+  var email = (emailField && emailField.value) ? emailField.value : 'customer@example.com';
+  var handler = PaystackPop.setup({
+    key: 'PAYSTACK_PUBLIC_KEY', // Replace with your Paystack public key
+    email: email,
+    amount: amount * 100, // Amount is specified in the smallest currency unit
+    currency: 'USD',
+    ref: '' + Math.floor((Math.random() * 1000000000) + 1),
+    callback: function(response) {
+      // Payment successful
+      alert('Payment complete! Reference: ' + response.reference);
+      // TODO: Send `response.reference` to backend for verification and onboarding
+    },
+    onClose: function() {
+      alert('Transaction was cancelled');
+    }
+  });
+  handler.openIframe();
+}
+</script>
 </body>
 </html>
+
