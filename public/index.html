@@ -3,70 +3,142 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>GPTs Help – AI Tutoring & Content Creation</title>
-  <meta name="description" content="Master Math and create content with AI. Subscribe to Plus or Pro plans for step-by-step math tutoring and content creation." />
+  <title>GPTs Help – Learn Smarter with AI</title>
   <style>
-    body { font-family: Inter, system-ui, sans-serif; background:#f8f9fa; margin:0; }
+    :root {
+      --brand: #6f42c1;  /* Purple */
+      --accent: #ffc107; /* Amber */
+      --bg: #f8f9fa;
+      --text: #212529;
+      --muted: #6c757d;
+    }
+    body { margin:0; font-family: Inter, sans-serif; color:var(--text); background:var(--bg); }
     header, footer { background:#fff; padding:1rem 2rem; border-bottom:1px solid #eee; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
     h1,h2,h3 { margin:.5rem 0; }
-    .container { max-width:960px; margin:0 auto; padding:1rem; }
-    .plan { background:#fff; border:1px solid #eee; border-radius:12px; padding:1.5rem; margin:1rem 0; }
-    .btn { padding:.75rem 1.25rem; border:none; border-radius:8px; cursor:pointer; font-weight:600; }
-    .btn-primary { background:#6f42c1; color:#fff; }
-    .input-row { margin:1rem 0; }
-    input[type="email"] { padding:.65rem .9rem; border:1px solid #ccc; border-radius:8px; width:100%; max-width:300px; }
+    p { margin:.5rem 0 1rem; }
+
+    /* Hero */
+    .hero { background:linear-gradient(135deg, var(--brand), #9c6fff); color:#fff; text-align:center; padding:5rem 2rem; }
+    .hero h1 { font-size:clamp(2rem,4vw,3rem); margin-bottom:1rem; }
+    .hero p { font-size:1.25rem; max-width:700px; margin:0 auto 2rem; opacity:.95; }
+    .btn { padding:.8rem 1.4rem; font-weight:700; border:none; border-radius:8px; cursor:pointer; }
+    .btn-primary { background:var(--accent); color:#000; }
+    .btn-secondary { background:#fff; color:var(--brand); }
+
+    /* Features */
+    .features { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:1.5rem; margin-top:2rem; }
+    .card { background:#fff; border:1px solid #eee; border-radius:12px; padding:1.5rem; box-shadow:0 4px 10px rgba(0,0,0,0.05); }
+
+    /* Pricing */
+    .plans { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1.5rem; margin-top:2rem; }
+    .plan { background:#fff; border:1px solid #eee; border-radius:14px; padding:2rem; position:relative; text-align:center; }
+    .plan h3 { margin-bottom:.5rem; }
+    .price { font-size:2rem; color:var(--brand); margin:.5rem 0 1rem; }
+    .plan ul { list-style:none; padding:0; margin:1rem 0; color:var(--muted); text-align:left; }
+    .plan li { margin:.35rem 0; }
+    .badge { position:absolute; top:12px; right:12px; background:var(--brand); color:#fff; font-size:.75rem; padding:.25rem .5rem; border-radius:999px; }
+
+    /* Testimonials */
+    .testimonials { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1.5rem; margin-top:2rem; }
+    .testimonial { background:#fff; border:1px solid #eee; border-radius:12px; padding:1.5rem; font-style:italic; }
+
+    footer { text-align:center; padding:2rem; color:var(--muted); margin-top:3rem; }
   </style>
 </head>
 <body>
+  <!-- Header -->
   <header>
     <div class="container"><strong>GPTs Help</strong></div>
   </header>
 
-  <main class="container">
-    <h1>Choose your plan</h1>
-    <p>Enter your email and pick a subscription. All payments are processed by Paystack.</p>
+  <!-- Hero -->
+  <section class="hero">
+    <h1>Master Math & Create Content with AI</h1>
+    <p>Get step-by-step math tutoring and professional AI content tools – all in one subscription. Start free today.</p>
+    <button class="btn btn-primary" onclick="document.getElementById('pricing').scrollIntoView({behavior:'smooth'})">Start Free Trial</button>
+  </section>
 
-    <!-- Email input -->
-    <div class="input-row">
-      <input id="payerEmail" type="email" placeholder="Enter your email" required>
+  <!-- Features -->
+  <section class="container">
+    <h2>Why Choose GPTs Help?</h2>
+    <div class="features">
+      <div class="card"><h3>Step-by-Step Math</h3><p>Clear explanations with proofs, hints, and multiple methods.</p></div>
+      <div class="card"><h3>Exam-Ready Practice</h3><p>Adaptive practice sets with instant feedback.</p></div>
+      <div class="card"><h3>Content Suite</h3><p>Generate polished blog posts, essays, and scripts in minutes.</p></div>
+      <div class="card"><h3>Secure & Fast</h3><p>Trusted Paystack payments. Your data stays private.</p></div>
     </div>
+  </section>
 
-    <!-- Free Plan -->
-    <div class="plan">
-      <h3>Free Plan</h3>
-      <p>₵0 / month – limited access</p>
-      <button class="btn btn-primary" onclick="goFree()">Sign Up Free</button>
+  <!-- Pricing -->
+  <section class="container" id="pricing">
+    <h2>Choose Your Plan</h2>
+    <p>Enter your email to get started. Payments processed securely with Paystack.</p>
+    <input id="payerEmail" type="email" placeholder="Enter your email" style="padding:.7rem;width:300px;border-radius:8px;border:1px solid #ccc;margin:1rem 0;display:block">
+
+    <div class="plans">
+      <!-- Free -->
+      <div class="plan">
+        <h3>Free Plan</h3>
+        <div class="price">₵0 / mo</div>
+        <ul>
+          <li>Up to 10 math problems / month</li>
+          <li>Basic AI explanations</li>
+          <li>Limited content exports</li>
+        </ul>
+        <button class="btn btn-secondary" onclick="goFree()">Sign Up Free</button>
+      </div>
+
+      <!-- Plus Monthly -->
+      <div class="plan">
+        <div class="badge">Popular</div>
+        <h3>Plus Monthly</h3>
+        <div class="price">₵99 / mo</div>
+        <ul>
+          <li>Unlimited math problem solving</li>
+          <li>Advanced explanations & proofs</li>
+          <li>Full content suite</li>
+        </ul>
+        <button class="btn btn-primary" onclick="subscribePlusMonthly()">Subscribe Monthly</button>
+      </div>
+
+      <!-- Pro Annual -->
+      <div class="plan">
+        <h3>Pro Annual</h3>
+        <div class="price">₵790 / yr</div>
+        <ul>
+          <li>Everything in Plus</li>
+          <li>Annual discount (save 34%)</li>
+          <li>Team collaboration tools</li>
+        </ul>
+        <button class="btn btn-primary" onclick="subscribeProAnnual()">Subscribe Annually</button>
+      </div>
     </div>
+  </section>
 
-    <!-- Plus Monthly -->
-    <div class="plan">
-      <h3>Plus Monthly</h3>
-      <p>₵99 / month – unlimited math problem solving & content creation</p>
-      <button class="btn btn-primary" onclick="subscribePlusMonthly()">Subscribe Monthly</button>
+  <!-- Testimonials -->
+  <section class="container">
+    <h2>What Our Users Say</h2>
+    <div class="testimonials">
+      <div class="testimonial">“I finally understood calculus limits—your hints + step-by-step solved it!”<br><strong>— Ama A., Student</strong></div>
+      <div class="testimonial">“We cut blog production time by 70%. The content suite is a lifesaver.”<br><strong>— Michael T., Creator</strong></div>
     </div>
+  </section>
 
-    <!-- Pro Annual -->
-    <div class="plan">
-      <h3>Pro Annual</h3>
-      <p>₵790 / year – everything in Plus, with annual discount & extras</p>
-      <button class="btn btn-primary" onclick="subscribeProAnnual()">Subscribe Annually</button>
-    </div>
-  </main>
-
+  <!-- Footer -->
   <footer>
-    <div class="container">&copy; <span id="year"></span> GPTs Help</div>
+    &copy; <span id="year"></span> GPTs Help. All rights reserved.
   </footer>
 
-  <!-- Paystack Inline v2 -->
+  <!-- Paystack -->
   <script src="https://js.paystack.co/v2/inline.js"></script>
   <script>
     const genRef = () => "gptshelp_" + Date.now() + "_" + Math.random().toString(36).slice(2,8);
 
-    // Your real plan codes
+    // Real plan codes
     const PLAN_CODE_PLUS_MONTHLY = "PLN_t8tii7sryvwsxxf"; 
     const PLAN_CODE_PRO_ANNUAL  = "PLN_3gkd3qo1pv8rylt";
 
-    // Load Paystack public key from server config
     let PAYSTACK_PUBLIC_KEY = null;
     async function loadConfig() {
       const res = await fetch("/api/public-config");
@@ -77,13 +149,13 @@
 
     function requireEmail() {
       const email = document.getElementById("payerEmail").value.trim();
-      if (!email) { alert("Please enter your email"); return null; }
+      if (!email) { alert("Enter your email"); return null; }
       return email;
     }
 
     function subscribeWithPlan(planCode, label) {
       const email = requireEmail(); if (!email) return;
-      if (!PAYSTACK_PUBLIC_KEY) { alert("Payment key not loaded. Try again."); return; }
+      if (!PAYSTACK_PUBLIC_KEY) { alert("Payment key not loaded."); return; }
 
       const popup = new PaystackPop();
       popup.newTransaction({
@@ -113,11 +185,11 @@
     }
 
     function goFree() {
-      // Free onboarding – create a free account or redirect to signup
+      const email = requireEmail(); if (!email) return;
       fetch("/api/signup-free", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: requireEmail() })
+        body: JSON.stringify({ email })
       })
       .then(r => r.json())
       .then(res => {
@@ -130,16 +202,10 @@
       });
     }
 
-    function subscribePlusMonthly() {
-      subscribeWithPlan(PLAN_CODE_PLUS_MONTHLY, "Plus Monthly");
-    }
-
-    function subscribeProAnnual() {
-      subscribeWithPlan(PLAN_CODE_PRO_ANNUAL, "Pro Annual");
-    }
+    function subscribePlusMonthly() { subscribeWithPlan(PLAN_CODE_PLUS_MONTHLY, "Plus Monthly"); }
+    function subscribeProAnnual() { subscribeWithPlan(PLAN_CODE_PRO_ANNUAL, "Pro Annual"); }
 
     document.getElementById("year").textContent = new Date().getFullYear();
   </script>
 </body>
 </html>
-
