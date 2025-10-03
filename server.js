@@ -124,7 +124,7 @@ async function ensureSchema() {
     );
   `);
 
-  // 2) Add any missing columns on legacy tables
+  // 2) Add any missing columns on legacy tables (including users.id via a dedicated block)
   await pool.query(`
     alter table if exists conversations
       add column if not exists user_id    bigint,
@@ -151,6 +151,33 @@ async function ensureSchema() {
       add column if not exists expires_at timestamptz,
       add column if not exists used       boolean not null default false,
       add column if not exists created_at timestamptz not null default now();
+  `);
+
+  // 2a) Special: ensure users.id exists and is populated + unique
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+         WHERE table_name = 'users' AND column_name = 'id'
+      ) THEN
+        -- Create sequence (safe if already created elsewhere)
+        CREATE SEQUENCE IF NOT EXISTS users_id_seq;
+        -- Add id column and default
+        ALTER TABLE users ADD COLUMN id bigint;
+        ALTER TABLE users ALTER COLUMN id SET DEFAULT nextval('users_id_seq'::regclass);
+        -- Backfill existing rows
+        UPDATE users SET id = nextval('users_id_seq'::regclass) WHERE id IS NULL;
+      END IF;
+    END $$;
+
+    DO $$
+    BEGIN
+      -- Ensure a unique constraint on id, so FKs can reference users(id)
+      ALTER TABLE users ADD CONSTRAINT users_id_key UNIQUE (id);
+    EXCEPTION WHEN duplicate_object THEN
+      NULL;
+    END $$;
   `);
 
   // 3) Add foreign keys idempotently
