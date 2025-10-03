@@ -69,18 +69,22 @@
     .logout{ width:100%; background:transparent; border:1px solid var(--border); color:var(--text); padding:9px 10px; border-radius:10px; cursor:pointer; font-size:13px }
     .logout:hover{ background:#151824 }
 
-    /* Main */
-    .main{ display:grid; grid-template-rows:auto 1fr auto; min-height:0 }
-    .public-banner{
-      display:none; padding:8px 12px; border-bottom:1px solid var(--border);
-      background:linear-gradient(180deg, rgba(240,180,41,.12), transparent 60%);
-      color:#fff; font-size:13px;
-    }
-    .public .public-banner{ display:block; }
+    /* Main area: messages (1fr) + composer (auto) — composer stays at bottom */
+    .main{ display:grid; grid-template-rows:1fr auto; min-height:0 }
     .messages{
       overflow-y:auto; padding:20px 18px; min-height:0; scroll-behavior:smooth;
       background:radial-gradient(1200px 400px at 50% -200px, rgba(88,101,242,.08), transparent 60%);
     }
+
+    /* Public banner sits inside messages; sticky at top; doesn't change layout rows */
+    .public-banner{
+      display:none; position:sticky; top:0; z-index:1;
+      padding:8px 12px; margin:-8px 0 8px; /* snug to top */
+      border:1px solid var(--border); border-radius:10px;
+      background:linear-gradient(180deg, rgba(240,180,41,.12), transparent 70%);
+      color:#fff; font-size:13px; backdrop-filter:saturate(120%);
+    }
+    .public .public-banner{ display:block; }
 
     /* Chat bubbles */
     .msg{ max-width:900px; margin:0 auto 12px auto; display:flex; }
@@ -158,7 +162,7 @@
       background:#0e0f13; color:var(--text); font-size:14px;
     }
     .btn{
-      border:1px solid var(--border); background:#141722; color:var(--text);
+      border:1px solid var(--border); background:#141722; color:#var(--text);
       border-radius:9999px; padding:10px 14px; cursor:pointer; font-size:14px;
     }
     .btn.primary{ background:var(--brand); color:#fff; border-color:transparent; }
@@ -173,16 +177,10 @@
     /* Public (read-only) state */
     .public .conv-menu-btn,
     .public .new-chat,
-    .public .logout,
+    .public .logout{ pointer-events:none; opacity:.6; }
     .public .controls .icon-btn,
     .public select,
     .public textarea{ pointer-events:none; opacity:.6; }
-    .public .composer{ position:relative; }
-    .public .composer::after{
-      content:'Public preview — read-only';
-      position:absolute; right:16px; top:-24px; font-size:12px; color:#ffd;
-      opacity:.8;
-    }
   </style>
 
   <!-- Markdown renderer + sanitizer -->
@@ -207,8 +205,11 @@
 
     <!-- Main -->
     <main class="main" id="main">
-      <div class="public-banner" id="publicBanner">Anyone with this link can view this chat. You can’t send messages in public view.</div>
-      <div class="messages" id="messages"></div>
+      <div class="messages" id="messages">
+        <div class="public-banner" id="publicBanner">
+          Anyone with this link can view this chat. You can’t send messages in public view.
+        </div>
+      </div>
 
       <form class="composer" id="composer">
         <div class="row">
@@ -310,7 +311,6 @@
     /* URL params */
     const p = new URLSearchParams(location.search);
     const publicToken = p.get('t'); // if present, we are in public read-only mode
-
     const isPublic = !!publicToken;
 
     /* --- Dynamic placeholder tied to selected assistant --- */
@@ -339,7 +339,13 @@
       toastEl.classList.add('show');
       setTimeout(()=> toastEl.classList.remove('show'), 1500);
     }
-    function clearMessages(){ messagesEl.innerHTML=''; }
+    function clearMessages(){
+      messagesEl.innerHTML='';
+      // keep the banner at the top of messages if in public view
+      if (isPublic && publicBanner && !messagesEl.contains(publicBanner)) {
+        messagesEl.appendChild(publicBanner);
+      }
+    }
     function scrollToBottom(){ messagesEl.scrollTop = messagesEl.scrollHeight; }
     function now(){ return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
 
@@ -410,7 +416,7 @@
         if (r && r.status === 'ok' && r.url) {
           shareLinkInput.value = r.url;
         } else {
-          // Fallback: deep link with token param isn't available; use non-token link
+          // Fallback: deep link (auth required)
           shareLinkInput.value = `${location.origin}/chat.html?c=${id}`;
         }
       }catch{
@@ -522,16 +528,17 @@
     /* Public view: fetch and render read-only snapshot */
     async function loadPublicConversation(token){
       mainEl.classList.add('public');
+      // keep banner visible inside messages
       publicBanner.style.display = 'block';
-      // Hide left sidebar list & actions visually but keep layout
+
+      // Hide some sidebar actions visually
       document.querySelectorAll('.conv-menu-btn,.new-chat,.logout').forEach(el=>{ el.style.display='none'; });
 
       clearMessages();
       try{
         const r = await api.getPublicConv(token);
-        // Expect shape: { title, messages:[{role,content}], createdAt, ... }
         if (r && r.title) {
-          // Render a fake single item list with the title (no menu)
+          // Render a single item list with the title (no menu)
           convListEl.innerHTML='';
           const row=el('div',{class:'conv active'});
           const title=el('div',{class:'conv-title'}, r.title);
@@ -542,7 +549,7 @@
       }catch(e){
         renderMessage('assistant','This public link is invalid or expired.');
       }
-      // fully disable composer
+      // disable composer controls but keep it at the bottom
       Array.from(composerEl.querySelectorAll('button,textarea,input,select')).forEach(el=>{
         el.disabled = true;
       });
@@ -682,7 +689,7 @@
     (async function init(){
       if (isPublic) {
         await loadPublicConversation(publicToken);
-        return; // no auth, no side effects
+        return;
       }
 
       const ok=await guardAuth(); if(!ok) return;
