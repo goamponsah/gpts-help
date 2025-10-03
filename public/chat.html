@@ -55,7 +55,7 @@
     .conv:hover .conv-menu-btn{ opacity:1 }
     .menu{ position:absolute; right:8px; top:32px; background:var(--panel); border:1px solid var(--border); border-radius:10px; overflow:hidden; display:none; z-index:10 }
     .menu.open{ display:block }
-    .menu button{ display:block; width:160px; text-align:left; background:transparent; color:var(--text); border:0; padding:10px 12px; cursor:pointer; font-size:14px }
+    .menu button{ display:block; width:180px; text-align:left; background:transparent; color:var(--text); border:0; padding:10px 12px; cursor:pointer; font-size:14px }
     .menu button:hover{ background:#1a1d2a }
     .side-bottom{ position:sticky; bottom:0; padding:10px; border-top:1px solid var(--border); background:#0f1117 }
     .logout{ width:100%; background:transparent; border:1px solid var(--border); color:var(--text); padding:9px 10px; border-radius:10px; cursor:pointer; font-size:13px }
@@ -213,6 +213,13 @@
       createConv:(email,title)=>fetch('/api/conversations',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({userId:email,title})}).then(r=>r.json()),
       renameConv:(email,id,title)=>fetch(`/api/conversations/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({userId:email,title})}).then(r=>r.json()),
       deleteConv:(email,id)=>fetch(`/api/conversations/${id}`,{method:'DELETE',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({userId:email})}).then(r=>r.json()),
+      /* New: archive/unarchive via PATCH. Backend should set archived=true */
+      archiveConv:(email,id,archived=true)=>fetch(`/api/conversations/${id}`,{
+        method:'PATCH',
+        headers:{'Content-Type':'application/json'},
+        credentials:'include',
+        body:JSON.stringify({userId:email, archived})
+      }).then(r=>r.json()),
       getConvMsgs:(email,id)=>fetch(`/api/conversations/${id}?userId=${encodeURIComponent(email)}`, { credentials:'include' }).then(r=>r.json()),
       chat:(payload)=>fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(payload)}).then(r=>r.json()),
       me:()=>fetch('/api/me', { credentials:'include' }).then(r=>r.json()),
@@ -349,56 +356,79 @@
     async function loadConversations(selectId=null){
       const list=await api.listConvs(userEmail);
       convListEl.innerHTML='';
-      list.forEach(c=>{
-        const row=el('div',{class:`conv ${c.id===selectId?'active':''}`});
-        const title=el('div',{class:'conv-title'},c.title);
-        const menuBtn=el('button',{class:'conv-menu-btn',title:'Options'},'⋯');
-        const menu=el('div',{class:'menu'});
-        const bShare=el('button',{},'Share link');
-        const bRename=el('button',{},'Rename');
-        const bDelete=el('button',{},'Delete');
+      list
+        .filter(c => !c.archived) /* hide archived if backend provides the flag */
+        .forEach(c=>{
+          const row=el('div',{class:`conv ${c.id===selectId?'active':''}`});
+          const title=el('div',{class:'conv-title'},c.title);
+          const menuBtn=el('button',{class:'conv-menu-btn',title:'Options','aria-label':'Conversation options'},'⋯');
+          const menu=el('div',{class:'menu'});
+          const bShare=el('button',{},'Share');
+          const bRename=el('button',{},'Rename');
+          const bArchive=el('button',{},'Archive');
+          const bDelete=el('button',{},'Delete');
 
-        bShare.addEventListener('click',e=>{
-          e.stopPropagation();
-          const url=`${location.origin}/chat.html?c=${c.id}`;
-          navigator.clipboard.writeText(url).catch(()=>{});
-          menu.classList.remove('open');
+          bShare.addEventListener('click',e=>{
+            e.stopPropagation();
+            const url=`${location.origin}/chat.html?c=${c.id}`;
+            navigator.clipboard.writeText(url).catch(()=>{});
+            menu.classList.remove('open');
+          });
+
+          bRename.addEventListener('click',async e=>{
+            e.stopPropagation(); menu.classList.remove('open');
+            const input=el('input',{value:c.title,style:'width:100%; background:#12131a; color:#e7eaf1; border:1px solid #232634; border-radius:6px; padding:6px 8px;'});
+            row.replaceChild(input,title); input.focus();
+            const commit=async ()=>{
+              const t=(input.value||'New chat').trim();
+              await api.renameConv(userEmail,c.id,t); await loadConversations(c.id);
+            };
+            input.addEventListener('keydown',ke=>{ if(ke.key==='Enter') commit(); if(ke.key==='Escape') loadConversations(c.id); });
+            input.addEventListener('blur',commit);
+          });
+
+          /* New: Archive */
+          bArchive.addEventListener('click', async e=>{
+            e.stopPropagation(); menu.classList.remove('open');
+            try{
+              await api.archiveConv(userEmail, c.id, true);
+              if(currentConvId===c.id){ currentConvId=null; clearMessages(); }
+              await loadConversations();
+            }catch(err){
+              alert('Archiving failed. Please try again.');
+            }
+          });
+
+          bDelete.addEventListener('click',async e=>{
+            e.stopPropagation(); menu.classList.remove('open');
+            if(confirm('Delete this chat?')){ 
+              await api.deleteConv(userEmail,c.id); 
+              if(currentConvId===c.id){ currentConvId=null; clearMessages(); } 
+              await loadConversations(); 
+            }
+          });
+
+          menu.appendChild(bShare); 
+          menu.appendChild(bRename); 
+          menu.appendChild(bArchive);
+          menu.appendChild(bDelete);
+
+          menuBtn.addEventListener('click',e=>{
+            e.stopPropagation();
+            document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'));
+            menu.classList.toggle('open');
+          });
+
+          row.addEventListener('click',async ()=>{
+            currentConvId=c.id;
+            document.querySelectorAll('.conv').forEach(n=>n.classList.remove('active'));
+            row.classList.add('active');
+            await showConversation(c.id);
+          });
+
+          row.appendChild(title); row.appendChild(menuBtn); row.appendChild(menu);
+          convListEl.appendChild(row);
         });
-
-        bRename.addEventListener('click',async e=>{
-          e.stopPropagation(); menu.classList.remove('open');
-          const input=el('input',{value:c.title,style:'width:100%; background:#12131a; color:#e7eaf1; border:1px solid #232634; border-radius:6px; padding:6px 8px;'});
-          row.replaceChild(input,title); input.focus();
-          const commit=async ()=>{
-            const t=(input.value||'New chat').trim();
-            await api.renameConv(userEmail,c.id,t); await loadConversations(c.id);
-          };
-          input.addEventListener('keydown',ke=>{ if(ke.key==='Enter') commit(); if(ke.key==='Escape') loadConversations(c.id); });
-          input.addEventListener('blur',commit);
-        });
-
-        bDelete.addEventListener('click',async e=>{
-          e.stopPropagation(); menu.classList.remove('open');
-          if(confirm('Delete this chat?')){ await api.deleteConv(userEmail,c.id); if(currentConvId===c.id){ currentConvId=null; clearMessages(); } await loadConversations(); }
-        });
-
-        menu.appendChild(bShare); menu.appendChild(bRename); menu.appendChild(bDelete);
-        menuBtn.addEventListener('click',e=>{
-          e.stopPropagation();
-          document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'));
-          menu.classList.toggle('open');
-        });
-
-        row.addEventListener('click',async ()=>{
-          currentConvId=c.id;
-          document.querySelectorAll('.conv').forEach(n=>n.classList.remove('active'));
-          row.classList.add('active');
-          await showConversation(c.id);
-        });
-
-        row.appendChild(title); row.appendChild(menuBtn); row.appendChild(menu);
-        convListEl.appendChild(row);
-      });
 
       document.addEventListener('click',()=>{ document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open')); },{capture:true});
     }
