@@ -274,12 +274,20 @@
     const genRef = () => "gptshelp_" + Date.now() + "_" + Math.random().toString(36).slice(2,8);
 
     // Plan codes
-    const PLAN_CODE_PLUS_MONTHLY = "PLN_t8tii7sryvwsxxf"; 
+    const PLAN_CODE_PLUS_MONTHLY = "PLN_t8tii7sryvwsxxf";
     const PLAN_CODE_PRO_ANNUAL  = "PLN_3gkd3qo1pv8rylt";
 
     // Optional next redirect (e.g., /index.html?next=/chat.html)
     const urlParams = new URLSearchParams(location.search);
     const NEXT_URL = urlParams.get("next") || "/chat.html";
+
+    // Helpers to normalize backend auth responses
+    function authOK(r){
+      return r && (r.status === "ok" || r.status === "success") && (r.user?.email || r.email);
+    }
+    function authEmail(r){
+      return (r && (r.user?.email || r.email)) || "";
+    }
 
     // Load Paystack public key
     let PAYSTACK_PUBLIC_KEY = null;
@@ -300,19 +308,13 @@
 
     function goToChat(){ window.location.assign("/chat.html"); }
 
-    // ===== Free signup via pricing box (kept for convenience) =====
-    function goFree() {
-      const email = requireEmail(); if (!email) return;
-      signupFree(email, null);
-    }
-
     // ===== Shared helpers =====
     function isValidEmail(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e); }
     function setBtnLoading(btn, loading, finalLabel){
       if (loading) {
         btn.disabled = true;
         btn.dataset.prev = btn.textContent;
-        btn.innerHTML = '<span class="spinner"></span> ' + btn.textContent;
+        btn.innerHTML = '<span class="spinner"></span> ' + (btn.textContent || 'Working…');
       } else {
         btn.disabled = false;
         btn.textContent = finalLabel || btn.dataset.prev || btn.textContent;
@@ -352,6 +354,22 @@
       } catch {}
     }
 
+    // ===== Free signup via pricing box (kept for convenience) =====
+    async function goFree() {
+      const email = requireEmail(); if (!email) return;
+      try{
+        const res = await apiSignupFree(email, null);
+        if (authOK(res)) {
+          localStorage.setItem("userEmail", authEmail(res));
+          setTimeout(()=>window.location.assign(NEXT_URL), 150);
+        } else {
+          alert("Error: " + (res?.message || "Signup failed"));
+        }
+      }catch{
+        alert("Network error. Please try again.");
+      }
+    }
+
     // ===== Paystack subscriptions =====
     function subscribeWithPlan(planCode, label) {
       const email = requireEmail(); if (!email) return;
@@ -373,7 +391,7 @@
           })
           .then(r => r.json())
           .then(r => {
-            if (r.status === "success") {
+            if (r.status === "success" || r.status === "ok") {
               alert(label + " subscription activated!");
               localStorage.setItem("userEmail", email);
               window.location.href = NEXT_URL;
@@ -438,11 +456,11 @@
       setBtnLoading(loginSubmit, true, "Log in");
       apiLogin(email, pw)
         .then(r=>{
-          if (r.status === "ok" && r.user?.email) {
-            localStorage.setItem("userEmail", r.user.email);
+          if (authOK(r)) {
+            localStorage.setItem("userEmail", authEmail(r));
             window.location.replace(NEXT_URL);
           } else {
-            loginErr.textContent = r.message || "Invalid email or password.";
+            loginErr.textContent = r?.message || "Invalid email or password.";
           }
         })
         .catch(()=> loginErr.textContent = "Could not log in. Check your connection.")
@@ -514,19 +532,12 @@
       setTimeout(()=> signupPassword.focus(), 20);
     }
     function passwordOk(p){ return typeof p === 'string' && p.length >= 8; }
+
+    // shared free-signup call; sets cookie
     function signupFree(email, password){
-      // Shared free-signup call; sets cookie
-      apiSignupFree(email, password)
-        .then(r=>{
-          if (r.status === "success" || (r.status === "ok" && r.user?.email)) {
-            localStorage.setItem("userEmail", r.user?.email || email);
-            window.location.replace(NEXT_URL);
-          } else {
-            signupErr.textContent = r.message || "Sign up failed. Try again.";
-          }
-        })
-        .catch(()=> signupErr.textContent = "Network error. Please try again.");
+      return apiSignupFree(email, password);
     }
+
     function handleSignupSubmit(){
       signupErr.textContent = '';
       const email = signupEmailEcho.textContent.trim() || signupEmail.value.trim();
@@ -536,13 +547,13 @@
       if (!passwordOk(p1)) { signupErr.textContent = "Password must be at least 8 characters."; return; }
       if (p1 !== p2) { signupErr.textContent = "Passwords do not match."; return; }
       setBtnLoading(signupSubmit, true, "Create account");
-      apiSignupFree(email, p1)
+      signupFree(email, p1)
         .then(r=>{
-          if (r.status === "success" || (r.status === "ok" && r.user?.email)) {
-            localStorage.setItem("userEmail", r.user?.email || email);
+          if (authOK(r)) {
+            localStorage.setItem("userEmail", authEmail(r));
             window.location.replace(NEXT_URL);
           } else {
-            signupErr.textContent = r.message || "Sign up failed. Try again.";
+            signupErr.textContent = r?.message || "Sign up failed. Try again.";
           }
         })
         .catch(()=> signupErr.textContent = "Network error. Please try again.")
@@ -568,12 +579,8 @@
 
     signupGoLogin.addEventListener('click', (e)=>{ e.preventDefault(); closeSignup(); openLogin(); });
 
-    // Login toggle password
-    document.getElementById("loginTogglePw").addEventListener('click', ()=>{
-      const isPw = loginPassword.type === 'password';
-      loginPassword.type = isPw ? 'text' : 'password';
-      document.getElementById("loginTogglePw").textContent = isPw ? 'Hide' : 'Show';
-    });
+    // Open login from pricing free card link
+    document.getElementById("loginUnderFree").addEventListener('click', (e)=>{ e.preventDefault(); openLogin(); });
 
     document.getElementById("year").textContent = new Date().getFullYear();
     checkSession();
