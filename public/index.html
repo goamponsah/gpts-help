@@ -11,20 +11,36 @@
       --bg: #f8f9fa;
       --text: #212529;
       --muted: #6c757d;
+      --panel:#ffffff;
+      --border:#eeeeee;
+      --shadow: 0 16px 36px rgba(0,0,0,.08);
+      --error:#dc3545;
     }
-    body { margin:0; font-family: Inter, sans-serif; color:var(--text); background:var(--bg); }
+    *{box-sizing:border-box}
+    body { margin:0; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color:var(--text); background:var(--bg); }
+    a { color: var(--brand); text-decoration: none; }
+
     header, footer { background:#fff; padding:1rem 2rem; border-bottom:1px solid #eee; }
     .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
     h1,h2,h3 { margin:.5rem 0; }
     p { margin:.5rem 0 1rem; }
 
+    /* Header */
+    .nav { display:flex; align-items:center; justify-content:space-between; }
+    .nav .right { display:flex; gap:.5rem; }
+    .btn-nav {
+      border:1px solid var(--border); background:#fff; color:var(--brand);
+      padding:.55rem .9rem; border-radius:10px; cursor:pointer; font-weight:600;
+    }
+    .btn-nav.primary { background:var(--brand); color:#fff; border-color:transparent; }
+
     /* Hero */
     .hero { background:linear-gradient(135deg, var(--brand), #9c6fff); color:#fff; text-align:center; padding:5rem 2rem; }
     .hero h1 { font-size:clamp(2rem,4vw,3rem); margin-bottom:1rem; }
-    .hero p { font-size:1.25rem; max-width:700px; margin:0 auto 2rem; opacity:.95; }
+    .hero p { font-size:1.1rem; max-width:720px; margin:0 auto 2rem; opacity:.98; }
     .btn { padding:.8rem 1.4rem; font-weight:700; border:none; border-radius:8px; cursor:pointer; }
     .btn-primary { background:var(--accent); color:#000; }
-    .btn-secondary { background:#fff; color:var(--brand); }
+    .btn-secondary { background:#fff; color:var(--brand); border:1px solid var(--border); }
 
     /* Features */
     .features { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:1.5rem; margin-top:2rem; }
@@ -32,7 +48,7 @@
 
     /* Pricing */
     .plans { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1.5rem; margin-top:2rem; }
-    .plan { background:#fff; border:1px solid #eee; border-radius:14px; padding:2rem; position:relative; text-align:center; }
+    .plan { background:#fff; border:1px solid #eee; border-radius:14px; padding:2rem; position:relative; text-align:center; box-shadow:var(--shadow); }
     .plan h3 { margin-bottom:.5rem; }
     .price { font-size:2rem; color:var(--brand); margin:.5rem 0 1rem; }
     .plan ul { list-style:none; padding:0; margin:1rem 0; color:var(--muted); text-align:left; }
@@ -43,13 +59,56 @@
     .testimonials { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1.5rem; margin-top:2rem; }
     .testimonial { background:#fff; border:1px solid #eee; border-radius:12px; padding:1.5rem; font-style:italic; }
 
-    footer { text-align:center; padding:2rem; color:var(--muted); margin-top:3rem; }
+    footer { text-align:center; padding:2rem; color:var(--muted); margin-top:3rem; border-top:1px solid #eee; }
+
+    /* Log in Modal */
+    .overlay {
+      position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+      background:rgba(0,0,0,.45); z-index:1000;
+    }
+    .overlay.open { display:flex; }
+    .modal {
+      width:min(480px,92vw); background:var(--panel); border:1px solid var(--border);
+      border-radius:14px; padding:18px; box-shadow:var(--shadow);
+    }
+    .modal h3 { margin:.25rem 0 4px; font-size:1.15rem; }
+    .modal p.sub { color:var(--muted); margin:0 0 12px; font-size:.95rem; }
+    .row { display:flex; gap:.6rem; }
+    label { display:block; font-size:.9rem; color:var(--muted); margin:.35rem 0 .35rem; }
+    input[type="email"], input[type="password"], input[type="text"] {
+      width:100%; padding:.75rem .9rem; border:1px solid #ddd; border-radius:10px; font-size:1rem;
+    }
+    .modal .btn { width:100%; }
+    .close-x { border:0; background:transparent; color:#999; font-size:20px; cursor:pointer; float:right; }
+    .err { color:var(--error); font-size:.9rem; min-height:18px; margin-top:6px; }
+    .muted { color: var(--muted); font-size:.9rem; margin-top:8px; }
+
+    .step { display:none; }
+    .step.active { display:block; }
+
+    .inline { display:flex; align-items:center; gap:.5rem; }
+    .link { color:var(--brand); background:none; border:0; padding:0; cursor:pointer; font-weight:600; }
+
+    /* Spinner */
+    .spinner {
+      width:16px; height:16px; border:2px solid #fff; border-right-color:transparent;
+      border-radius:50%; display:inline-block; vertical-align:-3px; animation:spin .7s linear infinite;
+      margin-right:.35rem;
+    }
+    .spinner.dark { border-color:#555; border-right-color:transparent; }
+    @keyframes spin { to { transform:rotate(360deg); } }
   </style>
 </head>
 <body>
   <!-- Header -->
   <header>
-    <div class="container"><strong>GPTs Help</strong></div>
+    <div class="container nav">
+      <strong>GPTs Help</strong>
+      <div class="right">
+        <button id="openChatBtn" class="btn-nav" style="display:none" onclick="goToChat()">Open Chat</button>
+        <button id="loginBtn" class="btn-nav primary">Log in</button>
+      </div>
+    </div>
   </header>
 
   <!-- Hero -->
@@ -57,6 +116,7 @@
     <h1>Master Math & Create Content with AI</h1>
     <p>Get step-by-step math tutoring and professional AI content tools – all in one subscription. Start free today.</p>
     <button class="btn btn-primary" onclick="document.getElementById('pricing').scrollIntoView({behavior:'smooth'})">Start Free Trial</button>
+    <div class="muted" style="margin-top:.8rem;">Already have an account? <a href="#" id="loginLink">Log in</a></div>
   </section>
 
   <!-- Features -->
@@ -87,6 +147,7 @@
           <li>Limited content exports</li>
         </ul>
         <button class="btn btn-secondary" onclick="goFree()">Sign Up Free</button>
+        <div class="muted" style="margin-top:8px;">Already have an account? <a href="#" id="loginUnderFree">Log in</a></div>
       </div>
 
       <!-- Plus Monthly -->
@@ -130,6 +191,51 @@
     &copy; <span id="year"></span> GPTs Help. All rights reserved.
   </footer>
 
+  <!-- Log in Modal (Two-step like ChatGPT) -->
+  <div class="overlay" id="loginOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+      <button class="close-x" id="loginClose" aria-label="Close">×</button>
+      <h3 id="loginTitle">Log in to GPTs Help</h3>
+      <p class="sub">Use your account email and password.</p>
+
+      <!-- Step 1: Email -->
+      <div id="stepEmail" class="step active">
+        <label for="loginEmail">Email</label>
+        <input id="loginEmail" type="email" placeholder="you@example.com" autocomplete="email" />
+        <div class="err" id="emailErr"></div>
+        <button class="btn btn-primary" id="emailContinueBtn" type="button">
+          Continue
+        </button>
+        <div class="muted" style="margin-top:10px;">Don’t have an account? Enter your email under Pricing and pick a plan.</div>
+      </div>
+
+      <!-- Step 2: Password -->
+      <div id="stepPassword" class="step">
+        <label>Email</label>
+        <div class="inline" style="justify-content:space-between;">
+          <div class="inline">
+            <span id="loginEmailEcho" style="font-weight:600;"></span>
+          </div>
+          <button class="link" id="changeEmailBtn" type="button">Change</button>
+        </div>
+
+        <label for="loginPassword" style="margin-top:8px;">Password</label>
+        <div class="inline" style="width:100%;">
+          <input id="loginPassword" type="password" placeholder="••••••••" autocomplete="current-password" style="flex:1;" />
+          <button class="link" id="togglePwBtn" type="button" aria-label="Show password">Show</button>
+        </div>
+
+        <div class="err" id="loginErr"></div>
+        <button class="btn btn-primary" id="loginSubmitBtn" type="button">
+          Log in
+        </button>
+        <div class="muted" style="margin-top:10px;">
+          <a href="/reset-password" id="forgotLink">Forgot password?</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Paystack -->
   <script src="https://js.paystack.co/v2/inline.js"></script>
   <script>
@@ -139,11 +245,18 @@
     const PLAN_CODE_PLUS_MONTHLY = "PLN_t8tii7sryvwsxxf"; 
     const PLAN_CODE_PRO_ANNUAL  = "PLN_3gkd3qo1pv8rylt";
 
+    // Optional next redirect (e.g., /index.html?next=/chat.html)
+    const urlParams = new URLSearchParams(location.search);
+    const NEXT_URL = urlParams.get("next") || "/chat.html";
+
+    // Load Paystack public key
     let PAYSTACK_PUBLIC_KEY = null;
     async function loadConfig() {
-      const res = await fetch("/api/public-config");
-      const cfg = await res.json();
-      PAYSTACK_PUBLIC_KEY = cfg.paystackPublicKey;
+      try {
+        const res = await fetch("/api/public-config");
+        const cfg = await res.json();
+        PAYSTACK_PUBLIC_KEY = cfg.paystackPublicKey || null;
+      } catch {}
     }
     loadConfig();
 
@@ -152,6 +265,8 @@
       if (!email) { alert("Enter your email"); return null; }
       return email;
     }
+
+    function goToChat(){ window.location.assign("/chat.html"); }
 
     // Free signup
     function goFree() {
@@ -165,11 +280,13 @@
       .then(r => r.json())
       .then(res => {
         if (res.status === "success") {
-          setTimeout(()=>window.location.assign("/chat.html"), 150);
+          localStorage.setItem("userEmail", email);
+          setTimeout(()=>window.location.assign(NEXT_URL), 150);
         } else {
-          alert("Error: " + res.message);
+          alert("Error: " + (res.message || "Signup failed"));
         }
-      });
+      })
+      .catch(()=> alert("Network error. Please try again."));
     }
 
     // Paid subscriptions
@@ -195,20 +312,162 @@
           .then(r => {
             if (r.status === "success") {
               alert(label + " subscription activated!");
-              window.location.href = "/chat.html";
+              localStorage.setItem("userEmail", email);
+              window.location.href = NEXT_URL;
             } else {
               alert("Verification failed. Ref: " + response.reference);
             }
-          });
+          })
+          .catch(()=> alert("Verification request failed."));
         },
         onCancel: () => alert("Payment cancelled.")
       });
     }
-
     function subscribePlusMonthly() { subscribeWithPlan(PLAN_CODE_PLUS_MONTHLY, "Plus Monthly"); }
     function subscribeProAnnual() { subscribeWithPlan(PLAN_CODE_PRO_ANNUAL, "Pro Annual"); }
 
+    // Session check: if logged in, show "Open Chat"
+    async function checkSession() {
+      try {
+        const me = await fetch("/api/me", { credentials: "include" }).then(r=>r.json());
+        if (me.status === "ok" && me.user?.email) {
+          document.getElementById("openChatBtn").style.display = "inline-block";
+          document.getElementById("loginBtn").textContent = "Switch account";
+        }
+      } catch {}
+    }
+
+    // =============== Log in Modal Logic (Two-step) ===============
+    const overlay = document.getElementById("loginOverlay");
+    const btnLogin = document.getElementById("loginBtn");
+    const loginLink = document.getElementById("loginLink");
+    const loginUnderFree = document.getElementById("loginUnderFree");
+    const closeBtn = document.getElementById("loginClose");
+
+    const stepEmail = document.getElementById("stepEmail");
+    const stepPassword = document.getElementById("stepPassword");
+    const emailInput = document.getElementById("loginEmail");
+    const emailErr = document.getElementById("emailErr");
+    const emailContinueBtn = document.getElementById("emailContinueBtn");
+
+    const loginEmailEcho = document.getElementById("loginEmailEcho");
+    const changeEmailBtn = document.getElementById("changeEmailBtn");
+    const pwInput = document.getElementById("loginPassword");
+    const togglePwBtn = document.getElementById("togglePwBtn");
+    const loginErr = document.getElementById("loginErr");
+    const loginSubmitBtn = document.getElementById("loginSubmitBtn");
+
+    function openLogin(){
+      emailErr.textContent = '';
+      loginErr.textContent = '';
+      overlay.classList.add("open");
+      overlay.setAttribute("aria-hidden","false");
+      // default to email step
+      stepEmail.classList.add("active");
+      stepPassword.classList.remove("active");
+      setTimeout(()=> emailInput.focus(), 20);
+    }
+    function closeLogin(){
+      overlay.classList.remove("open");
+      overlay.setAttribute("aria-hidden","true");
+    }
+
+    function isValidEmail(e){
+      return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+    }
+
+    function setBtnLoading(btn, loading, labelWhenDone){
+      if (loading) {
+        btn.disabled = true;
+        btn.dataset.prev = btn.textContent;
+        btn.innerHTML = '<span class="spinner"></span> ' + btn.textContent;
+      } else {
+        btn.disabled = false;
+        btn.innerHTML = labelWhenDone || btn.dataset.prev || 'Continue';
+      }
+    }
+
+    // Step 1: Email -> Continue
+    async function handleEmailContinue(){
+      const email = emailInput.value.trim();
+      emailErr.textContent = '';
+      if (!isValidEmail(email)) {
+        emailErr.textContent = "Enter a valid email.";
+        emailInput.focus();
+        return;
+      }
+      // Move to password step
+      loginEmailEcho.textContent = email;
+      stepEmail.classList.remove("active");
+      stepPassword.classList.add("active");
+      setTimeout(()=> pwInput.focus(), 20);
+    }
+
+    // Password visibility toggle
+    togglePwBtn.addEventListener('click', ()=>{
+      const isPw = pwInput.type === 'password';
+      pwInput.type = isPw ? 'text' : 'password';
+      togglePwBtn.textContent = isPw ? 'Hide' : 'Show';
+      togglePwBtn.setAttribute('aria-label', isPw ? 'Hide password' : 'Show password');
+      pwInput.focus();
+    });
+
+    // Change email (back to step 1)
+    changeEmailBtn.addEventListener('click', ()=>{
+      stepPassword.classList.remove("active");
+      stepEmail.classList.add("active");
+      setTimeout(()=> emailInput.focus(), 20);
+    });
+
+    // Final submit
+    async function handleLoginSubmit(){
+      loginErr.textContent = '';
+      const email = loginEmailEcho.textContent.trim() || emailInput.value.trim();
+      const password = pwInput.value;
+      if (!isValidEmail(email)) { changeEmailBtn.click(); emailErr.textContent = "Enter a valid email."; return; }
+      if (!password) { loginErr.textContent = "Enter your password."; pwInput.focus(); return; }
+
+      setBtnLoading(loginSubmitBtn, true, 'Log in');
+      try{
+        const r = await fetch("/api/login", {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          credentials:"include",
+          body: JSON.stringify({ email, password })
+        }).then(x=>x.json());
+
+        if (r.status === "ok" && r.user?.email) {
+          localStorage.setItem("userEmail", r.user.email);
+          window.location.replace(NEXT_URL);
+          return;
+        } else {
+          loginErr.textContent = r.message || "Invalid email or password.";
+        }
+      }catch{
+        loginErr.textContent = "Could not log in. Check your connection.";
+      }finally{
+        setBtnLoading(loginSubmitBtn, false, 'Log in');
+      }
+    }
+
+    // Wire up modal buttons
+    btnLogin.addEventListener('click', openLogin);
+    loginLink.addEventListener('click', (e)=>{ e.preventDefault(); openLogin(); });
+    loginUnderFree.addEventListener('click', (e)=>{ e.preventDefault(); openLogin(); });
+    closeBtn.addEventListener('click', closeLogin);
+    overlay.addEventListener('click', (e)=>{ if (e.target === overlay) closeLogin(); });
+    document.addEventListener('keydown', (e)=>{ if(e.key === "Escape" && overlay.classList.contains("open")) closeLogin(); });
+
+    emailContinueBtn.addEventListener('click', handleEmailContinue);
+    emailInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') handleEmailContinue(); });
+
+    loginSubmitBtn.addEventListener('click', handleLoginSubmit);
+    pwInput.addEventListener('keydown', (e)=>{ if(e.key === 'Enter') handleLoginSubmit(); });
+
+    // =============== End Log in Modal Logic ===============
+
     document.getElementById("year").textContent = new Date().getFullYear();
+    checkSession();
   </script>
 </body>
 </html>
