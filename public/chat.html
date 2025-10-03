@@ -45,17 +45,26 @@
     .new-chat{ background:var(--panel); color:var(--text); border:1px solid var(--border);
       border-radius:10px; padding:8px 10px; cursor:pointer; font-size:13px }
     .side-list{ overflow-y:auto; padding:10px 8px 10px 12px; min-height:0 }
-    .conv{ position:relative; display:flex; align-items:center; gap:8px; padding:8px 10px;
+    .conv{
+      position:relative; display:flex; align-items:center; gap:8px; padding:8px 10px;
       border-radius:10px; border:1px solid transparent; font-size:14px; margin-bottom:6px;
-      white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:pointer }
+      white-space:nowrap; /* removed overflow hidden so menu can overflow */
+      overflow:visible;
+      cursor:pointer
+    }
     .conv:hover{ background:#151824; border-color:#1b1f2b }
     .conv.active{ background:#171b28; border-color:#2a3352 }
     .conv-title{ flex:1; overflow:hidden; text-overflow:ellipsis }
     .conv-menu-btn{ opacity:0; transition:opacity .15s; border:0; background:transparent; color:var(--muted); cursor:pointer; padding:2px 4px; border-radius:6px }
     .conv:hover .conv-menu-btn{ opacity:1 }
-    .menu{ position:absolute; right:8px; top:32px; background:var(--panel); border:1px solid var(--border); border-radius:10px; overflow:hidden; display:none; z-index:10 }
+    .menu{
+      position:absolute; right:8px; top:32px;
+      background:var(--panel); border:1px solid var(--border); border-radius:10px;
+      overflow:hidden; display:none; z-index:10; min-width:180px;
+      box-shadow:0 10px 24px rgba(0,0,0,.35)
+    }
     .menu.open{ display:block }
-    .menu button{ display:block; width:180px; text-align:left; background:transparent; color:var(--text); border:0; padding:10px 12px; cursor:pointer; font-size:14px }
+    .menu button{ display:block; width:100%; text-align:left; background:transparent; color:var(--text); border:0; padding:10px 12px; cursor:pointer; font-size:14px }
     .menu button:hover{ background:#1a1d2a }
     .side-bottom{ position:sticky; bottom:0; padding:10px; border-top:1px solid var(--border); background:#0f1117 }
     .logout{ width:100%; background:transparent; border:1px solid var(--border); color:var(--text); padding:9px 10px; border-radius:10px; cursor:pointer; font-size:13px }
@@ -213,11 +222,8 @@
       createConv:(email,title)=>fetch('/api/conversations',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({userId:email,title})}).then(r=>r.json()),
       renameConv:(email,id,title)=>fetch(`/api/conversations/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({userId:email,title})}).then(r=>r.json()),
       deleteConv:(email,id)=>fetch(`/api/conversations/${id}`,{method:'DELETE',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({userId:email})}).then(r=>r.json()),
-      /* New: archive/unarchive via PATCH. Backend should set archived=true */
       archiveConv:(email,id,archived=true)=>fetch(`/api/conversations/${id}`,{
-        method:'PATCH',
-        headers:{'Content-Type':'application/json'},
-        credentials:'include',
+        method:'PATCH', headers:{'Content-Type':'application/json'}, credentials:'include',
         body:JSON.stringify({userId:email, archived})
       }).then(r=>r.json()),
       getConvMsgs:(email,id)=>fetch(`/api/conversations/${id}?userId=${encodeURIComponent(email)}`, { credentials:'include' }).then(r=>r.json()),
@@ -357,7 +363,7 @@
       const list=await api.listConvs(userEmail);
       convListEl.innerHTML='';
       list
-        .filter(c => !c.archived) /* hide archived if backend provides the flag */
+        .filter(c => !c.archived)
         .forEach(c=>{
           const row=el('div',{class:`conv ${c.id===selectId?'active':''}`});
           const title=el('div',{class:'conv-title'},c.title);
@@ -387,7 +393,6 @@
             input.addEventListener('blur',commit);
           });
 
-          /* New: Archive */
           bArchive.addEventListener('click', async e=>{
             e.stopPropagation(); menu.classList.remove('open');
             try{
@@ -415,7 +420,8 @@
 
           menuBtn.addEventListener('click',e=>{
             e.stopPropagation();
-            document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'));
+            // close others, then toggle this one
+            document.querySelectorAll('.menu.open').forEach(m=>{ if(m!==menu) m.classList.remove('open'); });
             menu.classList.toggle('open');
           });
 
@@ -430,7 +436,12 @@
           convListEl.appendChild(row);
         });
 
-      document.addEventListener('click',()=>{ document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open')); },{capture:true});
+      // Close menus when clicking anywhere else (bubble phase, not capture)
+      document.addEventListener('click', (e)=>{
+        if (!e.target.closest('.menu') && !e.target.closest('.conv-menu-btn')) {
+          document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'));
+        }
+      }, {capture:false});
     }
 
     async function showConversation(id){
@@ -561,4 +572,3 @@
   </script>
 </body>
 </html>
-
