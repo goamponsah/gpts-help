@@ -68,11 +68,19 @@
     .msg{
       max-width:900px; margin:0 auto 12px auto; padding:12px 14px;
       border:1px solid var(--border); border-radius:12px; background:var(--panel);
-      white-space:pre-wrap; line-height:1.55; font-size:15px;
+      line-height:1.55; font-size:15px;
+      white-space:normal; /* allow rendered HTML to wrap */
     }
     .msg.user{ background:#11131a }
     .msg small{ display:block; color:var(--muted); margin-bottom:6px }
     .thumb{ display:block; max-width:240px; height:auto; border-radius:8px; margin-top:8px; border:1px solid var(--border) }
+
+    /* Nicer markdown defaults */
+    .msg p{ margin:.4rem 0; }
+    .msg h1,.msg h2,.msg h3{ margin:.6rem 0 .4rem; }
+    .msg ul,.msg ol{ padding-left:1.2rem; margin:.4rem 0; }
+    .msg code{ background:#0b0d12; padding:2px 6px; border-radius:6px; border:1px solid var(--border); }
+    .msg pre{ background:#0b0d12; padding:10px; border-radius:10px; border:1px solid var(--border); overflow:auto; }
 
     /* Composer — compact, ChatGPT-like */
     .composer{
@@ -113,6 +121,10 @@
     .icon-btn.primary{ background:var(--brand); color:#fff; border-color:transparent }
     .icon-btn:disabled{ opacity:.6; cursor:not-allowed }
   </style>
+
+  <!-- Markdown renderer + sanitizer -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 </head>
 <body>
   <div class="app">
@@ -203,7 +215,6 @@
           window.location.replace('/index.html'); 
           return false;
         }
-        // Persist to localStorage only as a convenience
         userEmail = me.user.email;
         localStorage.setItem('userEmail', userEmail);
 
@@ -231,12 +242,32 @@
       children.forEach(c=> typeof c==='string' ? e.appendChild(document.createTextNode(c)) : c && e.appendChild(c));
       return e;
     }
-    function renderMessage(role,text,when=''){
-      const m=el('div',{class:`msg ${role}`});
-      if(when) m.appendChild(el('small',{},when));
-      m.appendChild(document.createTextNode(text));
+
+    // Markdown-rendered assistant messages
+    function renderMessage(role, text, when=''){
+      const m = document.createElement('div');
+      m.className = `msg ${role}`;
+
+      if (when) {
+        const small = document.createElement('small');
+        small.textContent = when;
+        m.appendChild(small);
+      }
+
+      if (role === 'assistant') {
+        // Render markdown -> HTML and sanitize (ChatGPT-like)
+        const html = DOMPurify.sanitize(marked.parse(text || '', { breaks: true }));
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = html;
+        m.appendChild(wrapper);
+      } else {
+        // User messages stay as plain text
+        m.appendChild(document.createTextNode(text || ''));
+      }
+
       messagesEl.appendChild(m);
     }
+
     function renderImageMessage(caption,url){
       const m=el('div',{class:'msg user'});
       m.appendChild(document.createTextNode(caption||'📷 Photo uploaded'));
