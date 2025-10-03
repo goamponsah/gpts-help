@@ -69,7 +69,7 @@
       max-width:900px; margin:0 auto 12px auto; padding:12px 14px;
       border:1px solid var(--border); border-radius:12px; background:var(--panel);
       line-height:1.55; font-size:15px;
-      white-space:normal; /* allow rendered HTML to wrap */
+      white-space:normal;
     }
     .msg.user{ background:#11131a }
     .msg small{ display:block; color:var(--muted); margin-bottom:6px }
@@ -217,13 +217,6 @@
         }
         userEmail = me.user.email;
         localStorage.setItem('userEmail', userEmail);
-
-        // If you want to restrict chat to paying users only, uncomment:
-        // if (!['PLUS','PRO'].includes((me.user.plan||'').toUpperCase())) {
-        //   window.location.replace('/index.html');
-        //   return false;
-        // }
-
         return true;
       } catch {
         window.location.replace('/index.html');
@@ -243,6 +236,34 @@
       return e;
     }
 
+    // Clean text and make a short, neat title (ChatGPT-like)
+    function makeTitleFrom(text, prefix="") {
+      const t0 = (text || "").replace(/\s+/g, " ").trim();
+      if (!t0) return prefix ? `${prefix}` : "New chat";
+
+      // strip basic markdown and code fences/backticks
+      let t = t0
+        .replace(/^#{1,6}\s*/gm, "")
+        .replace(/\*\*(.*?)\*\*/g, "$1")
+        .replace(/\*(.*?)\*/g, "$1")
+        .replace(/`{1,3}([\s\S]*?)`{1,3}/g, "$1")
+        .replace(/\[(.*?)\]\((.*?)\)/g, "$1")
+        .replace(/!\[(.*?)\]\((.*?)\)/g, "$1");
+
+      // take first sentence/line-ish
+      t = t.split(/[\n\.!?]/)[0].trim();
+      if (!t) t = t0;
+
+      // uppercase first letter
+      t = t.charAt(0).toUpperCase() + t.slice(1);
+
+      // length clamp ~50 chars
+      const MAX = 50;
+      if (t.length > MAX) t = t.slice(0, MAX - 1).trim() + "…";
+
+      return prefix ? `${prefix} ${t}` : t;
+    }
+
     // Markdown-rendered assistant messages
     function renderMessage(role, text, when=''){
       const m = document.createElement('div');
@@ -255,13 +276,11 @@
       }
 
       if (role === 'assistant') {
-        // Render markdown -> HTML and sanitize (ChatGPT-like)
         const html = DOMPurify.sanitize(marked.parse(text || '', { breaks: true }));
         const wrapper = document.createElement('div');
         wrapper.innerHTML = html;
         m.appendChild(wrapper);
       } else {
-        // User messages stay as plain text
         m.appendChild(document.createTextNode(text || ''));
       }
 
@@ -367,11 +386,20 @@
       sendBtn.disabled=true; photoBtn.disabled=true; promptEl.disabled=true; statusEl.textContent='Thinking…';
       try{
         const payload={ message:text, gptType:gptTypeEl.value||'math', userId:userEmail };
+        const isNew = !currentConvId;
         if(currentConvId) payload.conversationId=currentConvId;
+
         const res=await api.chat(payload);
 
-        if(!currentConvId && res.conversationId){ currentConvId=res.conversationId; await loadConversations(currentConvId); }
-        else { await loadConversations(currentConvId||undefined); }
+        // If a new conversation was created, capture id and auto-name it
+        if(isNew && res.conversationId){
+          currentConvId = res.conversationId;
+          const autoTitle = makeTitleFrom(text);
+          try { await api.renameConv(userEmail, currentConvId, autoTitle); } catch {}
+          await loadConversations(currentConvId);
+        } else {
+          await loadConversations(currentConvId||undefined);
+        }
 
         renderMessage('assistant', res.response||'');
         scrollToBottom();
@@ -407,10 +435,19 @@
         if(note) fd.append('attempt', note);
         if(currentConvId) fd.append('conversationId', currentConvId);
 
+        const wasNew = !currentConvId;
+
         const res=await api.photoSolve(fd);
 
-        if(!currentConvId && res.conversationId){ currentConvId=res.conversationId; await loadConversations(currentConvId); }
-        else { await loadConversations(currentConvId||undefined); }
+        // If a new conversation was created by photo-solve, auto-name it
+        if(wasNew && res.conversationId){
+          currentConvId = res.conversationId;
+          const autoTitle = makeTitleFrom(note || 'Photo', 'Photo:');
+          try { await api.renameConv(userEmail, currentConvId, autoTitle); } catch {}
+          await loadConversations(currentConvId);
+        } else {
+          await loadConversations(currentConvId||undefined);
+        }
 
         renderMessage('assistant', res.response||'No response text returned.');
         scrollToBottom();
