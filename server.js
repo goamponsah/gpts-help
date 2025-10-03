@@ -1,8 +1,7 @@
 // server.js (ESM, Node 18+)
 // package.json: { "type": "module" }
 // npm i express cookie-parser cors jsonwebtoken multer pg
-// ENV required: DATABASE_URL, JWT_SECRET, OPENAI_API_KEY, PAYSTACK_PUBLIC_KEY, PAYSTACK_SECRET_KEY
-// Optional: PLAN_CODE_PLUS_MONTHLY, PLAN_CODE_PRO_ANNUAL, OPENAI_MODEL, PAYSTACK_CURRENCY, FRONTEND_ORIGIN
+// Optionally for email: RESEND_API_KEY, MAIL_FROM, CANONICAL_HOST
 
 import express from "express";
 import cookieParser from "cookie-parser";
@@ -36,7 +35,10 @@ const {
   PLAN_CODE_PRO_ANNUAL,
   PAYSTACK_CURRENCY = "GHS",
   FRONTEND_ORIGIN,
-  NODE_ENV
+  NODE_ENV,
+  RESEND_API_KEY,
+  MAIL_FROM = "GPTs Help <no-reply@example.com>",
+  CANONICAL_HOST
 } = process.env;
 
 if (!DATABASE_URL) console.error("[ERROR] DATABASE_URL not set");
@@ -83,6 +85,7 @@ async function ensureSchema() {
 
     create table if not exists conversations (
       id            bigserial primary key,
+      user_id       bigint,
       title         text not null,
       archived      boolean not null default false,
       created_at    timestamptz not null default now(),
@@ -91,6 +94,7 @@ async function ensureSchema() {
 
     create table if not exists messages (
       id            bigserial primary key,
+      conversation_id bigint,
       role          text,
       content       text,
       created_at    timestamptz not null default now()
@@ -124,7 +128,7 @@ async function ensureSchema() {
     );
   `);
 
-  // 2) Add any missing columns on legacy tables (including users.id via a dedicated block)
+  // 2) Add any missing columns on legacy tables
   await pool.query(`
     alter table if exists conversations
       add column if not exists user_id    bigint,
@@ -153,7 +157,7 @@ async function ensureSchema() {
       add column if not exists created_at timestamptz not null default now();
   `);
 
-  // 2a) Special: ensure users.id exists and is populated + unique
+  // 2a) Special: ensure users.id exists, backfilled, unique (for very old DBs)
   await pool.query(`
     DO $$
     BEGIN
@@ -161,26 +165,20 @@ async function ensureSchema() {
         SELECT 1 FROM information_schema.columns
          WHERE table_name = 'users' AND column_name = 'id'
       ) THEN
-        -- Create sequence (safe if already created elsewhere)
         CREATE SEQUENCE IF NOT EXISTS users_id_seq;
-        -- Add id column and default
         ALTER TABLE users ADD COLUMN id bigint;
         ALTER TABLE users ALTER COLUMN id SET DEFAULT nextval('users_id_seq'::regclass);
-        -- Backfill existing rows
         UPDATE users SET id = nextval('users_id_seq'::regclass) WHERE id IS NULL;
       END IF;
     END $$;
 
     DO $$
     BEGIN
-      -- Ensure a unique constraint on id, so FKs can reference users(id)
       ALTER TABLE users ADD CONSTRAINT users_id_key UNIQUE (id);
-    EXCEPTION WHEN duplicate_object THEN
-      NULL;
-    END $$;
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
   `);
 
-  // 3) Add foreign keys idempotently
+  // 3) FKs
   await pool.query(`
     DO $$ BEGIN
       ALTER TABLE conversations
@@ -207,14 +205,12 @@ async function ensureSchema() {
     EXCEPTION WHEN duplicate_object THEN NULL; END $$;
   `);
 
-  // 4) Create indexes
+  // 4) Indexes
   await pool.query(`
     create index if not exists conversations_user_idx
       on conversations(user_id, created_at desc);
-
     create index if not exists messages_conv_idx
       on messages(conversation_id, id);
-
     create index if not exists password_resets_token_idx
       on password_resets(token_hash);
   `);
@@ -261,6 +257,7 @@ async function verifyPassword(pw, salt, hash) {
 // ---------- Misc helpers ----------
 function sha256Hex(str){ return crypto.createHash('sha256').update(str).digest('hex'); }
 function absoluteBaseUrl(req){
+  if (CANONICAL_HOST) return CANONICAL_HOST.replace(/\/+$/,'');
   const proto = req.get('x-forwarded-proto') || req.protocol;
   const host  = req.get('x-forwarded-host') || req.get('host');
   return `${proto}://${host}`;
@@ -299,6 +296,34 @@ async function openaiChat(messages) {
   if (!r.ok) throw new Error(`OpenAI ${r.status}: ${await r.text()}`);
   const data = await r.json();
   return data?.choices?.[0]?.message?.content || "";
+}
+
+// ---------- Email (Resend) ----------
+async function sendEmail({ to, subject, html, text }) {
+  if (!RESEND_API_KEY) {
+    console.warn("[WARN] RESEND_API_KEY not set — email NOT sent.");
+    return { sent: false };
+    // For debugging you can console.log({ to, subject, html });
+  }
+  const r = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: MAIL_FROM,
+      to: [to],
+      subject,
+      html,
+      text
+    })
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(`Resend error ${r.status}: ${t}`);
+  }
+  return { sent: true };
 }
 
 // ---------- Health / Config ----------
@@ -368,7 +393,7 @@ app.post("/api/reset/request", async (req, res) => {
     // Always return OK to avoid user enumeration
     if (!email || !/^\S+@\S+\.\S+$/.test(email)) return res.json({ status:"ok" });
 
-    const u = await pool.query(`select id from users where email=$1`, [email]);
+    const u = await pool.query(`select id, email from users where email=$1`, [email]);
     if (!u.rowCount) return res.json({ status:"ok" });
 
     const userId = u.rows[0].id;
@@ -381,10 +406,29 @@ app.post("/api/reset/request", async (req, res) => {
       [userId, tokenHash, expires]
     );
 
-    const link = `${absoluteBaseUrl(req)}/reset-password?t=${token}`;
+    const base = CANONICAL_HOST || absoluteBaseUrl(req);
+    const link = `${base}/reset-password?t=${token}`;
 
-    // TODO: email 'link' via provider; return dev link for now
-    res.json({ status:"ok", devLink: link });
+    // Send email (HTML + text)
+    const subject = "Reset your GPTs Help password";
+    const text = `Hi,\n\nClick the link below to reset your password:\n${link}\n\nIf you didn’t request this, you can ignore this email.\n`;
+    const html = `
+      <div style="font-family:system-ui,Segoe UI,Roboto,Arial">
+        <p>Click the button below to reset your password:</p>
+        <p><a href="${link}" style="display:inline-block;padding:10px 16px;background:#6f42c1;color:#fff;border-radius:8px;text-decoration:none">Reset password</a></p>
+        <p>Or paste this link into your browser:<br>${link}</p>
+        <p style="color:#6c757d;font-size:12px">If you didn’t request this, you can ignore this email.</p>
+      </div>`.trim();
+
+    try {
+      await sendEmail({ to: email, subject, html, text });
+    } catch (mailErr) {
+      console.error("Email send failed:", mailErr);
+      // We still return OK, but log the link so you can test logs if needed.
+    }
+
+    // IMPORTANT: do NOT include devLink in response
+    res.json({ status:"ok" });
   }catch(e){
     console.error("reset/request", e);
     res.json({ status:"ok" });
@@ -441,6 +485,13 @@ app.post("/api/reset/confirm", async (req, res) => {
 });
 
 // ---------- Paystack ----------
+function mapPlanCodeToLabel(planCode) {
+  if (!planCode) return "ONE_TIME";
+  if (planCode === PLAN_CODE_PLUS_MONTHLY) return "PLUS";
+  if (planCode === PLAN_CODE_PRO_ANNUAL) return "PRO";
+  return "ONE_TIME";
+}
+
 app.post("/api/paystack/verify", async (req, res) => {
   try {
     const { reference } = req.body || {};
