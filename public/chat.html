@@ -233,6 +233,16 @@
     const newChatBtn = document.getElementById('newChatBtn');
     const logoutBtn = document.getElementById('logoutBtn');
 
+    /* --- Dynamic placeholder tied to selected assistant --- */
+    function updatePlaceholder() {
+      const name = gptTypeEl.options[gptTypeEl.selectedIndex]?.text || "Assistant";
+      promptEl.placeholder = `Message ${name}…`;
+      promptEl.setAttribute('aria-label', `Message ${name}`);
+      promptEl.setAttribute('title', `Message ${name}`);
+    }
+    gptTypeEl.addEventListener('change', updatePlaceholder);
+    updatePlaceholder(); // init once elements exist
+
     let userEmail = localStorage.getItem('userEmail') || '';
     let currentConvId = null;
 
@@ -515,6 +525,7 @@
       const p=new URLSearchParams(location.search); const fromUrl=p.get('c');
       await loadConversations(fromUrl?Number(fromUrl):null);
       if(fromUrl){ currentConvId=Number(fromUrl); await showConversation(currentConvId); }
+      updatePlaceholder(); // ensure correct placeholder on first load
       promptEl.focus(); autoresize();
     })();
   </script>
