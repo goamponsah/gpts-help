@@ -54,8 +54,6 @@ app.use(cookieParser());
 
 // ---------- Static ----------
 app.use(express.static(path.join(__dirname, "public")));
-
-// Pretty URL for reset page
 app.get("/reset-password", (_req, res) => {
   res.sendFile(path.join(__dirname, "public", "reset-password.html"));
 });
@@ -71,7 +69,7 @@ const pool = new Pool({
 
 // ---- Robust, idempotent schema setup (handles existing partial tables) ----
 async function ensureSchema() {
-  // 1) Create tables if missing (minimal columns; we add/alter next)
+  // 1) Create tables if missing
   await pool.query(`
     create table if not exists users (
       id            bigserial primary key,
@@ -155,7 +153,7 @@ async function ensureSchema() {
       add column if not exists created_at timestamptz not null default now();
   `);
 
-  // 3) Add foreign keys idempotently (safe even if duplicates)
+  // 3) Add foreign keys idempotently
   await pool.query(`
     DO $$ BEGIN
       ALTER TABLE conversations
@@ -182,7 +180,7 @@ async function ensureSchema() {
     EXCEPTION WHEN duplicate_object THEN NULL; END $$;
   `);
 
-  // 4) Create indexes after columns exist
+  // 4) Create indexes
   await pool.query(`
     create index if not exists conversations_user_idx
       on conversations(user_id, created_at desc);
@@ -416,13 +414,6 @@ app.post("/api/reset/confirm", async (req, res) => {
 });
 
 // ---------- Paystack ----------
-function mapPlanCodeToLabel(planCode) {
-  if (!planCode) return "ONE_TIME";
-  if (planCode === PLAN_CODE_PLUS_MONTHLY) return "PLUS";
-  if (planCode === PLAN_CODE_PRO_ANNUAL) return "PRO";
-  return "ONE_TIME";
-}
-
 app.post("/api/paystack/verify", async (req, res) => {
   try {
     const { reference } = req.body || {};
@@ -525,7 +516,7 @@ app.get("/api/conversations/:id", async (req, res) => {
   res.json({ id, title: conv.rows[0].title, messages: msgs.rows });
 });
 
-// ---------- Share links (public, read-only consumer uses /api/share/:token) ----------
+// ---------- Share links (public, read-only) ----------
 app.post("/api/conversations/:id/share", async (req, res) => {
   const u = await requireUser(req, res); if (!u) return;
   const id = Number(req.params.id);
