@@ -45,7 +45,7 @@
     .card { background:#fff; border:1px solid #eee; border-radius:12px; padding:1.5rem; box-shadow:0 4px 10px rgba(0,0,0,0.05); }
 
     /* Pricing */
-    .plans { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1.5rem; margin-top:2rem; }
+    .plans { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1.5rem; margin-top:1rem; }
     .plan { background:#fff; border:1px solid #eee; border-radius:14px; padding:2rem; position:relative; text-align:center; box-shadow:var(--shadow); }
     .plan h3 { margin-bottom:.5rem; }
     .price { font-size:2rem; color:var(--brand); margin:.5rem 0 1rem; }
@@ -71,12 +71,11 @@
     }
     .modal h3 { margin:.25rem 0 4px; font-size:1.15rem; }
     .modal p.sub { color:var(--muted); margin:0 0 12px; font-size:.95rem; }
-    .row { display:flex; gap:.6rem; }
     label { display:block; font-size:.9rem; color:var(--muted); margin:.35rem 0 .35rem; }
     input[type="email"], input[type="password"], input[type="text"] {
       width:100%; padding:.75rem .9rem; border:1px solid #ddd; border-radius:10px; font-size:1rem;
     }
-    .modal .btn { width:100%; }
+    .modal .btn { width:100%; margin-top:.35rem; }
     .close-x { border:0; background:transparent; color:#999; font-size:20px; cursor:pointer; float:right; }
     .err { color:var(--error); font-size:.9rem; min-height:18px; margin-top:6px; }
     .ok { color:var(--ok); font-size:.9rem; min-height:18px; margin-top:6px; }
@@ -114,7 +113,7 @@
     </div>
   </header>
 
-  <!-- Hero (no auth buttons here) -->
+  <!-- Hero -->
   <section class="hero">
     <h1>Master Math & Create Content with AI</h1>
     <p>Get step-by-step math tutoring and professional AI content tools – all in one subscription.</p>
@@ -131,11 +130,9 @@
     </div>
   </section>
 
-  <!-- Pricing (no free signup/login buttons here) -->
+  <!-- Pricing (no email field here) -->
   <section class="container" id="pricing">
     <h2>Choose Your Plan</h2>
-    <p>Enter your email to subscribe to a paid plan. Payments processed securely with Paystack.</p>
-    <input id="payerEmail" type="email" placeholder="Enter your email" style="padding:.7rem;width:300px;border-radius:8px;border:1px solid #ccc;margin:1rem 0;display:block">
 
     <div class="plans">
       <div class="plan">
@@ -188,14 +185,13 @@
     &copy; <span id="year"></span> GPTs Help. All rights reserved.
   </footer>
 
-  <!-- Log in Modal (two-step) -->
+  <!-- Log in Modal -->
   <div class="overlay" id="loginOverlay" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
       <button class="close-x" id="loginClose" aria-label="Close">×</button>
       <h3 id="loginTitle">Log in to GPTs Help</h3>
       <p class="sub">Use your account email and password.</p>
 
-      <!-- Step 1: Email -->
       <div id="loginStepEmail" class="step active">
         <label for="loginEmail">Email</label>
         <input id="loginEmail" type="email" placeholder="you@example.com" autocomplete="email" />
@@ -203,7 +199,6 @@
         <button class="btn btn-primary" id="loginEmailContinue" type="button">Continue</button>
       </div>
 
-      <!-- Step 2: Password -->
       <div id="loginStepPassword" class="step">
         <label>Email</label>
         <div class="inline" style="justify-content:space-between;">
@@ -226,14 +221,13 @@
     </div>
   </div>
 
-  <!-- Sign up Modal (two-step) -->
+  <!-- Sign up Modal -->
   <div class="overlay" id="signupOverlay" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="signupTitle">
       <button class="close-x" id="signupClose" aria-label="Close">×</button>
       <h3 id="signupTitle">Create your free account</h3>
       <p class="sub">Start with the free plan. Upgrade anytime.</p>
 
-      <!-- Step 1: Email -->
       <div id="signupStepEmail" class="step active">
         <label for="signupEmail">Email</label>
         <input id="signupEmail" type="email" placeholder="you@example.com" autocomplete="email" />
@@ -241,7 +235,6 @@
         <button class="btn btn-primary" id="signupEmailContinue" type="button">Continue</button>
       </div>
 
-      <!-- Step 2: Password -->
       <div id="signupStepPassword" class="step">
         <label>Email</label>
         <div class="inline" style="justify-content:space-between;">
@@ -292,12 +285,6 @@
     }
     loadConfig();
 
-    function requireEmail() {
-      const email = document.getElementById("payerEmail").value.trim();
-      if (!email) { alert("Enter your email"); return null; }
-      return email;
-    }
-
     function goToChat(){ window.location.assign("/chat.html"); }
 
     // ===== Shared helpers =====
@@ -334,26 +321,38 @@
       return r.json();
     }
 
-    async function checkSession() {
+    async function getSessionEmail() {
       try {
         const me = await fetch("/api/me", { credentials: "include" }).then(r=>r.json());
-        if (me.status === "ok" && me.user?.email) {
-          document.getElementById("openChatBtn").style.display = "inline-block";
-          document.getElementById("loginBtn").textContent = "Switch account";
-          document.getElementById("signupBtn").textContent = "New account";
-        }
+        if (me.status === "ok" && me.user?.email) return me.user.email;
       } catch {}
+      return null;
     }
 
-    // ===== Paystack subscriptions (paid) =====
-    function subscribeWithPlan(planCode, label) {
-      const email = requireEmail(); if (!email) return;
+    async function checkSession() {
+      const email = await getSessionEmail();
+      if (email) {
+        document.getElementById("openChatBtn").style.display = "inline-block";
+        document.getElementById("loginBtn").textContent = "Switch account";
+        document.getElementById("signupBtn").textContent = "New account";
+      }
+    }
+
+    // ===== Paystack subscriptions (use session email) =====
+    async function subscribeWithPlan(planCode, label) {
+      // Must be logged in (we removed the email field on the page)
+      const sessionEmail = await getSessionEmail();
+      if (!sessionEmail) {
+        openLogin();
+        alert("Please log in first, then subscribe.");
+        return;
+      }
       if (!PAYSTACK_PUBLIC_KEY) { alert("Payment key not loaded."); return; }
 
       const popup = new PaystackPop();
       popup.newTransaction({
         key: PAYSTACK_PUBLIC_KEY,
-        email,
+        email: sessionEmail,             // from session
         currency: "GHS",
         plan: planCode,
         reference: genRef(),
@@ -368,7 +367,7 @@
           .then(r => {
             if (r.status === "success" || r.status === "ok") {
               alert(label + " subscription activated!");
-              localStorage.setItem("userEmail", email);
+              localStorage.setItem("userEmail", r.email || sessionEmail);
               window.location.href = NEXT_URL;
             } else {
               alert("Verification failed. Ref: " + response.reference);
