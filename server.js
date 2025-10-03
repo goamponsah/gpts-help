@@ -1,12 +1,10 @@
 // server.js (Node 18+ / 22+, ESM)
-// Start with:  "type": "module"  in package.json
-// Env you should set in Railway:
-//   PAYSTACK_PUBLIC_KEY=pk_live_...
-//   PAYSTACK_SECRET_KEY=sk_live_...
-//   PLAN_CODE_PLUS_MONTHLY=PLN_t8tii7sryvwsxxf
-//   PLAN_CODE_PRO_ANNUAL=PLN_3gkd3qo1pv8rylt
-//   JWT_SECRET=some-long-random-string              (recommended)
-//   FRONTEND_ORIGIN=https://gptshelp.online        (set if FE/BE are on different origins)
+// package.json should have: "type": "module"
+// Railway ENV needed:
+//  - PAYSTACK_PUBLIC_KEY, PAYSTACK_SECRET_KEY
+//  - PLAN_CODE_PLUS_MONTHLY, PLAN_CODE_PRO_ANNUAL
+//  - OPENAI_API_KEY, OPENAI_MODEL
+//  - JWT_SECRET (recommended), FRONTEND_ORIGIN (if FE/BE split)
 
 import express from "express";
 import cookieParser from "cookie-parser";
@@ -15,6 +13,7 @@ import jwt from "jsonwebtoken";
 import crypto from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import multer from "multer";
 
 // ---------- Resolve __dirname (ESM) ----------
 const __filename = fileURLToPath(import.meta.url);
@@ -23,14 +22,23 @@ const __dirname = path.dirname(__filename);
 // ---------- App & Middleware ----------
 const app = express();
 
-// CORS: enable only if you have a separate frontend origin
+// ---- ENV
 const {
   PAYSTACK_PUBLIC_KEY,
   PAYSTACK_SECRET_KEY,
   PLAN_CODE_PLUS_MONTHLY,
   PLAN_CODE_PRO_ANNUAL,
+  OPENAI_API_KEY,
+  OPENAI_MODEL,
   FRONTEND_ORIGIN,
 } = process.env;
+
+if (!OPENAI_API_KEY) {
+  console.warn("[WARN] OPENAI_API_KEY is not set.");
+}
+if (!OPENAI_MODEL) {
+  console.warn("[WARN] OPENAI_MODEL is not set. Falling back to 'gpt-4o-mini'.");
+}
 
 if (FRONTEND_ORIGIN) {
   app.use(
@@ -41,22 +49,24 @@ if (FRONTEND_ORIGIN) {
   );
 }
 
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 
-// Serve static files from /public (index.html, chat.html, etc.)
+// Serve static site
 app.use(express.static(path.join(__dirname, "public")));
+
+// Multer for image uploads (kept in memory)
+const upload = multer({ storage: multer.memoryStorage() });
 
 // ---------- JWT Session ----------
 const JWT_SECRET =
   process.env.JWT_SECRET || crypto.randomBytes(48).toString("hex");
 
 function cookieOptions() {
-  // If front and back are on different origins, you need SameSite=None and Secure.
   const crossSite = Boolean(FRONTEND_ORIGIN);
   return {
     httpOnly: true,
-    secure: true, // Railway is HTTPS
+    secure: true,               // Railway is HTTPS
     sameSite: crossSite ? "None" : "Lax",
     path: "/",
     maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
@@ -82,7 +92,19 @@ function verifySession(req) {
   }
 }
 
-// Map Paystack plan_code to internal plan label
+// ---------- Minimal In-Memory Conversations (replace with DB later) ----------
+/*
+  conversations: Map<email, Array<{id:number, title:string, messages:Array<{role:'user'|'assistant', content:string}>}>>
+*/
+const conversations = new Map();
+let nextConvId = 1;
+
+function getUserConvs(email) {
+  if (!conversations.has(email)) conversations.set(email, []);
+  return conversations.get(email);
+}
+
+// ---------- Helpers ----------
 function mapPlanCodeToLabel(planCode) {
   if (!planCode) return "ONE_TIME";
   if (planCode === PLAN_CODE_PLUS_MONTHLY) return "PLUS";
@@ -90,12 +112,34 @@ function mapPlanCodeToLabel(planCode) {
   return "ONE_TIME";
 }
 
-// ---------- Routes ----------
+async function openaiChat(messages) {
+  const model = OPENAI_MODEL || "gpt-4o-mini";
+  const r = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature: 0.2,
+    }),
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    throw new Error(`OpenAI error ${r.status}: ${t}`);
+  }
+  const data = await r.json();
+  return data?.choices?.[0]?.message?.content || "";
+}
+
+// ---------- Core Routes ----------
 
 // Health
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
-// Public config for frontend (safe to expose PUBLIC key and plan codes)
+// Public config for frontend (safe: public key + plan codes)
 app.get("/api/public-config", (_req, res) => {
   res.json({
     paystackPublicKey: PAYSTACK_PUBLIC_KEY || null,
@@ -115,13 +159,7 @@ app.post("/api/signup-free", async (req, res) => {
         .json({ status: "error", message: "Valid email required" });
     }
 
-    // TODO: Insert/upsert into your DB here (Prisma example commented)
-    // await prisma.user.upsert({
-    //   where: { email },
-    //   update: { plan: "FREE" },
-    //   create: { email, plan: "FREE" },
-    // });
-
+    // TODO: Upsert into DB if you have one
     setSessionCookie(res, { email, plan: "FREE" });
     return res.json({ status: "success" });
   } catch (err) {
@@ -132,26 +170,25 @@ app.post("/api/signup-free", async (req, res) => {
   }
 });
 
-// Who am I: validate session cookie, return user info
+// Who am I
 app.get("/api/me", (req, res) => {
   const session = verifySession(req);
   if (!session?.email) {
     return res.status(401).json({ status: "unauthenticated" });
   }
-  // Optionally fetch from DB to get latest plan; we return cookie payload for now
   return res.json({
     status: "ok",
     user: { email: session.email, plan: session.plan || "FREE" },
   });
 });
 
-// Logout: clear session
+// Logout
 app.post("/api/logout", (_req, res) => {
   clearSessionCookie(res);
   res.json({ status: "ok" });
 });
 
-// Verify Paystack payment and set PLUS/PRO session
+// Verify Paystack transaction → set PLUS/PRO
 app.post("/api/paystack/verify", async (req, res) => {
   try {
     const { reference } = req.body || {};
@@ -163,27 +200,17 @@ app.post("/api/paystack/verify", async (req, res) => {
 
     const psRes = await fetch(
       `https://api.paystack.co/transaction/verify/${reference}`,
-      {
-        headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}` },
-      }
+      { headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}` } }
     );
     const data = await psRes.json();
 
-    // Expecting: data.status === true and data.data.status === 'success'
     if (data?.status && data?.data?.status === "success") {
       const customerEmail = data.data?.customer?.email || null;
       const planCode = data.data?.plan?.plan_code || null;
       const newPlan = mapPlanCodeToLabel(planCode);
 
-      // TODO: Persist to DB
-      // await prisma.user.upsert({
-      //   where: { email: customerEmail },
-      //   update: { plan: newPlan },
-      //   create: { email: customerEmail, plan: newPlan },
-      // });
-
+      // TODO: persist to DB
       if (customerEmail) {
-        // Set/refresh session cookie with upgraded plan
         setSessionCookie(res, { email: customerEmail, plan: newPlan });
       }
 
@@ -204,28 +231,185 @@ app.post("/api/paystack/verify", async (req, res) => {
   }
 });
 
-// (Optional) Webhook: handle charge.success / invoices / subscription events
-// IMPORTANT: Paystack webhooks require raw body to compute signature.
-// If you implement signature verification, use express.raw({ type: "*/*" }) for this route.
-// For now, we accept and 200 OK to avoid retries; add your own logic as needed.
+// (Optional) Webhook — build out later
 app.post("/api/paystack/webhook", express.raw({ type: "*/*" }), (req, res) => {
   try {
     // const signature = req.headers["x-paystack-signature"];
-    // Verify signature here if you store the raw body and compute HMAC with secret key.
-    // const event = JSON.parse(req.body.toString("utf8"));
-    // Handle event: event.event === 'charge.success', etc.
+    // Verify + handle charge.success etc.
     res.sendStatus(200);
   } catch (e) {
     console.error("webhook error:", e);
-    res.sendStatus(200); // Avoid repeated retries while you build logic
+    res.sendStatus(200);
   }
 });
 
-// ---------- Fallback to SPA (optional) ----------
-// If you want unknown routes to fall back to index.html for client-side routing:
-// app.get("*", (_req, res) => {
-//   res.sendFile(path.join(__dirname, "public", "index.html"));
-// });
+// ---------- Conversations API (minimal in-memory) ----------
+
+// List conversations
+app.get("/api/conversations", (req, res) => {
+  const { userId } = req.query;
+  if (!userId) return res.json([]);
+  const list = getUserConvs(String(userId)).map(({ id, title }) => ({
+    id,
+    title,
+  }));
+  res.json(list);
+});
+
+// Create conversation
+app.post("/api/conversations", (req, res) => {
+  const { userId, title } = req.body || {};
+  if (!userId) return res.status(400).json({ error: "userId required" });
+  const conv = { id: nextConvId++, title: (title || "New chat").trim(), messages: [] };
+  getUserConvs(String(userId)).unshift(conv); // newest first
+  res.json({ id: conv.id, title: conv.title });
+});
+
+// Rename conversation
+app.patch("/api/conversations/:id", (req, res) => {
+  const { userId, title } = req.body || {};
+  const id = Number(req.params.id);
+  if (!userId || !id) return res.status(400).json({ error: "bad request" });
+  const list = getUserConvs(String(userId));
+  const c = list.find(x => x.id === id);
+  if (!c) return res.status(404).json({ error: "not found" });
+  c.title = (title || "Untitled").trim();
+  res.json({ ok: true });
+});
+
+// Delete conversation
+app.delete("/api/conversations/:id", (req, res) => {
+  const { userId } = req.body || {};
+  const id = Number(req.params.id);
+  if (!userId || !id) return res.status(400).json({ error: "bad request" });
+  const list = getUserConvs(String(userId));
+  const idx = list.findIndex(x => x.id === id);
+  if (idx >= 0) list.splice(idx, 1);
+  res.json({ ok: true });
+});
+
+// Get messages in a conversation
+app.get("/api/conversations/:id", (req, res) => {
+  const { userId } = req.query;
+  const id = Number(req.params.id);
+  if (!userId || !id) return res.status(400).json({ error: "bad request" });
+  const list = getUserConvs(String(userId));
+  const c = list.find(x => x.id === id);
+  if (!c) return res.status(404).json({ error: "not found" });
+  res.json({ id: c.id, title: c.title, messages: c.messages });
+});
+
+// ---------- Chat & Photo Solve ----------
+
+// /api/chat: forwards to OpenAI chat completion
+app.post("/api/chat", async (req, res) => {
+  try {
+    const { message, gptType, userId, conversationId } = req.body || {};
+    if (!userId || !message) {
+      return res.status(400).json({ error: "userId and message required" });
+    }
+
+    // find or create conversation
+    const list = getUserConvs(String(userId));
+    let conv = conversationId ? list.find(c => c.id === Number(conversationId)) : null;
+    if (!conv) {
+      conv = { id: nextConvId++, title: (message.slice(0, 40) || "New chat"), messages: [] };
+      list.unshift(conv);
+    }
+
+    // build messages for OpenAI
+    const system =
+      gptType === "math"
+        ? "You are Math GPT. Solve math problems step-by-step with clear reasoning, and show workings. Be accurate and concise."
+        : "You are a helpful writing assistant. Be clear, structured, and helpful.";
+
+    const msgs = [
+      { role: "system", content: system },
+      ...conv.messages.map(m => ({ role: m.role, content: m.content })),
+      { role: "user", content: message },
+    ];
+
+    // store user message
+    conv.messages.push({ role: "user", content: message });
+
+    // call OpenAI
+    const answer = await openaiChat(msgs);
+
+    // store assistant message
+    conv.messages.push({ role: "assistant", content: answer });
+
+    res.json({ response: answer, conversationId: conv.id });
+  } catch (e) {
+    console.error("Chat error:", e);
+    res.status(500).json({ error: "Chat failed" });
+  }
+});
+
+// /api/photo-solve: accepts FormData image and uses OpenAI vision
+app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
+  try {
+    const { userId, gptType, conversationId, attempt } = req.body || {};
+    if (!userId) return res.status(400).json({ error: "userId required" });
+    if (!req.file) return res.status(400).json({ error: "image required" });
+
+    const mime = req.file.mimetype || "image/png";
+    const b64 = req.file.buffer.toString("base64");
+    const dataUrl = `data:${mime};base64,${b64}`;
+
+    // find or create conversation
+    const list = getUserConvs(String(userId));
+    let conv = conversationId ? list.find(c => c.id === Number(conversationId)) : null;
+    if (!conv) {
+      conv = { id: nextConvId++, title: "Photo solve", messages: [] };
+      list.unshift(conv);
+    }
+
+    const system =
+      gptType === "math"
+        ? "You are Math GPT. Read the problem from the image and solve it step-by-step. Explain clearly."
+        : "You are a helpful assistant. Describe and analyze the content of the image, then answer the user's request.";
+
+    const model = OPENAI_MODEL || "gpt-4o-mini";
+
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: system },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: attempt ? `Note from user: ${attempt}\nSolve:` : "Solve this problem step-by-step:" },
+              { type: "image_url", image_url: { url: dataUrl } },
+            ],
+          },
+        ],
+        temperature: 0.2,
+      }),
+    });
+
+    if (!r.ok) {
+      const t = await r.text();
+      throw new Error(`OpenAI vision error ${r.status}: ${t}`);
+    }
+
+    const data = await r.json();
+    const answer = data?.choices?.[0]?.message?.content || "No result";
+
+    conv.messages.push({ role: "user", content: attempt ? `(Photo) ${attempt}` : "(Photo uploaded)" });
+    conv.messages.push({ role: "assistant", content: answer });
+
+    res.json({ response: answer, conversationId: conv.id });
+  } catch (e) {
+    console.error("Photo solve error:", e);
+    res.status(500).json({ error: "Photo solve failed" });
+  }
+});
 
 // ---------- Start server ----------
 const PORT = process.env.PORT || 3000;
