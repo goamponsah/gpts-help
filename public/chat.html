@@ -12,11 +12,12 @@
       --muted:#9aa3b2;
       --text:#e7eaf1;
       --brand:#5865f2;
-      --user:#1c2333;     /* user bubble */
-      --assistant:#13141a;/* assistant bubble */
+      --user:#1c2333;
+      --assistant:#13141a;
       --border:#232634;
       --vh:100vh;
       --radius:14px;
+      --warning:#f0b429;
     }
     *{box-sizing:border-box}
     html,body{height:100%;margin:0}
@@ -68,8 +69,14 @@
     .logout{ width:100%; background:transparent; border:1px solid var(--border); color:var(--text); padding:9px 10px; border-radius:10px; cursor:pointer; font-size:13px }
     .logout:hover{ background:#151824 }
 
-    /* Main area: messages (1fr) + composer (auto) */
-    .main{ display:grid; grid-template-rows:1fr auto; min-height:0 }
+    /* Main */
+    .main{ display:grid; grid-template-rows:auto 1fr auto; min-height:0 }
+    .public-banner{
+      display:none; padding:8px 12px; border-bottom:1px solid var(--border);
+      background:linear-gradient(180deg, rgba(240,180,41,.12), transparent 60%);
+      color:#fff; font-size:13px;
+    }
+    .public .public-banner{ display:block; }
     .messages{
       overflow-y:auto; padding:20px 18px; min-height:0; scroll-behavior:smooth;
       background:radial-gradient(1200px 400px at 50% -200px, rgba(88,101,242,.08), transparent 60%);
@@ -83,28 +90,23 @@
       background:var(--assistant);
     }
     .meta{ display:block; color:var(--muted); margin-bottom:6px; font-size:12px; }
-
-    /* Assistant on LEFT */
     .msg.assistant{ justify-content:flex-start; }
     .msg.assistant .bubble{ background:var(--assistant); border-top-left-radius:8px; border-top-right-radius:12px; }
     .msg.assistant .meta{ text-align:left; }
-
-    /* User on RIGHT */
     .msg.user{ justify-content:flex-end; }
     .msg.user .bubble{ background:var(--user); border-top-left-radius:12px; border-top-right-radius:8px; }
     .msg.user .meta{ text-align:right; }
     .msg.user .thumb{ margin-left:auto; }
-
     .thumb{ display:block; max-width:240px; height:auto; border-radius:8px; margin-top:8px; border:1px solid var(--border) }
 
-    /* Nicer markdown defaults */
+    /* Markdown defaults */
     .bubble p{ margin:.4rem 0; }
     .bubble h1,.bubble h2,.bubble h3{ margin:.6rem 0 .4rem; }
     .bubble ul,.bubble ol{ padding-left:1.2rem; margin:.4rem 0; }
     .bubble code{ background:#0b0d12; padding:2px 6px; border-radius:6px; border:1px solid var(--border); }
     .bubble pre{ background:#0b0d12; padding:10px; border-radius:10px; border:1px solid var(--border); overflow:auto; }
 
-    /* Composer — compact, ChatGPT-like */
+    /* Composer */
     .composer{
       border-top:1px solid var(--border);
       background:linear-gradient(#0e0f13,#0f1117);
@@ -120,13 +122,9 @@
       border-radius:9999px; padding:6px 10px; min-height:42px;
     }
     .ta-wrap{ flex:1; display:flex; flex-direction:column; }
-    .meta-row{
-      display:flex; gap:8px; align-items:center; color:var(--muted); font-size:11px; margin:2px 2px 4px 6px;
-    }
-    select{
-      background:#0f1117; color:var(--text); border:1px solid var(--border);
-      border-radius:8px; padding:4px 6px; font-size:11px;
-    }
+    .meta-row{ display:flex; gap:8px; align-items:center; color:var(--muted); font-size:11px; margin:2px 2px 4px 6px; }
+    select{ background:#0f1117; color:var(--text); border:1px solid var(--border);
+      border-radius:8px; padding:4px 6px; font-size:11px; }
     textarea{
       width:100%; resize:none; min-height:24px; max-height:120px;
       background:transparent; color:var(--text); outline:none; border:0; font:inherit; line-height:1.45; padding:0 4px 2px 6px;
@@ -154,10 +152,7 @@
     .modal-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
     .modal-title{ font-weight:600; }
     .modal-sub{ color:var(--muted); font-size:13px; margin-bottom:12px; }
-    .modal-row{
-      display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center;
-      background:#0f1117;
-    }
+    .modal-row{ display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center; }
     .modal input[type="text"]{
       width:100%; padding:12px 14px; border:1px solid var(--border); border-radius:9999px;
       background:#0e0f13; color:var(--text); font-size:14px;
@@ -167,15 +162,27 @@
       border-radius:9999px; padding:10px 14px; cursor:pointer; font-size:14px;
     }
     .btn.primary{ background:var(--brand); color:#fff; border-color:transparent; }
-    .modal-close{
-      border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:20px; line-height:1;
-    }
+    .modal-close{ border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:20px; line-height:1; }
     .toast{
       position:fixed; left:50%; bottom:22px; transform:translateX(-50%);
       padding:10px 14px; font-size:13px; background:#141722; color:#e7eaf1; border:1px solid var(--border);
       border-radius:9999px; display:none; z-index:1100;
     }
     .toast.show{ display:block; }
+
+    /* Public (read-only) state */
+    .public .conv-menu-btn,
+    .public .new-chat,
+    .public .logout,
+    .public .controls .icon-btn,
+    .public select,
+    .public textarea{ pointer-events:none; opacity:.6; }
+    .public .composer{ position:relative; }
+    .public .composer::after{
+      content:'Public preview — read-only';
+      position:absolute; right:16px; top:-24px; font-size:12px; color:#ffd;
+      opacity:.8;
+    }
   </style>
 
   <!-- Markdown renderer + sanitizer -->
@@ -199,12 +206,12 @@
     </aside>
 
     <!-- Main -->
-    <main class="main">
+    <main class="main" id="main">
+      <div class="public-banner" id="publicBanner">Anyone with this link can view this chat. You can’t send messages in public view.</div>
       <div class="messages" id="messages"></div>
 
       <form class="composer" id="composer">
         <div class="row">
-          <!-- compact pill input -->
           <div class="input">
             <div class="ta-wrap">
               <div class="meta-row">
@@ -261,6 +268,13 @@
         body:JSON.stringify({userId:email, archived})
       }).then(r=>r.json()),
       getConvMsgs:(email,id)=>fetch(`/api/conversations/${id}?userId=${encodeURIComponent(email)}`, { credentials:'include' }).then(r=>r.json()),
+      /* PUBLIC endpoints (no auth expected) */
+      getPublicConv:(token)=>fetch(`/api/public/conversation?t=${encodeURIComponent(token)}`).then(r=>r.json()),
+      /* SHARE endpoint – should return {status:'ok', url, token} */
+      createShare:(email,conversationId)=>fetch('/api/share',{
+        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
+        body:JSON.stringify({userId:email, conversationId})
+      }).then(r=>r.json()),
       chat:(payload)=>fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(payload)}).then(r=>r.json()),
       me:()=>fetch('/api/me', { credentials:'include' }).then(r=>r.json()),
       photoSolve:(fd)=>fetch('/api/photo-solve',{method:'POST',credentials:'include',body:fd}).then(r=>r.json()),
@@ -268,6 +282,7 @@
     };
 
     /* Elements */
+    const mainEl = document.getElementById('main');
     const messagesEl = document.getElementById('messages');
     const convListEl = document.getElementById('convList');
     const promptEl = document.getElementById('prompt');
@@ -279,6 +294,7 @@
     const statusEl = document.getElementById('status');
     const newChatBtn = document.getElementById('newChatBtn');
     const logoutBtn = document.getElementById('logoutBtn');
+    const publicBanner = document.getElementById('publicBanner');
 
     /* Share modal elements */
     const shareOverlay = document.getElementById('shareOverlay');
@@ -291,6 +307,12 @@
     let currentConvId = null;
     let pendingShareConvId = null;
 
+    /* URL params */
+    const p = new URLSearchParams(location.search);
+    const publicToken = p.get('t'); // if present, we are in public read-only mode
+
+    const isPublic = !!publicToken;
+
     /* --- Dynamic placeholder tied to selected assistant --- */
     function updatePlaceholder() {
       const name = gptTypeEl.options[gptTypeEl.selectedIndex]?.text || "Assistant";
@@ -300,23 +322,6 @@
     }
     gptTypeEl.addEventListener('change', updatePlaceholder);
     updatePlaceholder();
-
-    /* Auth guard (cookie-based) */
-    async function guardAuth(){
-      try{
-        const me = await api.me();
-        if (me.status !== 'ok' || !me.user?.email) {
-          window.location.replace('/index.html'); 
-          return false;
-        }
-        userEmail = me.user.email;
-        localStorage.setItem('userEmail', userEmail);
-        return true;
-      } catch {
-        window.location.replace('/index.html');
-        return false;
-      }
-    }
 
     /* Helpers */
     function el(tag, attrs={}, ...children){
@@ -329,47 +334,27 @@
       children.forEach(c=> typeof c==='string' ? e.appendChild(document.createTextNode(c)) : c && e.appendChild(c));
       return e;
     }
-
     function showToast(msg='Link copied to clipboard'){
       toastEl.textContent = msg;
       toastEl.classList.add('show');
       setTimeout(()=> toastEl.classList.remove('show'), 1500);
     }
-
-    // Clean text and make a short, neat title (ChatGPT-like)
-    function makeTitleFrom(text, prefix="") {
-      const t0 = (text || "").replace(/\s+/g, " ").trim();
-      if (!t0) return prefix ? `${prefix}` : "New chat";
-      let t = t0
-        .replace(/^#{1,6}\s*/gm, "")
-        .replace(/\*\*(.*?)\*\*/g, "$1")
-        .replace(/\*(.*?)\*/g, "$1")
-        .replace(/`{1,3}([\s\S]*?)`{1,3}/g, "$1")
-        .replace(/\[(.*?)\]\((.*?)\)/g, "$1")
-        .replace(/!\[(.*?)\]\((.*?)\)/g, "$1");
-      t = t.split(/[\n\.!?]/)[0].trim();
-      if (!t) t = t0;
-      t = t.charAt(0).toUpperCase() + t.slice(1);
-      const MAX = 50;
-      if (t.length > MAX) t = t.slice(0, MAX - 1).trim() + "…";
-      return prefix ? `${prefix} ${t}` : t;
-    }
+    function clearMessages(){ messagesEl.innerHTML=''; }
+    function scrollToBottom(){ messagesEl.scrollTop = messagesEl.scrollHeight; }
+    function now(){ return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
 
     // Markdown-rendered assistant messages
     function renderMessage(role, text, when=''){
       const row = document.createElement('div');
       row.className = `msg ${role}`;
-
       const bubble = document.createElement('div');
       bubble.className = 'bubble';
-
       if (when) {
         const small = document.createElement('small');
         small.className = 'meta';
         small.textContent = when;
         bubble.appendChild(small);
       }
-
       if (role === 'assistant') {
         const html = DOMPurify.sanitize(marked.parse(text || '', { breaks: true }));
         const wrapper = document.createElement('div');
@@ -378,7 +363,6 @@
       } else {
         bubble.appendChild(document.createTextNode(text || ''));
       }
-
       row.appendChild(bubble);
       messagesEl.appendChild(row);
     }
@@ -398,16 +382,11 @@
       messagesEl.appendChild(row);
     }
 
-    function clearMessages(){ messagesEl.innerHTML=''; }
-    function scrollToBottom(){ messagesEl.scrollTop = messagesEl.scrollHeight; }
-    function now(){ return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
-
     /* SHARE MODAL LOGIC */
     function openShareModal(convId){
       pendingShareConvId = convId;
       shareOverlay.classList.add('open');
       shareOverlay.setAttribute('aria-hidden','false');
-      // Prepare placeholder; real link generated on click
       shareLinkInput.value = '';
       shareLinkInput.placeholder = `${location.origin}/chat.html?c=${convId}`;
       setTimeout(()=>createShareBtn.focus(), 10);
@@ -421,21 +400,30 @@
     shareOverlay.addEventListener('click', (e)=>{ if(e.target === shareOverlay) closeShareModal(); });
     document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape' && shareOverlay.classList.contains('open')) closeShareModal(); });
 
-    // If you later add a backend that returns a permanent public share URL,
-    // call it here before copying. For now we generate a stable deep-link.
     createShareBtn.addEventListener('click', async ()=>{
       const id = pendingShareConvId ?? currentConvId;
       if(!id) return;
-      const url = `${location.origin}/chat.html?c=${id}`;
-      shareLinkInput.value = url;
+
+      // Prefer backend-generated public token URL
+      try{
+        const r = await api.createShare(userEmail, id);
+        if (r && r.status === 'ok' && r.url) {
+          shareLinkInput.value = r.url;
+        } else {
+          // Fallback: deep link with token param isn't available; use non-token link
+          shareLinkInput.value = `${location.origin}/chat.html?c=${id}`;
+        }
+      }catch{
+        shareLinkInput.value = `${location.origin}/chat.html?c=${id}`;
+      }
+
       shareLinkInput.select();
       try{
-        await navigator.clipboard.writeText(url);
+        await navigator.clipboard.writeText(shareLinkInput.value);
         createShareBtn.textContent = 'Copied!';
         showToast('Link copied to clipboard');
         setTimeout(()=>{ createShareBtn.textContent = 'Create link'; }, 1200);
       }catch{
-        // Fallback if clipboard API fails
         showToast('Copy failed. Select and copy manually.');
       }
     });
@@ -456,7 +444,6 @@
           const bArchive=el('button',{},'Archive');
           const bDelete=el('button',{},'Delete');
 
-          // SHARE — open modal like ChatGPT
           bShare.addEventListener('click',e=>{
             e.stopPropagation();
             menu.classList.remove('open');
@@ -532,6 +519,36 @@
       scrollToBottom();
     }
 
+    /* Public view: fetch and render read-only snapshot */
+    async function loadPublicConversation(token){
+      mainEl.classList.add('public');
+      publicBanner.style.display = 'block';
+      // Hide left sidebar list & actions visually but keep layout
+      document.querySelectorAll('.conv-menu-btn,.new-chat,.logout').forEach(el=>{ el.style.display='none'; });
+
+      clearMessages();
+      try{
+        const r = await api.getPublicConv(token);
+        // Expect shape: { title, messages:[{role,content}], createdAt, ... }
+        if (r && r.title) {
+          // Render a fake single item list with the title (no menu)
+          convListEl.innerHTML='';
+          const row=el('div',{class:'conv active'});
+          const title=el('div',{class:'conv-title'}, r.title);
+          row.appendChild(title);
+          convListEl.appendChild(row);
+        }
+        (r.messages||[]).forEach(m=> renderMessage(m.role==='user'?'user':'assistant', m.content));
+      }catch(e){
+        renderMessage('assistant','This public link is invalid or expired.');
+      }
+      // fully disable composer
+      Array.from(composerEl.querySelectorAll('button,textarea,input,select')).forEach(el=>{
+        el.disabled = true;
+      });
+      scrollToBottom();
+    }
+
     /* Auto-resize + Enter to send */
     function autoresize(){
       promptEl.style.height='auto';
@@ -548,10 +565,12 @@
     /* Submit text */
     composerEl.addEventListener('submit', async (e)=>{
       e.preventDefault();
+      if(isPublic){ return; } // guard: no sending in public mode
       const text=(promptEl.value||'').trim();
       if(!text) return;
 
-      renderMessage('user', text, now()); scrollToBottom();
+      const when = now();
+      renderMessage('user', text, when); scrollToBottom();
 
       sendBtn.disabled=true; photoBtn.disabled=true; promptEl.disabled=true; statusEl.textContent='Thinking…';
       try{
@@ -561,7 +580,6 @@
 
         const res=await api.chat(payload);
 
-        // If a new conversation was created, capture id and auto-name it
         if(isNew && res.conversationId){
           currentConvId = res.conversationId;
           const autoTitle = makeTitleFrom(text);
@@ -574,7 +592,8 @@
         renderMessage('assistant', res.response||'');
         scrollToBottom();
       }catch(err){
-        renderMessage('assistant','Sorry, something went wrong. Please try again.'); scrollToBottom();
+        renderMessage('assistant','Sorry, something went wrong. Please try again.');
+        scrollToBottom();
       }finally{
         promptEl.value=''; autoresize();
         sendBtn.disabled=false; photoBtn.disabled=false; promptEl.disabled=false; promptEl.focus(); statusEl.textContent='';
@@ -582,8 +601,9 @@
     });
 
     /* Photo Solve */
-    document.getElementById('photoBtn').addEventListener('click',()=> photoFile.click());
+    document.getElementById('photoBtn').addEventListener('click',()=>{ if(!isPublic) photoFile.click(); });
     photoFile.addEventListener('change', async ()=>{
+      if(isPublic) return;
       const file = photoFile.files && photoFile.files[0];
       if(!file) return;
       const okTypes=['image/png','image/jpeg','image/jpg','image/webp'];
@@ -606,7 +626,6 @@
         if(currentConvId) fd.append('conversationId', currentConvId);
 
         const wasNew = !currentConvId;
-
         const res=await api.photoSolve(fd);
 
         if(wasNew && res.conversationId){
@@ -621,7 +640,8 @@
         renderMessage('assistant', res.response||'No response text returned.');
         scrollToBottom();
       }catch(e){
-        renderMessage('assistant','Photo solve failed. Please try another image.'); scrollToBottom();
+        renderMessage('assistant','Photo solve failed. Please try another image.');
+        scrollToBottom();
       }finally{
         URL.revokeObjectURL(objUrl); photoFile.value='';
         sendBtn.disabled=false; photoBtn.disabled=false; promptEl.disabled=false; promptEl.focus(); statusEl.textContent='';
@@ -630,24 +650,49 @@
 
     /* New chat & logout */
     newChatBtn.addEventListener('click', async ()=>{
+      if(isPublic) return;
       const c=await api.createConv(userEmail,'New chat');
       currentConvId=c.id; await loadConversations(currentConvId); clearMessages(); promptEl.focus();
     });
-
     logoutBtn.addEventListener('click', async ()=>{
+      if(isPublic) return;
       try { await api.logout(); } catch {}
       localStorage.removeItem('userEmail');
       window.location.replace('/index.html');
     });
 
+    /* Auth guard — skipped in public mode */
+    async function guardAuth(){
+      try{
+        const me = await api.me();
+        if (me.status !== 'ok' || !me.user?.email) {
+          window.location.replace('/index.html'); 
+          return false;
+        }
+        userEmail = me.user.email;
+        localStorage.setItem('userEmail', userEmail);
+        return true;
+      } catch {
+        window.location.replace('/index.html');
+        return false;
+      }
+    }
+
     /* Init */
     (async function init(){
+      if (isPublic) {
+        await loadPublicConversation(publicToken);
+        return; // no auth, no side effects
+      }
+
       const ok=await guardAuth(); if(!ok) return;
-      const p=new URLSearchParams(location.search); const fromUrl=p.get('c');
+
+      const fromUrl=p.get('c');
       await loadConversations(fromUrl?Number(fromUrl):null);
       if(fromUrl){ currentConvId=Number(fromUrl); await showConversation(currentConvId); }
-      updatePlaceholder(); 
-      promptEl.focus(); autoresize();
+      updatePlaceholder();
+      promptEl.focus(); 
+      (function autoresizeInit(){ promptEl.style.height='auto'; promptEl.style.height=Math.min(120,promptEl.scrollHeight)+'px'; })();
     })();
   </script>
 </body>
