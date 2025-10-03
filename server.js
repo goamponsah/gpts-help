@@ -55,7 +55,7 @@ app.use(cookieParser());
 // ---------- Static ----------
 app.use(express.static(path.join(__dirname, "public")));
 
-// Serve pretty URL for reset page
+// Pretty URL for reset page
 app.get("/reset-password", (_req, res) => {
   res.sendFile(path.join(__dirname, "public", "reset-password.html"));
 });
@@ -69,7 +69,9 @@ const pool = new Pool({
   ssl: NODE_ENV === "production" ? { rejectUnauthorized: false } : false
 });
 
+// ---- Robust, idempotent schema setup (handles existing partial tables) ----
 async function ensureSchema() {
+  // 1) Create tables if missing (minimal columns; we add/alter next)
   await pool.query(`
     create table if not exists users (
       id            bigserial primary key,
@@ -83,29 +85,25 @@ async function ensureSchema() {
 
     create table if not exists conversations (
       id            bigserial primary key,
-      user_id       bigint not null references users(id) on delete cascade,
       title         text not null,
       archived      boolean not null default false,
       created_at    timestamptz not null default now(),
       updated_at    timestamptz not null default now()
     );
-    create index if not exists conversations_user_idx on conversations(user_id, created_at desc);
 
     create table if not exists messages (
       id            bigserial primary key,
-      conversation_id bigint not null references conversations(id) on delete cascade,
-      role          text not null, -- 'user' | 'assistant'
-      content       text not null,
+      role          text,
+      content       text,
       created_at    timestamptz not null default now()
     );
-    create index if not exists messages_conv_idx on messages(conversation_id, id);
 
     create table if not exists share_links (
-      id            bigserial primary key,
-      conversation_id bigint not null references conversations(id) on delete cascade,
-      token         text not null unique,
-      revoked       boolean not null default false,
-      created_at    timestamptz not null default now()
+      id               bigserial primary key,
+      conversation_id  bigint,
+      token            text not null unique,
+      revoked          boolean not null default false,
+      created_at       timestamptz not null default now()
     );
 
     create table if not exists paystack_receipts (
@@ -120,13 +118,80 @@ async function ensureSchema() {
 
     create table if not exists password_resets (
       id            bigserial primary key,
-      user_id       bigint not null references users(id) on delete cascade,
+      user_id       bigint,
       token_hash    text not null,
       expires_at    timestamptz not null,
       used          boolean not null default false,
       created_at    timestamptz not null default now()
     );
-    create index if not exists password_resets_token_idx on password_resets(token_hash);
+  `);
+
+  // 2) Add any missing columns on legacy tables
+  await pool.query(`
+    alter table if exists conversations
+      add column if not exists user_id    bigint,
+      add column if not exists title      text not null default 'New chat',
+      add column if not exists archived   boolean not null default false,
+      add column if not exists created_at timestamptz not null default now(),
+      add column if not exists updated_at timestamptz not null default now();
+
+    alter table if exists messages
+      add column if not exists conversation_id bigint,
+      add column if not exists role           text,
+      add column if not exists content        text,
+      add column if not exists created_at     timestamptz not null default now();
+
+    alter table if exists share_links
+      add column if not exists conversation_id bigint,
+      add column if not exists token           text,
+      add column if not exists revoked         boolean not null default false,
+      add column if not exists created_at      timestamptz not null default now();
+
+    alter table if exists password_resets
+      add column if not exists user_id    bigint,
+      add column if not exists token_hash text,
+      add column if not exists expires_at timestamptz,
+      add column if not exists used       boolean not null default false,
+      add column if not exists created_at timestamptz not null default now();
+  `);
+
+  // 3) Add foreign keys idempotently (safe even if duplicates)
+  await pool.query(`
+    DO $$ BEGIN
+      ALTER TABLE conversations
+        ADD CONSTRAINT conversations_user_fk
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+    DO $$ BEGIN
+      ALTER TABLE messages
+        ADD CONSTRAINT messages_conversation_fk
+        FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+    DO $$ BEGIN
+      ALTER TABLE share_links
+        ADD CONSTRAINT share_links_conversation_fk
+        FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+    DO $$ BEGIN
+      ALTER TABLE password_resets
+        ADD CONSTRAINT password_resets_user_fk
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+  `);
+
+  // 4) Create indexes after columns exist
+  await pool.query(`
+    create index if not exists conversations_user_idx
+      on conversations(user_id, created_at desc);
+
+    create index if not exists messages_conv_idx
+      on messages(conversation_id, id);
+
+    create index if not exists password_resets_token_idx
+      on password_resets(token_hash);
   `);
 }
 await ensureSchema();
@@ -246,7 +311,7 @@ app.post("/api/login", async (req, res) => {
     const u = await getUserByEmail(email);
     if (!u) return res.status(401).json({ status:"error", message:"No account found. Please sign up." });
 
-    // First password login sets the password (if migrating free-email users)
+    // First password login sets the password (if migrating email-only users)
     if (!u.pass_hash) {
       if (password.length < 8) return res.status(400).json({ status:"error", message:"Password must be at least 8 characters." });
       await setUserPassword(email, password);
@@ -351,6 +416,13 @@ app.post("/api/reset/confirm", async (req, res) => {
 });
 
 // ---------- Paystack ----------
+function mapPlanCodeToLabel(planCode) {
+  if (!planCode) return "ONE_TIME";
+  if (planCode === PLAN_CODE_PLUS_MONTHLY) return "PLUS";
+  if (planCode === PLAN_CODE_PRO_ANNUAL) return "PRO";
+  return "ONE_TIME";
+}
+
 app.post("/api/paystack/verify", async (req, res) => {
   try {
     const { reference } = req.body || {};
@@ -453,7 +525,7 @@ app.get("/api/conversations/:id", async (req, res) => {
   res.json({ id, title: conv.rows[0].title, messages: msgs.rows });
 });
 
-// ---------- Share links ----------
+// ---------- Share links (public, read-only consumer uses /api/share/:token) ----------
 app.post("/api/conversations/:id/share", async (req, res) => {
   const u = await requireUser(req, res); if (!u) return;
   const id = Number(req.params.id);
