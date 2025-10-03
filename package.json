@@ -1,21 +1,35 @@
 {
   "name": "gpts-help",
   "version": "1.0.0",
-  "description": "GPTs Help server",
-  "type": "module",
+  "description": "GPTs Help - AI tutoring and content generation suite with Paystack integration",
   "main": "server.js",
+  "type": "module",
   "scripts": {
-    "start": "node server.js"
-  },
-  "engines": {
-    "node": ">=18"
+    "start": "node server.js",
+    "dev": "nodemon server.js"
   },
   "dependencies": {
-    "cookie-parser": "^1.4.6",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
-    "express": "^4.19.2",
+    "express": "^4.21.1",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
     "pg": "^8.11.5"
-  }
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "AI",
+    "GPT",
+    "Paystack",
+    "Math",
+    "Content",
+    "Tutoring"
+  ],
+  "author": "Your Name",
+  "license": "MIT"
 }
