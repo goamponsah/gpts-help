@@ -12,12 +12,11 @@
       --muted:#9aa3b2;
       --text:#e7eaf1;
       --brand:#5865f2;
-      --user:#1c2333;
-      --assistant:#13141a;
+      --user:#1c2333;     /* user bubble */
+      --assistant:#13141a;/* assistant bubble */
       --border:#232634;
       --vh:100vh;
       --radius:14px;
-      --warning:#f0b429;
     }
     *{box-sizing:border-box}
     html,body{height:100%;margin:0}
@@ -69,20 +68,18 @@
     .logout{ width:100%; background:transparent; border:1px solid var(--border); color:var(--text); padding:9px 10px; border-radius:10px; cursor:pointer; font-size:13px }
     .logout:hover{ background:#151824 }
 
-    /* Main area: messages (1fr) + composer (auto) — composer stays at bottom */
+    /* Main area: messages (1fr) + composer (auto) */
     .main{ display:grid; grid-template-rows:1fr auto; min-height:0 }
     .messages{
       overflow-y:auto; padding:20px 18px; min-height:0; scroll-behavior:smooth;
       background:radial-gradient(1200px 400px at 50% -200px, rgba(88,101,242,.08), transparent 60%);
     }
-
-    /* Public banner sits inside messages; sticky at top; doesn't change layout rows */
     .public-banner{
       display:none; position:sticky; top:0; z-index:1;
-      padding:8px 12px; margin:-8px 0 8px; /* snug to top */
+      padding:8px 12px; margin:-8px 0 8px;
       border:1px solid var(--border); border-radius:10px;
       background:linear-gradient(180deg, rgba(240,180,41,.12), transparent 70%);
-      color:#fff; font-size:13px; backdrop-filter:saturate(120%);
+      color:#fff; font-size:13px;
     }
     .public .public-banner{ display:block; }
 
@@ -94,23 +91,28 @@
       background:var(--assistant);
     }
     .meta{ display:block; color:var(--muted); margin-bottom:6px; font-size:12px; }
+
+    /* Assistant on LEFT */
     .msg.assistant{ justify-content:flex-start; }
     .msg.assistant .bubble{ background:var(--assistant); border-top-left-radius:8px; border-top-right-radius:12px; }
     .msg.assistant .meta{ text-align:left; }
+
+    /* User on RIGHT */
     .msg.user{ justify-content:flex-end; }
     .msg.user .bubble{ background:var(--user); border-top-left-radius:12px; border-top-right-radius:8px; }
     .msg.user .meta{ text-align:right; }
     .msg.user .thumb{ margin-left:auto; }
+
     .thumb{ display:block; max-width:240px; height:auto; border-radius:8px; margin-top:8px; border:1px solid var(--border) }
 
-    /* Markdown defaults */
+    /* Nicer markdown defaults */
     .bubble p{ margin:.4rem 0; }
     .bubble h1,.bubble h2,.bubble h3{ margin:.6rem 0 .4rem; }
     .bubble ul,.bubble ol{ padding-left:1.2rem; margin:.4rem 0; }
     .bubble code{ background:#0b0d12; padding:2px 6px; border-radius:6px; border:1px solid var(--border); }
     .bubble pre{ background:#0b0d12; padding:10px; border-radius:10px; border:1px solid var(--border); overflow:auto; }
 
-    /* Composer */
+    /* Composer — compact, ChatGPT-like */
     .composer{
       border-top:1px solid var(--border);
       background:linear-gradient(#0e0f13,#0f1117);
@@ -123,17 +125,24 @@
     .input{
       display:flex; align-items:flex-end; gap:8px;
       background:#0f1117; border:1px solid var(--border);
-      border-radius:9999px; padding:6px 10px; min-height:42px;
+      border-radius:9999px; padding:6px 10px;
+      min-height:42px;
     }
     .ta-wrap{ flex:1; display:flex; flex-direction:column; }
-    .meta-row{ display:flex; gap:8px; align-items:center; color:var(--muted); font-size:11px; margin:2px 2px 4px 6px; }
-    select{ background:#0f1117; color:var(--text); border:1px solid var(--border);
-      border-radius:8px; padding:4px 6px; font-size:11px; }
+    .meta-row{
+      display:flex; gap:8px; align-items:center; color:var(--muted); font-size:11px; margin:2px 2px 4px 6px;
+    }
+    select{
+      background:#0f1117; color:var(--text); border:1px solid var(--border);
+      border-radius:8px; padding:4px 6px; font-size:11px;
+    }
     textarea{
       width:100%; resize:none; min-height:24px; max-height:120px;
       background:transparent; color:var(--text); outline:none; border:0; font:inherit; line-height:1.45; padding:0 4px 2px 6px;
     }
-    .controls{ display:inline-flex; gap:6px; }
+    .controls{
+      display:inline-flex; gap:6px;
+    }
     .icon-btn{
       width:36px; height:36px; display:inline-flex; align-items:center; justify-content:center;
       border-radius:9999px; border:1px solid var(--border); background:#141722; color:#dfe3ec;
@@ -156,17 +165,22 @@
     .modal-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
     .modal-title{ font-weight:600; }
     .modal-sub{ color:var(--muted); font-size:13px; margin-bottom:12px; }
-    .modal-row{ display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center; }
+    .modal-row{
+      display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center;
+      background:#0f1117;
+    }
     .modal input[type="text"]{
       width:100%; padding:12px 14px; border:1px solid var(--border); border-radius:9999px;
       background:#0e0f13; color:var(--text); font-size:14px;
     }
     .btn{
-      border:1px solid var(--border); background:#141722; color:#var(--text);
+      border:1px solid var(--border); background:#141722; color:var(--text);
       border-radius:9999px; padding:10px 14px; cursor:pointer; font-size:14px;
     }
     .btn.primary{ background:var(--brand); color:#fff; border-color:transparent; }
-    .modal-close{ border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:20px; line-height:1; }
+    .modal-close{
+      border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:20px; line-height:1;
+    }
     .toast{
       position:fixed; left:50%; bottom:22px; transform:translateX(-50%);
       padding:10px 14px; font-size:13px; background:#141722; color:#e7eaf1; border:1px solid var(--border);
@@ -213,6 +227,7 @@
 
       <form class="composer" id="composer">
         <div class="row">
+          <!-- compact pill input -->
           <div class="input">
             <div class="ta-wrap">
               <div class="meta-row">
@@ -269,17 +284,17 @@
         body:JSON.stringify({userId:email, archived})
       }).then(r=>r.json()),
       getConvMsgs:(email,id)=>fetch(`/api/conversations/${id}?userId=${encodeURIComponent(email)}`, { credentials:'include' }).then(r=>r.json()),
-      /* PUBLIC endpoints (no auth expected) */
+      chat:(payload)=>fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(payload)}).then(r=>r.json()),
+      me:()=>fetch('/api/me', { credentials:'include' }).then(r=>r.json()),
+      photoSolve:(fd)=>fetch('/api/photo-solve',{method:'POST',credentials:'include',body:fd}).then(r=>r.json()),
+      logout:()=>fetch('/api/logout',{method:'POST',credentials:'include'}),
+
+      /* PUBLIC + SHARE endpoints */
       getPublicConv:(token)=>fetch(`/api/public/conversation?t=${encodeURIComponent(token)}`).then(r=>r.json()),
-      /* SHARE endpoint – should return {status:'ok', url, token} */
       createShare:(email,conversationId)=>fetch('/api/share',{
         method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
         body:JSON.stringify({userId:email, conversationId})
       }).then(r=>r.json()),
-      chat:(payload)=>fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(payload)}).then(r=>r.json()),
-      me:()=>fetch('/api/me', { credentials:'include' }).then(r=>r.json()),
-      photoSolve:(fd)=>fetch('/api/photo-solve',{method:'POST',credentials:'include',body:fd}).then(r=>r.json()),
-      logout:()=>fetch('/api/logout',{method:'POST',credentials:'include'})
     };
 
     /* Elements */
@@ -308,9 +323,9 @@
     let currentConvId = null;
     let pendingShareConvId = null;
 
-    /* URL params */
-    const p = new URLSearchParams(location.search);
-    const publicToken = p.get('t'); // if present, we are in public read-only mode
+    /* URL params: if ?t=TOKEN exists, show public read-only */
+    const urlParams = new URLSearchParams(location.search);
+    const publicToken = urlParams.get('t');
     const isPublic = !!publicToken;
 
     /* --- Dynamic placeholder tied to selected assistant --- */
@@ -323,6 +338,23 @@
     gptTypeEl.addEventListener('change', updatePlaceholder);
     updatePlaceholder();
 
+    /* Auth guard (cookie-based) — skipped in public mode */
+    async function guardAuth(){
+      try{
+        const me = await api.me();
+        if (me.status !== 'ok' || !me.user?.email) {
+          window.location.replace('/index.html'); 
+          return false;
+        }
+        userEmail = me.user.email;
+        localStorage.setItem('userEmail', userEmail);
+        return true;
+      } catch {
+        window.location.replace('/index.html');
+        return false;
+      }
+    }
+
     /* Helpers */
     function el(tag, attrs={}, ...children){
       const e=document.createElement(tag);
@@ -334,33 +366,47 @@
       children.forEach(c=> typeof c==='string' ? e.appendChild(document.createTextNode(c)) : c && e.appendChild(c));
       return e;
     }
+
     function showToast(msg='Link copied to clipboard'){
       toastEl.textContent = msg;
       toastEl.classList.add('show');
       setTimeout(()=> toastEl.classList.remove('show'), 1500);
     }
-    function clearMessages(){
-      messagesEl.innerHTML='';
-      // keep the banner at the top of messages if in public view
-      if (isPublic && publicBanner && !messagesEl.contains(publicBanner)) {
-        messagesEl.appendChild(publicBanner);
-      }
+
+    // Clean text and make a short, neat title (ChatGPT-like)
+    function makeTitleFrom(text, prefix="") {
+      const t0 = (text || "").replace(/\s+/g, " ").trim();
+      if (!t0) return prefix ? `${prefix}` : "New chat";
+      let t = t0
+        .replace(/^#{1,6}\s*/gm, "")
+        .replace(/\*\*(.*?)\*\*/g, "$1")
+        .replace(/\*(.*?)\*/g, "$1")
+        .replace(/`{1,3}([\s\S]*?)`{1,3}/g, "$1")
+        .replace(/\[(.*?)\]\((.*?)\)/g, "$1")
+        .replace(/!\[(.*?)\]\((.*?)\)/g, "$1");
+      t = t.split(/[\n\.!?]/)[0].trim();
+      if (!t) t = t0;
+      t = t.charAt(0).toUpperCase() + t.slice(1);
+      const MAX = 50;
+      if (t.length > MAX) t = t.slice(0, MAX - 1).trim() + "…";
+      return prefix ? `${prefix} ${t}` : t;
     }
-    function scrollToBottom(){ messagesEl.scrollTop = messagesEl.scrollHeight; }
-    function now(){ return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
 
     // Markdown-rendered assistant messages
     function renderMessage(role, text, when=''){
       const row = document.createElement('div');
       row.className = `msg ${role}`;
+
       const bubble = document.createElement('div');
       bubble.className = 'bubble';
+
       if (when) {
         const small = document.createElement('small');
         small.className = 'meta';
         small.textContent = when;
         bubble.appendChild(small);
       }
+
       if (role === 'assistant') {
         const html = DOMPurify.sanitize(marked.parse(text || '', { breaks: true }));
         const wrapper = document.createElement('div');
@@ -369,6 +415,7 @@
       } else {
         bubble.appendChild(document.createTextNode(text || ''));
       }
+
       row.appendChild(bubble);
       messagesEl.appendChild(row);
     }
@@ -388,6 +435,15 @@
       messagesEl.appendChild(row);
     }
 
+    function clearMessages(){
+      messagesEl.innerHTML='';
+      if (isPublic && publicBanner && !messagesEl.contains(publicBanner)) {
+        messagesEl.appendChild(publicBanner);
+      }
+    }
+    function scrollToBottom(){ messagesEl.scrollTop = messagesEl.scrollHeight; }
+    function now(){ return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
+
     /* SHARE MODAL LOGIC */
     function openShareModal(convId){
       pendingShareConvId = convId;
@@ -406,18 +462,17 @@
     shareOverlay.addEventListener('click', (e)=>{ if(e.target === shareOverlay) closeShareModal(); });
     document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape' && shareOverlay.classList.contains('open')) closeShareModal(); });
 
+    // Create a public share link (prefer backend token URL)
     createShareBtn.addEventListener('click', async ()=>{
       const id = pendingShareConvId ?? currentConvId;
       if(!id) return;
 
-      // Prefer backend-generated public token URL
       try{
         const r = await api.createShare(userEmail, id);
         if (r && r.status === 'ok' && r.url) {
-          shareLinkInput.value = r.url;
+          shareLinkInput.value = r.url; // e.g., https://yourapp.com/chat.html?t=TOKEN
         } else {
-          // Fallback: deep link (auth required)
-          shareLinkInput.value = `${location.origin}/chat.html?c=${id}`;
+          shareLinkInput.value = `${location.origin}/chat.html?c=${id}`; // fallback (requires auth)
         }
       }catch{
         shareLinkInput.value = `${location.origin}/chat.html?c=${id}`;
@@ -525,20 +580,21 @@
       scrollToBottom();
     }
 
-    /* Public view: fetch and render read-only snapshot */
+    /* Public view: fetch and render read-only snapshot (no auth) */
     async function loadPublicConversation(token){
-      mainEl.classList.add('public');
-      // keep banner visible inside messages
+      // mark UI as public/read-only
+      document.body.classList.add('public');
       publicBanner.style.display = 'block';
 
-      // Hide some sidebar actions visually
+      // hide some sidebar actions visually
       document.querySelectorAll('.conv-menu-btn,.new-chat,.logout').forEach(el=>{ el.style.display='none'; });
 
       clearMessages();
       try{
         const r = await api.getPublicConv(token);
+        // Expected: { title, messages:[{role,content}], ... }
         if (r && r.title) {
-          // Render a single item list with the title (no menu)
+          // show single active item with title
           convListEl.innerHTML='';
           const row=el('div',{class:'conv active'});
           const title=el('div',{class:'conv-title'}, r.title);
@@ -549,7 +605,7 @@
       }catch(e){
         renderMessage('assistant','This public link is invalid or expired.');
       }
-      // disable composer controls but keep it at the bottom
+      // disable composer controls but keep layout
       Array.from(composerEl.querySelectorAll('button,textarea,input,select')).forEach(el=>{
         el.disabled = true;
       });
@@ -572,12 +628,12 @@
     /* Submit text */
     composerEl.addEventListener('submit', async (e)=>{
       e.preventDefault();
-      if(isPublic){ return; } // guard: no sending in public mode
+      if (isPublic) return; // read-only guard
+
       const text=(promptEl.value||'').trim();
       if(!text) return;
 
-      const when = now();
-      renderMessage('user', text, when); scrollToBottom();
+      renderMessage('user', text, now()); scrollToBottom();
 
       sendBtn.disabled=true; photoBtn.disabled=true; promptEl.disabled=true; statusEl.textContent='Thinking…';
       try{
@@ -599,8 +655,7 @@
         renderMessage('assistant', res.response||'');
         scrollToBottom();
       }catch(err){
-        renderMessage('assistant','Sorry, something went wrong. Please try again.');
-        scrollToBottom();
+        renderMessage('assistant','Sorry, something went wrong. Please try again.'); scrollToBottom();
       }finally{
         promptEl.value=''; autoresize();
         sendBtn.disabled=false; photoBtn.disabled=false; promptEl.disabled=false; promptEl.focus(); statusEl.textContent='';
@@ -633,6 +688,7 @@
         if(currentConvId) fd.append('conversationId', currentConvId);
 
         const wasNew = !currentConvId;
+
         const res=await api.photoSolve(fd);
 
         if(wasNew && res.conversationId){
@@ -647,8 +703,7 @@
         renderMessage('assistant', res.response||'No response text returned.');
         scrollToBottom();
       }catch(e){
-        renderMessage('assistant','Photo solve failed. Please try another image.');
-        scrollToBottom();
+        renderMessage('assistant','Photo solve failed. Please try another image.'); scrollToBottom();
       }finally{
         URL.revokeObjectURL(objUrl); photoFile.value='';
         sendBtn.disabled=false; photoBtn.disabled=false; promptEl.disabled=false; promptEl.focus(); statusEl.textContent='';
@@ -661,6 +716,7 @@
       const c=await api.createConv(userEmail,'New chat');
       currentConvId=c.id; await loadConversations(currentConvId); clearMessages(); promptEl.focus();
     });
+
     logoutBtn.addEventListener('click', async ()=>{
       if(isPublic) return;
       try { await api.logout(); } catch {}
@@ -668,38 +724,18 @@
       window.location.replace('/index.html');
     });
 
-    /* Auth guard — skipped in public mode */
-    async function guardAuth(){
-      try{
-        const me = await api.me();
-        if (me.status !== 'ok' || !me.user?.email) {
-          window.location.replace('/index.html'); 
-          return false;
-        }
-        userEmail = me.user.email;
-        localStorage.setItem('userEmail', userEmail);
-        return true;
-      } catch {
-        window.location.replace('/index.html');
-        return false;
-      }
-    }
-
     /* Init */
     (async function init(){
       if (isPublic) {
         await loadPublicConversation(publicToken);
         return;
       }
-
       const ok=await guardAuth(); if(!ok) return;
-
-      const fromUrl=p.get('c');
+      const fromUrl=urlParams.get('c');
       await loadConversations(fromUrl?Number(fromUrl):null);
       if(fromUrl){ currentConvId=Number(fromUrl); await showConversation(currentConvId); }
-      updatePlaceholder();
-      promptEl.focus(); 
-      (function autoresizeInit(){ promptEl.style.height='auto'; promptEl.style.height=Math.min(120,promptEl.scrollHeight)+'px'; })();
+      updatePlaceholder(); 
+      promptEl.focus(); autoresize();
     })();
   </script>
 </body>
