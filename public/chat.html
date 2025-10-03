@@ -12,8 +12,8 @@
       --muted:#9aa3b2;
       --text:#e7eaf1;
       --brand:#5865f2;
-      --user:#1c2333;   /* user bubble */
-      --assistant:#13141a; /* assistant bubble */
+      --user:#1c2333;     /* user bubble */
+      --assistant:#13141a;/* assistant bubble */
       --border:#232634;
       --vh:100vh;
       --radius:14px;
@@ -48,9 +48,7 @@
     .conv{
       position:relative; display:flex; align-items:center; gap:8px; padding:8px 10px;
       border-radius:10px; border:1px solid transparent; font-size:14px; margin-bottom:6px;
-      white-space:nowrap; /* removed overflow hidden so menu can overflow */
-      overflow:visible;
-      cursor:pointer
+      white-space:nowrap; overflow:visible; cursor:pointer;
     }
     .conv:hover{ background:#151824; border-color:#1b1f2b }
     .conv.active{ background:#171b28; border-color:#2a3352 }
@@ -78,36 +76,22 @@
     }
 
     /* Chat bubbles */
-    .msg{
-      max-width:900px; margin:0 auto 12px auto; display:flex;
-    }
+    .msg{ max-width:900px; margin:0 auto 12px auto; display:flex; }
     .bubble{
-      max-width:68ch;
-      padding:12px 14px;
-      border:1px solid var(--border);
-      border-radius:12px;
-      line-height:1.55; font-size:15px;
-      white-space:normal;
+      max-width:68ch; padding:12px 14px; border:1px solid var(--border);
+      border-radius:12px; line-height:1.55; font-size:15px; white-space:normal;
       background:var(--assistant);
     }
-    .meta{
-      display:block; color:var(--muted); margin-bottom:6px; font-size:12px;
-    }
+    .meta{ display:block; color:var(--muted); margin-bottom:6px; font-size:12px; }
 
     /* Assistant on LEFT */
     .msg.assistant{ justify-content:flex-start; }
-    .msg.assistant .bubble{
-      background:var(--assistant);
-      border-top-left-radius:8px; border-top-right-radius:12px;
-    }
+    .msg.assistant .bubble{ background:var(--assistant); border-top-left-radius:8px; border-top-right-radius:12px; }
     .msg.assistant .meta{ text-align:left; }
 
     /* User on RIGHT */
     .msg.user{ justify-content:flex-end; }
-    .msg.user .bubble{
-      background:var(--user);
-      border-top-left-radius:12px; border-top-right-radius:8px;
-    }
+    .msg.user .bubble{ background:var(--user); border-top-left-radius:12px; border-top-right-radius:8px; }
     .msg.user .meta{ text-align:right; }
     .msg.user .thumb{ margin-left:auto; }
 
@@ -133,8 +117,7 @@
     .input{
       display:flex; align-items:flex-end; gap:8px;
       background:#0f1117; border:1px solid var(--border);
-      border-radius:9999px; padding:6px 10px;
-      min-height:42px;
+      border-radius:9999px; padding:6px 10px; min-height:42px;
     }
     .ta-wrap{ flex:1; display:flex; flex-direction:column; }
     .meta-row{
@@ -148,9 +131,7 @@
       width:100%; resize:none; min-height:24px; max-height:120px;
       background:transparent; color:var(--text); outline:none; border:0; font:inherit; line-height:1.45; padding:0 4px 2px 6px;
     }
-    .controls{
-      display:inline-flex; gap:6px;
-    }
+    .controls{ display:inline-flex; gap:6px; }
     .icon-btn{
       width:36px; height:36px; display:inline-flex; align-items:center; justify-content:center;
       border-radius:9999px; border:1px solid var(--border); background:#141722; color:#dfe3ec;
@@ -158,6 +139,43 @@
     }
     .icon-btn.primary{ background:var(--brand); color:#fff; border-color:transparent }
     .icon-btn:disabled{ opacity:.6; cursor:not-allowed }
+
+    /* Share modal */
+    .overlay{
+      position:fixed; inset:0; background:rgba(0,0,0,.5);
+      display:none; align-items:center; justify-content:center; z-index:1000;
+    }
+    .overlay.open{ display:flex; }
+    .modal{
+      width:min(560px, 92vw);
+      background:#0f1117; border:1px solid var(--border); border-radius:16px;
+      padding:18px; box-shadow:0 18px 40px rgba(0,0,0,.45);
+    }
+    .modal-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+    .modal-title{ font-weight:600; }
+    .modal-sub{ color:var(--muted); font-size:13px; margin-bottom:12px; }
+    .modal-row{
+      display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center;
+      background:#0f1117;
+    }
+    .modal input[type="text"]{
+      width:100%; padding:12px 14px; border:1px solid var(--border); border-radius:9999px;
+      background:#0e0f13; color:var(--text); font-size:14px;
+    }
+    .btn{
+      border:1px solid var(--border); background:#141722; color:var(--text);
+      border-radius:9999px; padding:10px 14px; cursor:pointer; font-size:14px;
+    }
+    .btn.primary{ background:var(--brand); color:#fff; border-color:transparent; }
+    .modal-close{
+      border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:20px; line-height:1;
+    }
+    .toast{
+      position:fixed; left:50%; bottom:22px; transform:translateX(-50%);
+      padding:10px 14px; font-size:13px; background:#141722; color:#e7eaf1; border:1px solid var(--border);
+      border-radius:9999px; display:none; z-index:1100;
+    }
+    .toast.show{ display:block; }
   </style>
 
   <!-- Markdown renderer + sanitizer -->
@@ -211,6 +229,22 @@
     </main>
   </div>
 
+  <!-- Share Modal -->
+  <div class="overlay" id="shareOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+      <div class="modal-header">
+        <div class="modal-title" id="shareTitle">Share public link to chat</div>
+        <button class="modal-close" id="shareCloseBtn" aria-label="Close">×</button>
+      </div>
+      <div class="modal-sub">Your name, custom instructions, and any messages you add after sharing stay private.</div>
+      <div class="modal-row">
+        <input type="text" id="shareLinkInput" placeholder="https://yourapp.com/share/…" readonly />
+        <button class="btn primary" id="createShareBtn">Create link</button>
+      </div>
+    </div>
+  </div>
+  <div class="toast" id="toast">Link copied to clipboard</div>
+
   <script>
     /* mobile 100vh fix */
     function setVh(){ const vh = window.innerHeight * 0.01; document.documentElement.style.setProperty('--vh', `${vh*100}px`); }
@@ -246,6 +280,17 @@
     const newChatBtn = document.getElementById('newChatBtn');
     const logoutBtn = document.getElementById('logoutBtn');
 
+    /* Share modal elements */
+    const shareOverlay = document.getElementById('shareOverlay');
+    const shareLinkInput = document.getElementById('shareLinkInput');
+    const createShareBtn = document.getElementById('createShareBtn');
+    const shareCloseBtn = document.getElementById('shareCloseBtn');
+    const toastEl = document.getElementById('toast');
+
+    let userEmail = localStorage.getItem('userEmail') || '';
+    let currentConvId = null;
+    let pendingShareConvId = null;
+
     /* --- Dynamic placeholder tied to selected assistant --- */
     function updatePlaceholder() {
       const name = gptTypeEl.options[gptTypeEl.selectedIndex]?.text || "Assistant";
@@ -254,10 +299,7 @@
       promptEl.setAttribute('title', `Message ${name}`);
     }
     gptTypeEl.addEventListener('change', updatePlaceholder);
-    updatePlaceholder(); // init once elements exist
-
-    let userEmail = localStorage.getItem('userEmail') || '';
-    let currentConvId = null;
+    updatePlaceholder();
 
     /* Auth guard (cookie-based) */
     async function guardAuth(){
@@ -288,6 +330,12 @@
       return e;
     }
 
+    function showToast(msg='Link copied to clipboard'){
+      toastEl.textContent = msg;
+      toastEl.classList.add('show');
+      setTimeout(()=> toastEl.classList.remove('show'), 1500);
+    }
+
     // Clean text and make a short, neat title (ChatGPT-like)
     function makeTitleFrom(text, prefix="") {
       const t0 = (text || "").replace(/\s+/g, " ").trim();
@@ -307,7 +355,7 @@
       return prefix ? `${prefix} ${t}` : t;
     }
 
-    // Markdown-rendered assistant messages; right/left alignment via CSS classes
+    // Markdown-rendered assistant messages
     function renderMessage(role, text, when=''){
       const row = document.createElement('div');
       row.className = `msg ${role}`;
@@ -338,18 +386,14 @@
     function renderImageMessage(caption,url){
       const row = document.createElement('div');
       row.className = 'msg user';
-
       const bubble = document.createElement('div');
       bubble.className = 'bubble';
-
       const small = document.createElement('small');
       small.className = 'meta';
       small.textContent = '';
       bubble.appendChild(small);
-
       bubble.appendChild(document.createTextNode(caption||'📷 Photo uploaded'));
       if(url){ const img=document.createElement('img'); img.className='thumb'; img.src=url; img.alt='uploaded image'; bubble.appendChild(img); }
-
       row.appendChild(bubble);
       messagesEl.appendChild(row);
     }
@@ -357,6 +401,44 @@
     function clearMessages(){ messagesEl.innerHTML=''; }
     function scrollToBottom(){ messagesEl.scrollTop = messagesEl.scrollHeight; }
     function now(){ return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
+
+    /* SHARE MODAL LOGIC */
+    function openShareModal(convId){
+      pendingShareConvId = convId;
+      shareOverlay.classList.add('open');
+      shareOverlay.setAttribute('aria-hidden','false');
+      // Prepare placeholder; real link generated on click
+      shareLinkInput.value = '';
+      shareLinkInput.placeholder = `${location.origin}/chat.html?c=${convId}`;
+      setTimeout(()=>createShareBtn.focus(), 10);
+    }
+    function closeShareModal(){
+      shareOverlay.classList.remove('open');
+      shareOverlay.setAttribute('aria-hidden','true');
+      pendingShareConvId = null;
+    }
+    shareCloseBtn.addEventListener('click', closeShareModal);
+    shareOverlay.addEventListener('click', (e)=>{ if(e.target === shareOverlay) closeShareModal(); });
+    document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape' && shareOverlay.classList.contains('open')) closeShareModal(); });
+
+    // If you later add a backend that returns a permanent public share URL,
+    // call it here before copying. For now we generate a stable deep-link.
+    createShareBtn.addEventListener('click', async ()=>{
+      const id = pendingShareConvId ?? currentConvId;
+      if(!id) return;
+      const url = `${location.origin}/chat.html?c=${id}`;
+      shareLinkInput.value = url;
+      shareLinkInput.select();
+      try{
+        await navigator.clipboard.writeText(url);
+        createShareBtn.textContent = 'Copied!';
+        showToast('Link copied to clipboard');
+        setTimeout(()=>{ createShareBtn.textContent = 'Create link'; }, 1200);
+      }catch{
+        // Fallback if clipboard API fails
+        showToast('Copy failed. Select and copy manually.');
+      }
+    });
 
     /* Conversations UI */
     async function loadConversations(selectId=null){
@@ -374,11 +456,11 @@
           const bArchive=el('button',{},'Archive');
           const bDelete=el('button',{},'Delete');
 
+          // SHARE — open modal like ChatGPT
           bShare.addEventListener('click',e=>{
             e.stopPropagation();
-            const url=`${location.origin}/chat.html?c=${c.id}`;
-            navigator.clipboard.writeText(url).catch(()=>{});
             menu.classList.remove('open');
+            openShareModal(c.id);
           });
 
           bRename.addEventListener('click',async e=>{
@@ -420,7 +502,6 @@
 
           menuBtn.addEventListener('click',e=>{
             e.stopPropagation();
-            // close others, then toggle this one
             document.querySelectorAll('.menu.open').forEach(m=>{ if(m!==menu) m.classList.remove('open'); });
             menu.classList.toggle('open');
           });
@@ -436,7 +517,7 @@
           convListEl.appendChild(row);
         });
 
-      // Close menus when clicking anywhere else (bubble phase, not capture)
+      // Click outside to close menus
       document.addEventListener('click', (e)=>{
         if (!e.target.closest('.menu') && !e.target.closest('.conv-menu-btn')) {
           document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'));
@@ -528,7 +609,6 @@
 
         const res=await api.photoSolve(fd);
 
-        // If a new conversation was created by photo-solve, auto-name it
         if(wasNew && res.conversationId){
           currentConvId = res.conversationId;
           const autoTitle = makeTitleFrom(note || 'Photo', 'Photo:');
@@ -566,7 +646,7 @@
       const p=new URLSearchParams(location.search); const fromUrl=p.get('c');
       await loadConversations(fromUrl?Number(fromUrl):null);
       if(fromUrl){ currentConvId=Number(fromUrl); await showConversation(currentConvId); }
-      updatePlaceholder(); // ensure correct placeholder on first load
+      updatePlaceholder(); 
       promptEl.focus(); autoresize();
     })();
   </script>
