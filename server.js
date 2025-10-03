@@ -1,7 +1,7 @@
 // server.js (ESM, Node 18+)
 // package.json: { "type": "module" }
 // npm i express cookie-parser cors jsonwebtoken multer pg
-// Optionally for email: RESEND_API_KEY, MAIL_FROM, CANONICAL_HOST
+// + set the env vars listed in the message above
 
 import express from "express";
 import cookieParser from "cookie-parser";
@@ -69,9 +69,8 @@ const pool = new Pool({
   ssl: NODE_ENV === "production" ? { rejectUnauthorized: false } : false
 });
 
-// ---- Robust, idempotent schema setup (handles existing partial tables) ----
+// ---- Robust, idempotent schema setup ----
 async function ensureSchema() {
-  // 1) Create tables if missing
   await pool.query(`
     create table if not exists users (
       id            bigserial primary key,
@@ -128,7 +127,7 @@ async function ensureSchema() {
     );
   `);
 
-  // 2) Add any missing columns on legacy tables
+  // Backfill legacy cols if needed
   await pool.query(`
     alter table if exists conversations
       add column if not exists user_id    bigint,
@@ -157,7 +156,7 @@ async function ensureSchema() {
       add column if not exists created_at timestamptz not null default now();
   `);
 
-  // 2a) Special: ensure users.id exists, backfilled, unique (for very old DBs)
+  // Ensure users.id exists/unique if very old DB
   await pool.query(`
     DO $$
     BEGIN
@@ -178,7 +177,7 @@ async function ensureSchema() {
     EXCEPTION WHEN duplicate_object THEN NULL; END $$;
   `);
 
-  // 3) FKs
+  // Foreign keys
   await pool.query(`
     DO $$ BEGIN
       ALTER TABLE conversations
@@ -205,14 +204,11 @@ async function ensureSchema() {
     EXCEPTION WHEN duplicate_object THEN NULL; END $$;
   `);
 
-  // 4) Indexes
+  // Indexes
   await pool.query(`
-    create index if not exists conversations_user_idx
-      on conversations(user_id, created_at desc);
-    create index if not exists messages_conv_idx
-      on messages(conversation_id, id);
-    create index if not exists password_resets_token_idx
-      on password_resets(token_hash);
+    create index if not exists conversations_user_idx on conversations(user_id, created_at desc);
+    create index if not exists messages_conv_idx on messages(conversation_id, id);
+    create index if not exists password_resets_token_idx on password_resets(token_hash);
   `);
 }
 await ensureSchema();
@@ -262,7 +258,7 @@ function absoluteBaseUrl(req){
   const host  = req.get('x-forwarded-host') || req.get('host');
   return `${proto}://${host}`;
 }
-function mapPlanCodeToLabel(planCode) {
+function mapPlanCodeToLabel(planCode) {          // <— defined ONCE here
   if (!planCode) return "ONE_TIME";
   if (planCode === PLAN_CODE_PLUS_MONTHLY) return "PLUS";
   if (planCode === PLAN_CODE_PRO_ANNUAL) return "PRO";
@@ -303,7 +299,6 @@ async function sendEmail({ to, subject, html, text }) {
   if (!RESEND_API_KEY) {
     console.warn("[WARN] RESEND_API_KEY not set — email NOT sent.");
     return { sent: false };
-    // For debugging you can console.log({ to, subject, html });
   }
   const r = await fetch("https://api.resend.com/emails", {
     method: "POST",
@@ -319,10 +314,7 @@ async function sendEmail({ to, subject, html, text }) {
       text
     })
   });
-  if (!r.ok) {
-    const t = await r.text();
-    throw new Error(`Resend error ${r.status}: ${t}`);
-  }
+  if (!r.ok) throw new Error(`Resend error ${r.status}: ${await r.text()}`);
   return { sent: true };
 }
 
@@ -361,7 +353,6 @@ app.post("/api/login", async (req, res) => {
     const u = await getUserByEmail(email);
     if (!u) return res.status(401).json({ status:"error", message:"No account found. Please sign up." });
 
-    // First password login sets the password (if migrating email-only users)
     if (!u.pass_hash) {
       if (password.length < 8) return res.status(400).json({ status:"error", message:"Password must be at least 8 characters." });
       await setUserPassword(email, password);
@@ -409,7 +400,6 @@ app.post("/api/reset/request", async (req, res) => {
     const base = CANONICAL_HOST || absoluteBaseUrl(req);
     const link = `${base}/reset-password?t=${token}`;
 
-    // Send email (HTML + text)
     const subject = "Reset your GPTs Help password";
     const text = `Hi,\n\nClick the link below to reset your password:\n${link}\n\nIf you didn’t request this, you can ignore this email.\n`;
     const html = `
@@ -420,15 +410,10 @@ app.post("/api/reset/request", async (req, res) => {
         <p style="color:#6c757d;font-size:12px">If you didn’t request this, you can ignore this email.</p>
       </div>`.trim();
 
-    try {
-      await sendEmail({ to: email, subject, html, text });
-    } catch (mailErr) {
-      console.error("Email send failed:", mailErr);
-      // We still return OK, but log the link so you can test logs if needed.
-    }
+    try { await sendEmail({ to: email, subject, html, text }); }
+    catch (mailErr) { console.error("Email send failed:", mailErr); }
 
-    // IMPORTANT: do NOT include devLink in response
-    res.json({ status:"ok" });
+    res.json({ status:"ok" }); // no dev link
   }catch(e){
     console.error("reset/request", e);
     res.json({ status:"ok" });
@@ -467,13 +452,9 @@ app.post("/api/reset/confirm", async (req, res) => {
     if (!r.rowCount) return res.status(400).json({ status:"error", message:"Invalid or expired token" });
 
     const { id: prId, user_id: userId, email, plan } = r.rows[0];
-    const { salt, hash } = await (async ()=>{
-      const s = crypto.randomBytes(16).toString("hex");
-      const buf = await scrypt(newPassword, s, 64);
-      return { salt: s, hash: buf.toString("hex") };
-    })();
-
-    await pool.query(`update users set pass_salt=$2, pass_hash=$3, updated_at=now() where id=$1`, [userId, salt, hash]);
+    const s = crypto.randomBytes(16).toString("hex");
+    const buf = await scrypt(newPassword, s, 64);
+    await pool.query(`update users set pass_salt=$2, pass_hash=$3, updated_at=now() where id=$1`, [userId, s, buf.toString("hex")]);
     await pool.query(`update password_resets set used=true where id=$1`, [prId]);
 
     setSessionCookie(res, { email, plan: plan || "FREE" });
@@ -485,13 +466,6 @@ app.post("/api/reset/confirm", async (req, res) => {
 });
 
 // ---------- Paystack ----------
-function mapPlanCodeToLabel(planCode) {
-  if (!planCode) return "ONE_TIME";
-  if (planCode === PLAN_CODE_PLUS_MONTHLY) return "PLUS";
-  if (planCode === PLAN_CODE_PRO_ANNUAL) return "PRO";
-  return "ONE_TIME";
-}
-
 app.post("/api/paystack/verify", async (req, res) => {
   try {
     const { reference } = req.body || {};
@@ -690,7 +664,6 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
         ? "You are Math GPT. Read the problem from the image and solve it step-by-step. Explain clearly."
         : "You are a helpful assistant. Describe and analyze the content of the image, then answer the user's request.";
 
-    // record user "photo" note
     await pool.query(`insert into messages(conversation_id, role, content) values($1,$2,$3)`,
       [convId, "user", attempt ? `(Photo) ${attempt}` : "(Photo uploaded)"]);
 
