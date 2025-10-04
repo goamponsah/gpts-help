@@ -175,8 +175,8 @@
   <section class="container">
     <h2>What Our Users Say</h2>
     <div class="testimonials">
-      <div class="testimonial">“I finally understood calculus limits—your hints + step-by-step solved it!”<br><strong>— Ama A., Student</strong></div>
-      <div class="testimonial">“We cut blog production time by 70%. The content suite is a lifesaver.”<br><strong>— Michael T., Creator</strong></div>
+      <div class="testimonial">"I finally understood calculus limits—your hints + step-by-step solved it!"<br><strong>— Ama A., Student</strong></div>
+      <div class="testimonial">"We cut blog production time by 70%. The content suite is a lifesaver."<br><strong>— Michael T., Creator</strong></div>
     </div>
   </section>
 
@@ -262,9 +262,8 @@
     const PLAN_CODE_PLUS_MONTHLY = "PLN_t8tii7sryvwsxxf";
     const PLAN_CODE_PRO_ANNUAL  = "PLN_3gkd3qo1pv8rylt";
 
-    // Optional next redirect (e.g., /index.html?next=/chat.html)
-    const urlParams = new URLSearchParams(location.search);
-    const NEXT_URL = urlParams.get("next") || "/chat.html";
+    // Redirect to chat.html after login/signup
+    const NEXT_URL = "/chat.html";
 
     // Helpers to normalize backend auth responses
     function authOK(r){
@@ -431,7 +430,8 @@
         .then(r=>{
           if (authOK(r)) {
             localStorage.setItem("userEmail", authEmail(r));
-            window.location.replace(NEXT_URL);
+            // Redirect to chat.html (use redirect from response or default)
+            window.location.replace(r.redirect || NEXT_URL);
           } else {
             loginErr.textContent = r?.message || "Invalid email or password.";
           }
@@ -514,7 +514,8 @@
         .then(r=>{
           if (authOK(r)) {
             localStorage.setItem("userEmail", authEmail(r));
-            window.location.replace(NEXT_URL);
+            // Redirect to chat.html (use redirect from response or default)
+            window.location.replace(r.redirect || NEXT_URL);
           } else {
             signupErr.textContent = r?.message || "Sign up failed. Try again.";
           }
