@@ -4,11 +4,17 @@ import cookieParser from 'cookie-parser';
 import pkg from 'pg';
 import jwt from 'jsonwebtoken';
 import multer from 'multer';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
 const { Pool } = pkg;
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Get directory name for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 // Database connection
 const pool = new Pool({
@@ -22,17 +28,13 @@ app.use(express.json({ limit: '50mb' }));
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
-// Basic health check route - THIS IS CRITICAL FOR RAILWAY
-app.get('/', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    message: 'GPTs Help API is running',
-    timestamp: new Date().toISOString()
-  });
-});
+// Serve static files (CSS, JS, images) from 'public' directory
+app.use(express.static(join(__dirname, 'public')));
 
-// Health check endpoint
-app.get('/health', async (req, res) => {
+// API Routes - these should come before the static file serving for specific routes
+
+// Basic health check route
+app.get('/api/health', async (req, res) => {
   try {
     // Test database connection
     await pool.query('SELECT 1');
@@ -49,6 +51,18 @@ app.get('/health', async (req, res) => {
       error: error.message 
     });
   }
+});
+
+// Public config endpoint for Paystack
+app.get('/api/public-config', (req, res) => {
+  res.json({
+    paystackPublicKey: process.env.PAYSTACK_PUBLIC_KEY || 'pk_test_your_public_key_here'
+  });
+});
+
+// Serve your main HTML file for all other routes
+app.get('*', (req, res) => {
+  res.sendFile(join(__dirname, 'index.html'));
 });
 
 // ---- Robust, idempotent schema setup ----
@@ -207,7 +221,8 @@ async function startServer() {
     app.listen(PORT, '0.0.0.0', () => {
       console.log(`🚀 Server is running on port ${PORT}`);
       console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
-      console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+      console.log(`🌐 Website: http://localhost:${PORT}`);
+      console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);
@@ -215,20 +230,10 @@ async function startServer() {
   }
 }
 
-// Add your actual API routes here (add these after the basic setup)
-app.get('/api/test', (req, res) => {
-  res.json({ message: 'API is working!' });
-});
-
 // Error handling middleware
 app.use((err, req, res, next) => {
   console.error('Error:', err);
   res.status(500).json({ error: 'Internal Server Error' });
-});
-
-// 404 handler
-app.use('*', (req, res) => {
-  res.status(404).json({ error: 'Route not found' });
 });
 
 // Handle uncaught exceptions
