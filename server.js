@@ -1,159 +1,246 @@
+import express from 'express';
+import cors from 'cors';
+import cookieParser from 'cookie-parser';
+import pkg from 'pg';
+import jwt from 'jsonwebtoken';
+import multer from 'multer';
+
+const { Pool } = pkg;
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Database connection
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+});
+
+// Middleware
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
+app.use(cookieParser());
+app.use(express.urlencoded({ extended: true }));
+
+// Basic health check route - THIS IS CRITICAL FOR RAILWAY
+app.get('/', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    message: 'GPTs Help API is running',
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Health check endpoint
+app.get('/health', async (req, res) => {
+  try {
+    // Test database connection
+    await pool.query('SELECT 1');
+    res.json({ 
+      status: 'OK', 
+      database: 'connected',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Health check failed:', error);
+    res.status(500).json({ 
+      status: 'ERROR', 
+      database: 'disconnected',
+      error: error.message 
+    });
+  }
+});
+
 // ---- Robust, idempotent schema setup ----
 async function ensureSchema() {
-  // 1) Create tables if missing
-  await pool.query(`
-    create table if not exists users (
-      id            bigserial primary key,
-      email         text not null unique,
-      pass_salt     text,
-      pass_hash     text,
-      plan          text not null default 'FREE',
-      created_at    timestamptz not null default now(),
-      updated_at    timestamptz not null default now()
-    );
+  try {
+    console.log('Starting database schema setup...');
 
-    create table if not exists conversations (
-      id            bigserial primary key,
-      user_id       bigint,
-      title         text not null,
-      archived      boolean not null default false,
-      created_at    timestamptz not null default now(),
-      updated_at    timestamptz not null default now()
-    );
+    // 1) Create tables if missing
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id            BIGSERIAL PRIMARY KEY,
+        email         TEXT NOT NULL UNIQUE,
+        pass_salt     TEXT,
+        pass_hash     TEXT,
+        plan          TEXT NOT NULL DEFAULT 'FREE',
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
 
-    create table if not exists messages (
-      id            bigserial primary key,
-      conversation_id bigint,
-      role          text,
-      content       text,
-      created_at    timestamptz not null default now()
-    );
+      CREATE TABLE IF NOT EXISTS conversations (
+        id            BIGSERIAL PRIMARY KEY,
+        user_id       BIGINT,
+        title         TEXT NOT NULL,
+        archived      BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
 
-    create table if not exists share_links (
-      id               bigserial primary key,
-      conversation_id  bigint,
-      token            text not null unique,
-      revoked          boolean not null default false,
-      created_at       timestamptz not null default now()
-    );
+      CREATE TABLE IF NOT EXISTS messages (
+        id            BIGSERIAL PRIMARY KEY,
+        conversation_id BIGINT,
+        role          TEXT,
+        content       TEXT,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
 
-    create table if not exists paystack_receipts (
-      id            bigserial primary key,
-      email         text,
-      reference     text not null unique,
-      plan_code     text,
-      status        text,
-      raw           jsonb,
-      created_at    timestamptz not null default now()
-    );
+      CREATE TABLE IF NOT EXISTS share_links (
+        id               BIGSERIAL PRIMARY KEY,
+        conversation_id  BIGINT,
+        token            TEXT NOT NULL UNIQUE,
+        revoked          BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
 
-    create table if not exists password_resets (
-      id            bigserial primary key,
-      user_id       bigint,
-      token_hash    text not null,
-      expires_at    timestamptz not null,
-      used          boolean not null default false,
-      created_at    timestamptz not null default now()
-    );
-  `);
+      CREATE TABLE IF NOT EXISTS paystack_receipts (
+        id            BIGSERIAL PRIMARY KEY,
+        email         TEXT,
+        reference     TEXT NOT NULL UNIQUE,
+        plan_code     TEXT,
+        status        TEXT,
+        raw           JSONB,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
 
-  // 2) Add any missing columns on legacy tables
-  await pool.query(`
-    alter table if exists conversations
-      add column if not exists user_id    bigint,
-      add column if not exists title      text not null default 'New chat',
-      add column if not exists archived   boolean not null default false,
-      add column if not exists created_at timestamptz not null default now(),
-      add column if not exists updated_at timestamptz not null default now();
+      CREATE TABLE IF NOT EXISTS password_resets (
+        id            BIGSERIAL PRIMARY KEY,
+        user_id       BIGINT,
+        token_hash    TEXT NOT NULL,
+        expires_at    TIMESTAMPTZ NOT NULL,
+        used          BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
 
-    alter table if exists messages
-      add column if not exists conversation_id bigint,
-      add column if not exists role           text,
-      add column if not exists content        text,
-      add column if not exists created_at     timestamptz not null default now();
+    console.log('Basic tables created/verified');
 
-    alter table if exists share_links
-      add column if not exists conversation_id bigint,
-      add column if not exists token           text,
-      add column if not exists revoked         boolean not null default false,
-      add column if not exists created_at      timestamptz not null default now();
+    // 2) Add any missing columns on legacy tables
+    await pool.query(`
+      ALTER TABLE IF EXISTS conversations
+        ADD COLUMN IF NOT EXISTS user_id    BIGINT,
+        ADD COLUMN IF NOT EXISTS title      TEXT NOT NULL DEFAULT 'New chat',
+        ADD COLUMN IF NOT EXISTS archived   BOOLEAN NOT NULL DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
-    alter table if exists password_resets
-      add column if not exists user_id    bigint,
-      add column if not exists token_hash text,
-      add column if not exists expires_at timestamptz,
-      add column if not exists used       boolean not null default false,
-      add column if not exists created_at timestamptz not null default now();
-  `);
+      ALTER TABLE IF EXISTS messages
+        ADD COLUMN IF NOT EXISTS conversation_id BIGINT,
+        ADD COLUMN IF NOT EXISTS role           TEXT,
+        ADD COLUMN IF NOT EXISTS content        TEXT,
+        ADD COLUMN IF NOT EXISTS created_at     TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
-  // 2a) Very old DBs may lack users.id → create and backfill
-  await pool.query(`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-         WHERE table_name = 'users' AND column_name = 'id'
-      ) THEN
-        CREATE SEQUENCE IF NOT EXISTS users_id_seq;
-        ALTER TABLE users ADD COLUMN id bigint;
-        ALTER TABLE users ALTER COLUMN id SET DEFAULT nextval('users_id_seq'::regclass);
-        UPDATE users SET id = nextval('users_id_seq'::regclass) WHERE id IS NULL;
-      END IF;
-    END $$;
-  `);
+      ALTER TABLE IF EXISTS share_links
+        ADD COLUMN IF NOT EXISTS conversation_id BIGINT,
+        ADD COLUMN IF NOT EXISTS token           TEXT,
+        ADD COLUMN IF NOT EXISTS revoked         BOOLEAN NOT NULL DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
-  // 2b) Ensure PRIMARY KEY on users.id if missing (no duplicate errors)
-  await pool.query(`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint
-         WHERE conrelid = 'users'::regclass AND contype = 'p'
-      ) THEN
-        BEGIN
-          ALTER TABLE users ADD CONSTRAINT users_pkey PRIMARY KEY (id);
-        EXCEPTION WHEN duplicate_object THEN
-          -- If something else created it, ignore
-          NULL;
-        END;
-      END IF;
-    END $$;
-  `);
+      ALTER TABLE IF EXISTS password_resets
+        ADD COLUMN IF NOT EXISTS user_id    BIGINT,
+        ADD COLUMN IF NOT EXISTS token_hash TEXT,
+        ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ,
+        ADD COLUMN IF NOT EXISTS used       BOOLEAN NOT NULL DEFAULT FALSE,
+        ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
+    `);
 
-  // 3) Foreign keys (safe on duplicates)
-  await pool.query(`
-    DO $$ BEGIN
-      ALTER TABLE conversations
-        ADD CONSTRAINT conversations_user_fk
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
-    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+    console.log('Missing columns added');
 
-    DO $$ BEGIN
-      ALTER TABLE messages
-        ADD CONSTRAINT messages_conversation_fk
-        FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE;
-    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+    // 3) Foreign keys (safe on duplicates)
+    await pool.query(`
+      DO $$ BEGIN
+        ALTER TABLE conversations
+          ADD CONSTRAINT conversations_user_fk
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-    DO $$ BEGIN
-      ALTER TABLE share_links
-        ADD CONSTRAINT share_links_conversation_fk
-        FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE;
-    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+      DO $$ BEGIN
+        ALTER TABLE messages
+          ADD CONSTRAINT messages_conversation_fk
+          FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-    DO $$ BEGIN
-      ALTER TABLE password_resets
-        ADD CONSTRAINT password_resets_user_fk
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
-    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-  `);
+      DO $$ BEGIN
+        ALTER TABLE share_links
+          ADD CONSTRAINT share_links_conversation_fk
+          FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-  // 4) Indexes
-  await pool.query(`
-    create index if not exists conversations_user_idx
-      on conversations(user_id, created_at desc);
-    create index if not exists messages_conv_idx
-      on messages(conversation_id, id);
-    create index if not exists password_resets_token_idx
-      on password_resets(token_hash);
-  `);
+      DO $$ BEGIN
+        ALTER TABLE password_resets
+          ADD CONSTRAINT password_resets_user_fk
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+      EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+    `);
+
+    console.log('Foreign keys verified');
+
+    // 4) Indexes
+    await pool.query(`
+      CREATE INDEX IF NOT EXISTS conversations_user_idx
+        ON conversations(user_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS messages_conv_idx
+        ON messages(conversation_id, id);
+      CREATE INDEX IF NOT EXISTS password_resets_token_idx
+        ON password_resets(token_hash);
+    `);
+
+    console.log('Database schema setup completed successfully');
+  } catch (error) {
+    console.error('Schema setup error:', error);
+    throw error;
+  }
 }
+
+// Initialize database and start server
+async function startServer() {
+  try {
+    // Test database connection
+    console.log('Testing database connection...');
+    await pool.query('SELECT 1');
+    console.log('Database connection successful');
+
+    // Setup schema
+    await ensureSchema();
+
+    // Start server
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🚀 Server is running on port ${PORT}`);
+      console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+// Add your actual API routes here (add these after the basic setup)
+app.get('/api/test', (req, res) => {
+  res.json({ message: 'API is working!' });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(500).json({ error: 'Internal Server Error' });
+});
+
+// 404 handler
+app.use('*', (req, res) => {
+  res.status(404).json({ error: 'Route not found' });
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  process.exit(1);
+});
+
+// Start the server
+startServer();
