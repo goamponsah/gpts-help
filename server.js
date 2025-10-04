@@ -2,8 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import pkg from 'pg';
-import jwt from 'jsonwebtoken';
-import multer from 'multer';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
@@ -28,10 +26,10 @@ app.use(express.json({ limit: '50mb' }));
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 
-// Serve static files (CSS, JS, images) from 'public' directory
+// Serve static files from 'public' directory
 app.use(express.static(join(__dirname, 'public')));
 
-// API Routes - these should come before the static file serving for specific routes
+// API Routes
 
 // Basic health check route
 app.get('/api/health', async (req, res) => {
@@ -60,9 +58,41 @@ app.get('/api/public-config', (req, res) => {
   });
 });
 
-// Serve your main HTML file for all other routes
+// User authentication routes (placeholder - implement these)
+app.post('/api/login', (req, res) => {
+  res.json({ status: 'error', message: 'Login not implemented yet' });
+});
+
+app.post('/api/signup-free', (req, res) => {
+  res.json({ status: 'error', message: 'Signup not implemented yet' });
+});
+
+app.get('/api/me', (req, res) => {
+  res.json({ status: 'error', message: 'Session check not implemented' });
+});
+
+app.post('/api/paystack/verify', (req, res) => {
+  res.json({ status: 'error', message: 'Paystack verification not implemented' });
+});
+
+// Serve your main HTML file from public directory
+app.get('/', (req, res) => {
+  res.sendFile(join(__dirname, 'public', 'index.html'));
+});
+
+// For chat.html route
+app.get('/chat.html', (req, res) => {
+  res.sendFile(join(__dirname, 'public', 'chat.html'));
+});
+
+// For reset-password.html route
+app.get('/reset-password.html', (req, res) => {
+  res.sendFile(join(__dirname, 'public', 'reset-password.html'));
+});
+
+// For all other routes, serve index.html (for SPA routing)
 app.get('*', (req, res) => {
-  res.sendFile(join(__dirname, 'index.html'));
+  res.sendFile(join(__dirname, 'public', 'index.html'));
 });
 
 // ---- Robust, idempotent schema setup ----
