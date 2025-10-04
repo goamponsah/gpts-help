@@ -6,7 +6,10 @@
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js"
+    "dev": "nodemon server.js",
+    "build": "npm install --omit=dev",
+    "install-deps": "npm install --omit=dev",
+    "install-all": "npm install"
   },
   "dependencies": {
     "cookie-parser": "^1.4.7",
