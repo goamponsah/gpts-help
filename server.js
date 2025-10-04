@@ -59,6 +59,7 @@ const authenticateToken = async (req, res, next) => {
     req.user = userResult.rows[0];
     next();
   } catch (error) {
+    console.error('Auth middleware error:', error);
     return res.status(401).json({ status: 'error', message: 'Invalid token' });
   }
 };
@@ -97,6 +98,8 @@ app.post('/api/signup-free', async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    console.log('Signup attempt for:', email);
+
     // Validation
     if (!email || !password) {
       return res.status(400).json({ status: 'error', message: 'Email and password are required' });
@@ -110,30 +113,31 @@ app.post('/api/signup-free', async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'Password must be at least 8 characters' });
     }
 
-    // Check if user already exists
+    // Check if user already exists (case-insensitive)
     const existingUser = await pool.query(
-      'SELECT id FROM users WHERE email = $1',
-      [email.toLowerCase()]
+      'SELECT id FROM users WHERE LOWER(email) = LOWER($1)',
+      [email]
     );
 
     if (existingUser.rows.length > 0) {
-      return res.status(400).json({ status: 'error', message: 'User already exists' });
+      console.log('User already exists:', email);
+      return res.status(400).json({ status: 'error', message: 'User with this email already exists' });
     }
 
     // Hash password
     const saltRounds = 12;
-    const salt = await bcrypt.genSalt(saltRounds);
-    const passHash = await bcrypt.hash(password, salt);
+    const passHash = await bcrypt.hash(password, saltRounds);
 
     // Create user
     const result = await pool.query(
-      `INSERT INTO users (email, pass_salt, pass_hash, plan, created_at, updated_at) 
-       VALUES ($1, $2, $3, $4, NOW(), NOW()) 
+      `INSERT INTO users (email, pass_hash, plan, created_at, updated_at) 
+       VALUES ($1, $2, $3, NOW(), NOW()) 
        RETURNING id, email, plan`,
-      [email.toLowerCase(), salt, passHash, 'FREE']
+      [email.toLowerCase(), passHash, 'FREE']
     );
 
     const user = result.rows[0];
+    console.log('User created successfully:', user.email);
 
     // Generate JWT token
     const token = jwt.sign(
@@ -161,8 +165,12 @@ app.post('/api/signup-free', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Signup error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal server error' });
+    console.error('Signup error details:', error);
+    res.status(500).json({ 
+      status: 'error', 
+      message: 'Internal server error during signup',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
@@ -171,28 +179,35 @@ app.post('/api/login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
+    console.log('Login attempt for:', email);
+
     // Validation
     if (!email || !password) {
       return res.status(400).json({ status: 'error', message: 'Email and password are required' });
     }
 
-    // Find user
+    // Find user (case-insensitive)
     const userResult = await pool.query(
-      'SELECT id, email, pass_hash, plan FROM users WHERE email = $1',
-      [email.toLowerCase()]
+      'SELECT id, email, pass_hash, plan FROM users WHERE LOWER(email) = LOWER($1)',
+      [email]
     );
 
     if (userResult.rows.length === 0) {
+      console.log('User not found:', email);
       return res.status(401).json({ status: 'error', message: 'Invalid email or password' });
     }
 
     const user = userResult.rows[0];
+    console.log('User found:', user.email);
 
     // Verify password
     const isValidPassword = await bcrypt.compare(password, user.pass_hash);
     if (!isValidPassword) {
+      console.log('Invalid password for:', email);
       return res.status(401).json({ status: 'error', message: 'Invalid email or password' });
     }
+
+    console.log('Password valid for:', email);
 
     // Generate JWT token
     const token = jwt.sign(
@@ -220,8 +235,12 @@ app.post('/api/login', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Login error:', error);
-    res.status(500).json({ status: 'error', message: 'Internal server error' });
+    console.error('Login error details:', error);
+    res.status(500).json({ 
+      status: 'error', 
+      message: 'Internal server error during login',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
@@ -246,6 +265,27 @@ app.get('/api/me', authenticateToken, async (req, res) => {
 app.post('/api/logout', (req, res) => {
   res.clearCookie('token');
   res.json({ status: 'success', message: 'Logged out successfully' });
+});
+
+// Check if email exists (for frontend validation)
+app.post('/api/check-email', async (req, res) => {
+  try {
+    const { email } = req.body;
+    
+    if (!email) {
+      return res.json({ exists: false });
+    }
+
+    const existingUser = await pool.query(
+      'SELECT id FROM users WHERE LOWER(email) = LOWER($1)',
+      [email]
+    );
+
+    res.json({ exists: existingUser.rows.length > 0 });
+  } catch (error) {
+    console.error('Check email error:', error);
+    res.json({ exists: false });
+  }
 });
 
 // Paystack verification (placeholder - implement with actual Paystack API)
@@ -431,7 +471,7 @@ async function ensureSchema() {
       CREATE INDEX IF NOT EXISTS password_resets_token_idx
         ON password_resets(token_hash);
       CREATE INDEX IF NOT EXISTS users_email_idx 
-        ON users(email);
+        ON users(LOWER(email));
     `);
 
     console.log('Database schema setup completed successfully');
