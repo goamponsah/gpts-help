@@ -7,13 +7,10 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
-    "build": "npm install --omit=dev",
-    "install-deps": "npm install --omit=dev",
-    "install-all": "npm install",
-    "railway-build": "npm install --omit=dev",
-    "railway-start": "node server.js"
+    "build": "npm install --omit=dev"
   },
   "dependencies": {
+    "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "express": "^4.21.1",
