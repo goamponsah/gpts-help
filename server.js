@@ -154,9 +154,11 @@ app.post('/api/signup-free', async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     });
 
+    // Return success with redirect information
     res.json({
       status: 'success',
       message: 'Account created successfully',
+      redirect: '/chat.html',
       user: {
         id: user.id,
         email: user.email,
@@ -224,9 +226,11 @@ app.post('/api/login', async (req, res) => {
       maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
     });
 
+    // Return success with redirect information
     res.json({
       status: 'success',
       message: 'Login successful',
+      redirect: '/chat.html',
       user: {
         id: user.id,
         email: user.email,
@@ -288,6 +292,11 @@ app.post('/api/check-email', async (req, res) => {
   }
 });
 
+// Serve chat.html directly (protected route)
+app.get('/chat.html', authenticateToken, (req, res) => {
+  res.sendFile(join(__dirname, 'public', 'chat.html'));
+});
+
 // Paystack verification (placeholder - implement with actual Paystack API)
 app.post('/api/paystack/verify', authenticateToken, async (req, res) => {
   try {
@@ -321,11 +330,6 @@ app.post('/api/paystack/verify', authenticateToken, async (req, res) => {
 // Serve your main HTML file from public directory
 app.get('/', (req, res) => {
   res.sendFile(join(__dirname, 'public', 'index.html'));
-});
-
-// For chat.html route
-app.get('/chat.html', (req, res) => {
-  res.sendFile(join(__dirname, 'public', 'chat.html'));
 });
 
 // For reset-password.html route
@@ -498,6 +502,7 @@ async function startServer() {
       console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`🌐 Website: http://localhost:${PORT}`);
       console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
+      console.log(`💬 Chat: http://localhost:${PORT}/chat.html`);
     });
   } catch (error) {
     console.error('Failed to start server:', error);
