@@ -16,10 +16,15 @@ const PORT = process.env.PORT || 3000;
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Database connection
+// Database connection with better error handling
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+});
+
+// Handle database connection errors
+pool.on('error', (err) => {
+  console.error('Database connection error:', err);
 });
 
 // JWT secret - use environment variable in production
@@ -66,14 +71,17 @@ const authenticateToken = async (req, res, next) => {
 
 // API Routes
 
-// Basic health check route
+// Basic health check route with detailed database info
 app.get('/api/health', async (req, res) => {
   try {
-    // Test database connection
-    await pool.query('SELECT 1');
+    // Test database connection and get user count
+    const dbTest = await pool.query('SELECT 1 as connection_test');
+    const userCount = await pool.query('SELECT COUNT(*) as count FROM users');
+    
     res.json({ 
       status: 'OK', 
       database: 'connected',
+      user_count: parseInt(userCount.rows[0].count),
       timestamp: new Date().toISOString()
     });
   } catch (error) {
@@ -81,7 +89,26 @@ app.get('/api/health', async (req, res) => {
     res.status(500).json({ 
       status: 'ERROR', 
       database: 'disconnected',
-      error: error.message 
+      error: error.message,
+      details: 'Check your DATABASE_URL and database connection'
+    });
+  }
+});
+
+// Debug endpoint to check users table
+app.get('/api/debug/users', async (req, res) => {
+  try {
+    const users = await pool.query('SELECT id, email, plan, created_at FROM users ORDER BY created_at DESC');
+    res.json({
+      status: 'success',
+      users: users.rows,
+      count: users.rows.length
+    });
+  } catch (error) {
+    console.error('Debug users error:', error);
+    res.status(500).json({ 
+      status: 'error', 
+      message: error.message 
     });
   }
 });
@@ -95,6 +122,7 @@ app.get('/api/public-config', (req, res) => {
 
 // Sign up for free account
 app.post('/api/signup-free', async (req, res) => {
+  let client;
   try {
     const { email, password } = req.body;
 
@@ -113,15 +141,21 @@ app.post('/api/signup-free', async (req, res) => {
       return res.status(400).json({ status: 'error', message: 'Password must be at least 8 characters' });
     }
 
+    // Use transaction for safety
+    client = await pool.connect();
+
     // Check if user already exists (case-insensitive)
-    const existingUser = await pool.query(
+    const existingUser = await client.query(
       'SELECT id FROM users WHERE LOWER(email) = LOWER($1)',
       [email]
     );
 
     if (existingUser.rows.length > 0) {
       console.log('User already exists:', email);
-      return res.status(400).json({ status: 'error', message: 'User with this email already exists' });
+      return res.status(400).json({ 
+        status: 'error', 
+        message: 'User with this email already exists. Please try logging in instead.' 
+      });
     }
 
     // Hash password
@@ -129,7 +163,7 @@ app.post('/api/signup-free', async (req, res) => {
     const passHash = await bcrypt.hash(password, saltRounds);
 
     // Create user
-    const result = await pool.query(
+    const result = await client.query(
       `INSERT INTO users (email, pass_hash, plan, created_at, updated_at) 
        VALUES ($1, $2, $3, NOW(), NOW()) 
        RETURNING id, email, plan`,
@@ -168,11 +202,24 @@ app.post('/api/signup-free', async (req, res) => {
 
   } catch (error) {
     console.error('Signup error details:', error);
+    
+    // More specific error messages
+    let userMessage = 'Internal server error during signup';
+    if (error.code === '23505') { // Unique violation
+      userMessage = 'User with this email already exists';
+    } else if (error.code === '23502') { // Not null violation
+      userMessage = 'Required fields are missing';
+    }
+    
     res.status(500).json({ 
       status: 'error', 
-      message: 'Internal server error during signup',
+      message: userMessage,
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
+  } finally {
+    if (client) {
+      client.release();
+    }
   }
 });
 
@@ -240,9 +287,15 @@ app.post('/api/login', async (req, res) => {
 
   } catch (error) {
     console.error('Login error details:', error);
+    
+    let userMessage = 'Internal server error during login';
+    if (error.code === 'ECONNREFUSED') {
+      userMessage = 'Database connection failed';
+    }
+    
     res.status(500).json({ 
       status: 'error', 
-      message: 'Internal server error during login',
+      message: userMessage,
       details: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
@@ -344,11 +397,13 @@ app.get('*', (req, res) => {
 
 // ---- Robust, idempotent schema setup ----
 async function ensureSchema() {
+  let client;
   try {
     console.log('Starting database schema setup...');
+    client = await pool.connect();
 
     // 1) Create tables if missing
-    await pool.query(`
+    await client.query(`
       CREATE TABLE IF NOT EXISTS users (
         id            BIGSERIAL PRIMARY KEY,
         email         TEXT NOT NULL UNIQUE,
@@ -407,7 +462,7 @@ async function ensureSchema() {
     console.log('Basic tables created/verified');
 
     // 2) Add any missing columns on legacy tables
-    await pool.query(`
+    await client.query(`
       ALTER TABLE IF EXISTS conversations
         ADD COLUMN IF NOT EXISTS user_id    BIGINT,
         ADD COLUMN IF NOT EXISTS title      TEXT NOT NULL DEFAULT 'New chat',
@@ -438,7 +493,7 @@ async function ensureSchema() {
     console.log('Missing columns added');
 
     // 3) Foreign keys (safe on duplicates)
-    await pool.query(`
+    await client.query(`
       DO $$ BEGIN
         ALTER TABLE conversations
           ADD CONSTRAINT conversations_user_fk
@@ -467,7 +522,7 @@ async function ensureSchema() {
     console.log('Foreign keys verified');
 
     // 4) Indexes
-    await pool.query(`
+    await client.query(`
       CREATE INDEX IF NOT EXISTS conversations_user_idx
         ON conversations(user_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS messages_conv_idx
@@ -479,9 +534,18 @@ async function ensureSchema() {
     `);
 
     console.log('Database schema setup completed successfully');
+
+    // 5) Check if we have any users
+    const userCount = await client.query('SELECT COUNT(*) as count FROM users');
+    console.log(`Current users in database: ${userCount.rows[0].count}`);
+
   } catch (error) {
     console.error('Schema setup error:', error);
     throw error;
+  } finally {
+    if (client) {
+      client.release();
+    }
   }
 }
 
@@ -502,6 +566,7 @@ async function startServer() {
       console.log(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`🌐 Website: http://localhost:${PORT}`);
       console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
+      console.log(`🐛 Debug users: http://localhost:${PORT}/api/debug/users`);
       console.log(`💬 Chat: http://localhost:${PORT}/chat.html`);
     });
   } catch (error) {
