@@ -9,7 +9,9 @@
     "dev": "nodemon server.js",
     "build": "npm install --omit=dev",
     "install-deps": "npm install --omit=dev",
-    "install-all": "npm install"
+    "install-all": "npm install",
+    "railway-build": "npm install --omit=dev",
+    "railway-start": "node server.js"
   },
   "dependencies": {
     "cookie-parser": "^1.4.7",
