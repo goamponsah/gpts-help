@@ -1,0 +1,12 @@
+[build]
+builder = "nixpacks"
+
+[build.environment]
+NPM_CONFIG_PRODUCTION = "false"
+NPM_CONFIG_OMIT = "dev"
+
+[deploy]
+startCommand = "npm start"
+
+[variables]
+NODE_ENV = "production"
