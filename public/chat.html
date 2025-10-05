@@ -45,8 +45,13 @@
     .logout{width:100%;background:transparent;border:1px solid var(--border);color:var(--text);padding:9px 10px;border-radius:10px;cursor:pointer;font-size:13px}
     .logout:hover{background:#151824}
 
-    /* Main area: messages (1fr) + composer (auto) */
-    .main{display:grid;grid-template-rows:auto 1fr auto;min-height:0}
+    /* Main area: banner (auto) + messages (1fr) + composer (sticky at bottom) */
+    .main{
+      display:grid;
+      grid-template-rows:auto 1fr auto;
+      min-height:0;
+      height:100%;
+    }
     .readOnlyBanner{display:none;padding:10px 14px;border-bottom:1px solid var(--border);background:#10121a;color:#cbd2e1;font-size:14px}
     .readOnlyBanner.show{display:block}
     .messages{overflow-y:auto;padding:20px 18px;min-height:0;scroll-behavior:smooth;background:radial-gradient(1200px 400px at 50% -200px, rgba(88,101,242,.08), transparent 60%)}
@@ -69,8 +74,15 @@
     .bubble code{background:#0b0d12;padding:2px 6px;border-radius:6px;border:1px solid var(--border)}
     .bubble pre{background:#0b0d12;padding:10px;border-radius:10px;border:1px solid var(--border);overflow:auto}
 
-    /* Composer */
-    .composer{border-top:1px solid var(--border);background:linear-gradient(#0e0f13,#0f1117);padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px))}
+    /* Composer — sticky like ChatGPT */
+    .composer{
+      position: sticky;
+      bottom: 0;
+      z-index: 20;
+      border-top:1px solid var(--border);
+      background:linear-gradient(#0e0f13,#0f1117);
+      padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));
+    }
     .row{max-width:900px;margin:0 auto;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
     .input{display:flex;align-items:flex-end;gap:8px;background:#0f1117;border:1px solid var(--border);border-radius:9999px;padding:6px 10px;min-height:42px}
     .ta-wrap{flex:1;display:flex;flex-direction:column}
@@ -166,7 +178,7 @@
     function setVh(){ const vh = window.innerHeight * 0.01; document.documentElement.style.setProperty('--vh', `${vh*100}px`); }
     setVh(); window.addEventListener('resize', setVh);
 
-    /* API (all use cookie session) */
+    /* API (cookie-based session) */
     const api = {
       listConvs: ()=>fetch('/api/conversations',{credentials:'include'}).then(r=>r.json()),
       createConv:(title)=>fetch('/api/conversations',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({title})}).then(r=>r.json()),
@@ -316,10 +328,19 @@
         const payload={ message:text, gptType:gptTypeEl.value||'math' };
         if(currentConvId) payload.conversationId=currentConvId;
         const res=await api.chat(payload);
-        if(!currentConvId && res.conversationId){ currentConvId=res.conversationId; const autoTitle=makeTitleFrom(text); try{ await api.renameConv(currentConvId, autoTitle); }catch{} await loadConversations(currentConvId); }
+        if(!currentConvId && res.conversationId){
+          currentConvId=res.conversationId;
+          const autoTitle=makeTitleFrom(text);
+          try{ await api.renameConv(currentConvId, autoTitle); }catch{}
+          await loadConversations(currentConvId);
+        }
         renderMessage('assistant', res.response||''); scrollToBottom();
-      }catch(err){ renderMessage('assistant','Sorry, something went wrong. Please try again.'); scrollToBottom(); }
-      finally{ promptEl.value=''; autoresize(); sendBtn.disabled=false; photoBtn.disabled=false; promptEl.disabled=false; promptEl.focus(); statusEl.textContent=''; }
+      }catch(err){
+        renderMessage('assistant','Sorry, something went wrong. Please try again.'); scrollToBottom();
+      }finally{
+        promptEl.value=''; autoresize();
+        sendBtn.disabled=false; photoBtn.disabled=false; promptEl.disabled=false; promptEl.focus(); statusEl.textContent='';
+      }
     });
 
     /* Photo Solve */
@@ -335,12 +356,28 @@
       renderImageMessage(note ? `📷 (with note) ${note}` : '📷 Photo uploaded', objUrl); scrollToBottom();
       sendBtn.disabled=true; photoBtn.disabled=true; promptEl.disabled=true; statusEl.textContent='Solving…';
       try{
-        const fd=new FormData(); fd.append('image', file); fd.append('gptType', gptTypeEl.value||'math'); if(note) fd.append('attempt', note); if(currentConvId) fd.append('conversationId', currentConvId);
-        const wasNew=!currentConvId; const res=await api.photoSolve(fd);
-        if(wasNew && res.conversationId){ currentConvId=res.conversationId; const autoTitle=makeTitleFrom(note||'Photo','Photo:'); try{ await api.renameConv(currentConvId, autoTitle); }catch{} await loadConversations(currentConvId); }
+        const fd=new FormData();
+        fd.append('image', file);
+        fd.append('gptType', gptTypeEl.value||'math');
+        if(note) fd.append('attempt', note);
+        if(currentConvId) fd.append('conversationId', currentConvId);
+
+        const wasNew=!currentConvId;
+        const res=await api.photoSolve(fd);
+
+        if(wasNew && res.conversationId){
+          currentConvId=res.conversationId;
+          const autoTitle=makeTitleFrom(note||'Photo','Photo:');
+          try{ await api.renameConv(currentConvId, autoTitle); }catch{}
+          await loadConversations(currentConvId);
+        }
         renderMessage('assistant', res.response||'No response text returned.'); scrollToBottom();
-      }catch{ renderMessage('assistant','Photo solve failed. Please try another image.'); scrollToBottom(); }
-      finally{ URL.revokeObjectURL(objUrl); photoFile.value=''; sendBtn.disabled=false; photoBtn.disabled=false; promptEl.disabled=false; promptEl.focus(); statusEl.textContent=''; }
+      }catch{
+        renderMessage('assistant','Photo solve failed. Please try another image.'); scrollToBottom();
+      }finally{
+        URL.revokeObjectURL(objUrl); photoFile.value='';
+        sendBtn.disabled=false; photoBtn.disabled=false; promptEl.disabled=false; promptEl.focus(); statusEl.textContent='';
+      }
     });
 
     /* New chat & logout */
@@ -387,3 +424,4 @@
   </script>
 </body>
 </html>
+
