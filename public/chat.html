@@ -1,731 +1,672 @@
-// server.js (ESM, Node 18+)
-// package.json should have: { "type": "module" }
-// Dependencies: express, cookie-parser, cors, jsonwebtoken, multer, pg
-// Env you should set (Railway Variables):
-//   DATABASE_URL, JWT_SECRET, OPENAI_API_KEY, OPENAI_MODEL (optional)
-//   PAYSTACK_PUBLIC_KEY, PAYSTACK_SECRET_KEY, PLAN_CODE_PLUS_MONTHLY, PLAN_CODE_PRO_ANNUAL, PAYSTACK_CURRENCY (optional)
-//   RESEND_API_KEY (for email), MAIL_FROM (e.g. "GPTs Help <no-reply@yourdomain.com>")
-//   FRONTEND_ORIGIN (if FE/BE split), CANONICAL_HOST (optional), STRICT_CANONICAL (optional)
-// Files in /public must include index.html, chat.html, reset-password.html
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>GPTs Help — Chat</title>
 
-import express from "express";
-import cookieParser from "cookie-parser";
-import cors from "cors";
-import jwt from "jsonwebtoken";
-import crypto from "node:crypto";
-import util from "node:util";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import multer from "multer";
-import pg from "pg";
-
-const { Pool } = pg;
-
-// ---------------- Path helpers ----------------
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-// ---------------- App ----------------
-const app = express();
-
-// ---------------- ENV ----------------
-const {
-  DATABASE_URL,
-  JWT_SECRET,
-  OPENAI_API_KEY,
-  OPENAI_MODEL,
-  PAYSTACK_PUBLIC_KEY,
-  PAYSTACK_SECRET_KEY,
-  PLAN_CODE_PLUS_MONTHLY,
-  PLAN_CODE_PRO_ANNUAL,
-  PAYSTACK_CURRENCY = "GHS",
-  FRONTEND_ORIGIN,
-  NODE_ENV,
-  RESEND_API_KEY,
-  MAIL_FROM = "GPTs Help <no-reply@example.com>",
-  CANONICAL_HOST,
-  STRICT_CANONICAL
-} = process.env;
-
-const OPENAI_DEFAULT_MODEL = OPENAI_MODEL || "gpt-4o-mini";
-if (!DATABASE_URL) console.error("[ERROR] DATABASE_URL not set");
-if (!JWT_SECRET) console.warn("[WARN] JWT_SECRET not set; sessions will reset on deploy");
-if (!OPENAI_API_KEY) console.warn("[WARN] OPENAI_API_KEY not set");
-
-// ---------------- Middleware ----------------
-if (FRONTEND_ORIGIN) {
-  app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
-}
-app.use(express.json({ limit: "10mb" }));
-app.use(cookieParser());
-
-// Optional strict canonical redirect
-if (STRICT_CANONICAL === "true" && CANONICAL_HOST) {
-  const CANON = CANONICAL_HOST.replace(/\/+$/, "");
-  app.use((req, res, next) => {
-    const proto = req.get("x-forwarded-proto") || req.protocol;
-    const host = req.get("x-forwarded-host") || req.get("host");
-    const current = `${proto}://${host}`;
-    if (current !== CANON) return res.redirect(301, CANON + req.originalUrl);
-    next();
-  });
-}
-
-// Static files
-app.use(express.static(path.join(__dirname, "public")));
-app.get("/reset-password", (_req, res) => {
-  res.sendFile(path.join(__dirname, "public", "reset-password.html"));
-});
-
-// Uploads (memory)
-const upload = multer({ storage: multer.memoryStorage() });
-
-// ---------------- Database ----------------
-const pool = new Pool({
-  connectionString: DATABASE_URL,
-  ssl: NODE_ENV === "production" ? { rejectUnauthorized: false } : false
-});
-
-// Idempotent schema setup (safe across deploys)
-async function ensureSchema() {
-  // 1) Base tables
-  await pool.query(`
-    create table if not exists users (
-      id            bigserial primary key,
-      email         text not null unique,
-      pass_salt     text,
-      pass_hash     text,
-      plan          text not null default 'FREE',
-      created_at    timestamptz not null default now(),
-      updated_at    timestamptz not null default now()
-    );
-
-    create table if not exists conversations (
-      id            bigserial primary key,
-      user_id       bigint,
-      title         text not null,
-      archived      boolean not null default false,
-      created_at    timestamptz not null default now(),
-      updated_at    timestamptz not null default now()
-    );
-
-    create table if not exists messages (
-      id            bigserial primary key,
-      conversation_id bigint,
-      role          text,
-      content       text,
-      created_at    timestamptz not null default now()
-    );
-
-    create table if not exists share_links (
-      id               bigserial primary key,
-      conversation_id  bigint,
-      token            text not null unique,
-      revoked          boolean not null default false,
-      created_at       timestamptz not null default now()
-    );
-
-    create table if not exists paystack_receipts (
-      id            bigserial primary key,
-      email         text,
-      reference     text not null unique,
-      plan_code     text,
-      status        text,
-      raw           jsonb,
-      created_at    timestamptz not null default now()
-    );
-
-    create table if not exists password_resets (
-      id            bigserial primary key,
-      user_id       bigint,
-      token_hash    text not null,
-      expires_at    timestamptz not null,
-      used          boolean not null default false,
-      created_at    timestamptz not null default now()
-    );
-  `);
-
-  // 2) Add any missing legacy columns
-  await pool.query(`
-    alter table if exists conversations
-      add column if not exists user_id    bigint,
-      add column if not exists title      text not null default 'New chat',
-      add column if not exists archived   boolean not null default false,
-      add column if not exists created_at timestamptz not null default now(),
-      add column if not exists updated_at timestamptz not null default now();
-
-    alter table if exists messages
-      add column if not exists conversation_id bigint,
-      add column if not exists role           text,
-      add column if not exists content        text,
-      add column if not exists created_at     timestamptz not null default now();
-
-    alter table if exists share_links
-      add column if not exists conversation_id bigint,
-      add column if not exists token           text,
-      add column if not exists revoked         boolean not null default false,
-      add column if not exists created_at      timestamptz not null default now();
-
-    alter table if exists password_resets
-      add column if not exists user_id    bigint,
-      add column if not exists token_hash text,
-      add column if not exists expires_at timestamptz,
-      add column if not exists used       boolean not null default false,
-      add column if not exists created_at timestamptz not null default now();
-  `);
-
-  // 2a) Very old DBs may lack users.id — create & backfill
-  await pool.query(`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns
-         WHERE table_name = 'users' AND column_name = 'id'
-      ) THEN
-        CREATE SEQUENCE IF NOT EXISTS users_id_seq;
-        ALTER TABLE users ADD COLUMN id bigint;
-        ALTER TABLE users ALTER COLUMN id SET DEFAULT nextval('users_id_seq'::regclass);
-        UPDATE users SET id = nextval('users_id_seq'::regclass) WHERE id IS NULL;
-      END IF;
-    END $$;
-  `);
-
-  // 2b) Ensure PRIMARY KEY on users.id (ignore if already present)
-  await pool.query(`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint
-         WHERE conrelid = 'users'::regclass AND contype = 'p'
-      ) THEN
-        BEGIN
-          ALTER TABLE users ADD CONSTRAINT users_pkey PRIMARY KEY (id);
-        EXCEPTION WHEN duplicate_object THEN
-          NULL;
-        END;
-      END IF;
-    END $$;
-  `);
-
-  // 3) Foreign keys (ignore duplicates)
-  await pool.query(`
-    DO $$ BEGIN
-      ALTER TABLE conversations
-        ADD CONSTRAINT conversations_user_fk
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
-    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-
-    DO $$ BEGIN
-      ALTER TABLE messages
-        ADD CONSTRAINT messages_conversation_fk
-        FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE;
-    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-
-    DO $$ BEGIN
-      ALTER TABLE share_links
-        ADD CONSTRAINT share_links_conversation_fk
-        FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE;
-    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-
-    DO $$ BEGIN
-      ALTER TABLE password_resets
-        ADD CONSTRAINT password_resets_user_fk
-        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
-    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-  `);
-
-  // 4) Indexes
-  await pool.query(`
-    create index if not exists conversations_user_idx
-      on conversations(user_id, created_at desc);
-    create index if not exists messages_conv_idx
-      on messages(conversation_id, id);
-    create index if not exists password_resets_token_idx
-      on password_resets(token_hash);
-  `);
-}
-await ensureSchema();
-
-// ---------------- JWT session ----------------
-const SJWT = JWT_SECRET || crypto.randomBytes(48).toString("hex");
-function cookieOptions() {
-  const cross = Boolean(FRONTEND_ORIGIN);
-  return { httpOnly: true, secure: true, sameSite: cross ? "None" : "Lax", path: "/", maxAge: 30*24*60*60*1000 };
-}
-function setSessionCookie(res, payload) {
-  const token = jwt.sign(payload, SJWT, { expiresIn: "30d" });
-  res.cookie("sid", token, cookieOptions());
-}
-function clearSessionCookie(res) { res.clearCookie("sid", { ...cookieOptions(), maxAge: 0 }); }
-function session(req) {
-  const { sid } = req.cookies || {};
-  if (!sid) return null;
-  try { return jwt.verify(sid, SJWT); } catch { return null; }
-}
-
-// ---------------- Password hashing ----------------
-const scrypt = util.promisify(crypto.scrypt);
-async function hashPassword(pw) {
-  const salt = crypto.randomBytes(16).toString("hex");
-  const buf = await scrypt(pw, salt, 64);
-  return { salt, hash: buf.toString("hex") };
-}
-async function verifyPassword(pw, salt, hash) {
-  if (!salt || !hash) return false;
-  const buf = await scrypt(pw, salt, 64);
-  const a = Buffer.from(hash, "hex");
-  const b = Buffer.from(buf.toString("hex"), "hex");
-  return a.length === b.length && crypto.timingSafeEqual(a, b);
-}
-
-// ---------------- Helpers ----------------
-function sha256Hex(str){ return crypto.createHash("sha256").update(str).digest("hex"); }
-function absoluteBaseUrl(req){
-  if (CANONICAL_HOST) return CANONICAL_HOST.replace(/\/+$/,'');
-  const proto = req.get("x-forwarded-proto") || req.protocol;
-  const host  = req.get("x-forwarded-host") || req.get("host");
-  return `${proto}://${host}`;
-}
-function mapPlanCodeToLabel(planCode) {
-  if (!planCode) return "ONE_TIME";
-  if (planCode === PLAN_CODE_PLUS_MONTHLY) return "PLUS";
-  if (planCode === PLAN_CODE_PRO_ANNUAL) return "PRO";
-  return "ONE_TIME";
-}
-
-async function upsertUser(email, plan = "FREE") {
-  const r = await pool.query(
-    `insert into users(email, plan) values($1,$2)
-       on conflict(email) do update set email = excluded.email
-     returning id, email, plan`,
-    [email, plan]
-  );
-  return r.rows[0];
-}
-async function getUserByEmail(email) {
-  const r = await pool.query(`select * from users where email=$1`, [email]);
-  return r.rows[0] || null;
-}
-async function setUserPassword(email, pass) {
-  const { salt, hash } = await hashPassword(pass);
-  await pool.query(`update users set pass_salt=$2, pass_hash=$3, updated_at=now() where email=$1`, [email, salt, hash]);
-}
-
-async function openaiChat(messages) {
-  const r = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: OPENAI_DEFAULT_MODEL, messages, temperature: 0.2 })
-  });
-  if (!r.ok) throw new Error(`OpenAI ${r.status}: ${await r.text()}`);
-  const data = await r.json();
-  return data?.choices?.[0]?.message?.content || "";
-}
-
-// Email via Resend (simple REST call)
-async function sendEmail({ to, subject, html, text }) {
-  if (!RESEND_API_KEY) {
-    console.warn("[WARN] RESEND_API_KEY not set — email NOT sent.");
-    return { sent: false };
-  }
-  const r = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ from: MAIL_FROM, to: [to], subject, html, text })
-  });
-  if (!r.ok) throw new Error(`Resend error ${r.status}: ${await r.text()}`);
-  return { sent: true };
-}
-
-// ---------------- Health & Public config ----------------
-app.get("/api/health", (_req, res) => res.json({ ok: true }));
-app.get("/api/public-config", (_req, res) => {
-  res.json({
-    paystackPublicKey: PAYSTACK_PUBLIC_KEY || null,
-    currency: PAYSTACK_CURRENCY || "GHS",
-    planPlusMonthly: PLAN_CODE_PLUS_MONTHLY || null,
-    planProAnnual: PLAN_CODE_PRO_ANNUAL || null
-  });
-});
-
-// ---------------- Auth ----------------
-app.post("/api/signup-free", async (req, res) => {
-  try {
-    const { email, password } = req.body || {};
-    if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
-      return res.status(400).json({ status: "error", message: "Valid email required" });
+  <style>
+    :root{
+      --bg:#0f172a; --bg-light:#111827; --text:#e5e7eb; --muted:#9ca3af;
+      --accent:#6366f1; --border:#1f2937; --main:#0b1220; --bubble:#0f172a; --user:#1f2937;
+      --side-width: 280px;
     }
-    const u = await upsertUser(email, "FREE");
-    if (password && password.length >= 8) await setUserPassword(email, password);
-    setSessionCookie(res, { email: u.email, plan: u.plan });
-    res.json({ status: "success", user: { email: u.email } });
-  } catch (e) {
-    console.error("signup-free", e);
-    res.status(500).json({ status: "error", message: "Could not create user" });
-  }
-});
-
-app.post("/api/login", async (req, res) => {
-  try {
-    const { email, password } = req.body || {};
-    if (!email || !password) {
-      return res.status(400).json({ status: "error", message: "Email and password required" });
-    }
-    const u = await getUserByEmail(email);
-    if (!u) return res.status(401).json({ status: "error", message: "No account found. Please sign up." });
-
-    if (!u.pass_hash) {
-      if (password.length < 8) return res.status(400).json({ status: "error", message: "Password must be at least 8 characters." });
-      await setUserPassword(email, password);
-    } else {
-      const ok = await verifyPassword(password, u.pass_salt, u.pass_hash);
-      if (!ok) return res.status(401).json({ status: "error", message: "Invalid email or password." });
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{
+      font-family:system-ui,-apple-system,"Segoe UI",Roboto,Inter,sans-serif;
+      background:var(--main);color:var(--text);
+      height:100dvh; overflow:hidden;
     }
 
-    setSessionCookie(res, { email: u.email, plan: u.plan || "FREE" });
-    res.json({ status: "ok", user: { email: u.email } });
-  } catch (e) {
-    console.error("login", e);
-    res.status(500).json({ status: "error", message: "Login failed" });
-  }
-});
+    /* Sidebar (fixed) */
+    .sidebar{
+      width:var(--side-width);
+      position:fixed; left:0; top:0; height:100dvh; z-index:10;
+      background:var(--bg); border-right:1px solid var(--border);
+      display:flex; flex-direction:column;
+    }
+    .side-top{padding:12px; border-bottom:1px solid var(--border); background:var(--bg-light); display:flex; gap:8px}
+    .btn{background:var(--accent); color:#fff; border:none; border-radius:10px; padding:10px 12px; font-weight:700; cursor:pointer}
+    .btn.gray{background:#374151}
+    .btn.ghost{background:transparent; border:1px solid var(--border); color:var(--text)}
+    .search{margin:10px 12px}
+    .search input{width:100%; padding:10px; border-radius:10px; border:1px solid var(--border); background:#0b1220; color:var(--text)}
 
-app.get("/api/me", async (req, res) => {
-  const s = session(req);
-  if (!s?.email) return res.status(401).json({ status: "unauthenticated" });
-  const u = await getUserByEmail(s.email);
-  if (!u) return res.status(401).json({ status: "unauthenticated" });
-  res.json({ status: "ok", user: { email: u.email, plan: u.plan } });
-});
+    .convlist{flex:1; overflow:auto; padding:6px}
+    .conv{
+      position:relative;
+      display:flex; gap:10px; align-items:center; padding:10px 12px; border-radius:10px; cursor:pointer;
+    }
+    .conv:hover{background:#111a33}
+    .conv.active{background:#1b2540}
+    .conv .title{flex:1; font-size:.95rem; line-height:1.2}
+    .conv .time{color:var(--muted); font-size:.8rem}
+    .conv.editing{cursor:default}
 
-app.post("/api/logout", (_req, res) => { clearSessionCookie(res); res.json({ status: "ok" }); });
+    /* Inline title input */
+    .title-input{
+      width:100%; font-size:.95rem; color:var(--text);
+      background:transparent; border:1px solid var(--border);
+      border-radius:8px; padding:6px 8px; outline:none;
+    }
+    .title-input:disabled{opacity:.7}
 
-// ---------------- Password reset ----------------
-app.post("/api/reset/request", async (req, res) => {
-  try {
-    const { email } = req.body || {};
-    // Always return OK to avoid user enumeration
-    if (!email || !/^\S+@\S+\.\S+$/.test(email)) return res.json({ status: "ok" });
+    /* Kebab (three-dots) button */
+    .kebab{
+      opacity:0; transition:opacity .15s ease;
+      border:none; background:transparent; color:#9ca3af; font-size:18px; cursor:pointer; padding:2px 6px; border-radius:8px;
+    }
+    .conv:hover .kebab{opacity:1}
+    .kebab:focus{outline:1px solid #334155}
 
-    const u = await pool.query(`select id, email from users where email=$1`, [email]);
-    if (!u.rowCount) return res.json({ status: "ok" });
+    /* Context menu */
+    .menu{
+      position:absolute; right:8px; top:36px; z-index:30;
+      min-width:160px; background:#0b1220; border:1px solid var(--border); border-radius:10px; box-shadow:0 12px 28px rgba(0,0,0,.35);
+      display:none; overflow:hidden;
+    }
+    .menu.show{display:block;}
+    .menu button{
+      width:100%; text-align:left; background:transparent; border:none; color:var(--text);
+      padding:10px 12px; cursor:pointer; font-size:.95rem;
+    }
+    .menu button:hover{background:#111a33}
+    .menu .danger{color:#fca5a5}
+    .menu .muted{color:#9ca3af}
 
-    const userId = u.rows[0].id;
-    const token = crypto.randomBytes(32).toString("hex");
-    const tokenHash = sha256Hex(token);
-    const expires = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
+    .side-bottom{
+      padding:12px; border-top:1px solid var(--border); background:var(--bg);
+      display:flex; gap:8px;
+    }
+    .side-bottom .mini{flex:1}
+    .side-bottom .mini button{width:100%}
 
-    await pool.query(`insert into password_resets(user_id, token_hash, expires_at) values($1,$2,$3)`, [userId, tokenHash, expires]);
+    /* Main pane */
+    .main{
+      margin-left:var(--side-width);
+      height:100dvh; display:flex; flex-direction:column; min-width:0;
+    }
+    .topbar{
+      background:var(--bg-light); border-bottom:1px solid var(--border);
+      padding:12px 16px; display:flex; justify-content:space-between; align-items:center
+    }
+    .topbar .left{display:flex; gap:10px; align-items:center}
+    .pill{border:1px solid var(--border); border-radius:999px; padding:6px 10px; color:var(--muted); background:#0b1220}
 
-    const base = CANONICAL_HOST || absoluteBaseUrl(req);
-    const link = `${base}/reset-password?t=${token}`;
+    .wrap{
+      flex:1; display:flex; flex-direction:column; max-width:1000px; margin:0 auto; width:100%;
+      min-height:0;
+    }
+    .transcript{flex:1; overflow:auto; padding:18px; scroll-behavior:smooth;}
+    .row{display:flex; margin:10px 0}
+    .bubble{max-width:70%; white-space:pre-wrap; word-wrap:break-word; padding:14px; border-radius:14px; border:1px solid var(--border)}
+    .bot .bubble{background:var(--bubble)}
+    .user .bubble{background:var(--user)}
 
-    const subject = "Reset your GPTs Help password";
-    const text = `Click the link below to reset your password:\n${link}\n\nIf you didn’t request this, you can ignore this email.`;
-    const html = `
-      <div style="font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif">
-        <p>Click the button below to reset your password:</p>
-        <p><a href="${link}" style="display:inline-block;padding:10px 16px;background:#6f42c1;color:#fff;border-radius:8px;text-decoration:none">Reset password</a></p>
-        <p>Or paste this link into your browser:<br>${link}</p>
-        <p style="color:#6c757d;font-size:12px">If you didn’t request this, you can ignore this email.</p>
+    /* STICKY composer */
+    .composer{
+      position:sticky; bottom:0; z-index:5;
+      border-top:1px solid var(--border);
+      padding:12px 16px calc(12px + env(safe-area-inset-bottom));
+      display:grid; grid-template-columns:auto 1fr auto; gap:10px; align-items:end;
+      background:rgba(15,21,40,.92); backdrop-filter: blur(6px);
+    }
+    textarea{
+      padding:12px; border:1px solid var(--border); border-radius:12px;
+      min-height:54px; max-height:200px; resize:vertical; background:#0b1220; color:#fff;
+    }
+    .attach{border:1px dashed var(--border); background:#0b1220; color:#9ca3af}
+    .thumbs{display:flex; gap:8px; flex-wrap:wrap; margin-top:6px}
+    .thumbs img{height:54px;width:54px;object-fit:cover;border-radius:8px;border:1px solid var(--border)}
+    .muted{color:#9ca3af; font-size:.9rem}
+    .hide{display:none}
+
+    .floating-signout{
+      position:fixed; left:12px; bottom:12px; z-index:20;
+      display:none;
+      background:#374151; color:#fff; border:none; border-radius:10px; padding:10px 12px; font-weight:700; cursor:pointer;
+      box-shadow:0 8px 20px rgba(0,0,0,.25);
+    }
+
+    @media (max-width:900px){
+      .sidebar{display:none}
+      .main{margin-left:0}
+      .floating-signout{display:inline-flex}
+      .bubble{max-width:90%}
+    }
+
+    /* Markdown polish */
+    .bubble h1,.bubble h2,.bubble h3 { margin: 8px 0 6px; line-height: 1.25; }
+    .bubble pre { background:#0b1220; border:1px solid #1f2937; padding:10px; border-radius:10px; overflow:auto; }
+    .bubble code { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; }
+    .bubble ul,.bubble ol{ padding-left: 1.25rem; }
+    .bubble p { margin: 6px 0; }
+
+    /* Diagnostic choice bar */
+    .choicebar{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px}
+    .choicebar .btn{padding:8px 10px}
+    .progress{color:#9ca3af; font-size:.85rem; margin-top:6px}
+  </style>
+
+  <!-- Markdown + sanitization -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.5/dist/purify.min.js"></script>
+  <script>
+    marked.setOptions({ gfm: true, breaks: true });
+    function preprocessBotMarkdown(md){
+      if(!md) return '';
+      // Remove a leading "## Heading" line
+      md = md.replace(/^\s*##\s+([^\n]+)\n?/, '$1\n');
+      // Remove a single leading bold banner line "**...**"
+      md = md.replace(/^\s*\*\*([^*]+)\*\*\s*\n/, '$1\n');
+      return md;
+    }
+    window.renderMarkdown = function (md) {
+      const html = marked.parse(preprocessBotMarkdown(md || ""));
+      return DOMPurify.sanitize(html, { USE_PROFILES: { html: true } });
+    };
+  </script>
+
+  <!-- MathJax -->
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['\\(','\\)'], ['$', '$']], displayMath: [['\\[','\\]']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml.js" defer></script>
+</head>
+
+<body>
+  <!-- Sidebar (fixed) -->
+  <aside class="sidebar">
+    <div class="side-top">
+      <button id="newChat" class="btn">+ New chat</button>
+      <button id="toAccount" class="btn gray">Account</button>
+    </div>
+    <div class="search">
+      <input id="q" placeholder="Search chats…">
+    </div>
+    <div id="convlist" class="convlist"></div>
+    <div class="side-bottom">
+      <div class="mini"><button id="signout" class="btn gray">Sign out</button></div>
+    </div>
+  </aside>
+
+  <!-- Mobile floating signout -->
+  <button id="floatingSignout" class="floating-signout">Sign out</button>
+
+  <!-- Main -->
+  <main class="main">
+    <div class="topbar">
+      <div class="left">
+        <div class="pill" id="emailPill">—</div>
+        <div class="pill"><span id="model">Math GPT</span></div>
+        <div class="pill" id="status"></div>
       </div>
-    `.trim();
+      <div class="left" style="gap:8px">
+        <select id="gptType" class="pill" style="background:#0b1220;color:#e5e7eb;border:1px solid var(--border)">
+          <option value="math">Math GPT</option>
+          <option value="content">Content GPT</option>
+        </select>
+        <!-- Tutor buttons -->
+        <button id="btnDiagnostic" class="btn ghost">Start Diagnostic</button>
+        <button id="btnNextProblem" class="btn ghost">Next Problem</button>
+      </div>
+    </div>
 
-    try { await sendEmail({ to: email, subject, html, text }); }
-    catch (mailErr) { console.error("Email send failed:", mailErr); }
+    <div class="wrap">
+      <div id="transcript" class="transcript"></div>
 
-    res.json({ status: "ok" }); // no dev-only link returned
-  } catch (e) {
-    console.error("reset/request", e);
-    res.json({ status: "ok" });
-  }
-});
+      <!-- STICKY composer -->
+      <div class="composer">
+        <div>
+          <input id="file" class="hide" type="file" accept="image/*" capture="environment">
+          <button class="btn attach" id="attach">Attach Photo</button>
+          <div id="thumbs" class="thumbs hide"></div>
+        </div>
+        <textarea id="message" placeholder="Message Math GPT… (Enter = send, Shift+Enter = newline)"></textarea>
+        <button class="btn" id="send">Send</button>
+      </div>
 
-app.get("/api/reset/validate", async (req, res) => {
-  try {
-    const token = String(req.query.token || "");
-    if (!token) return res.json({ valid: false });
-    const tokenHash = sha256Hex(token);
-    const r = await pool.query(
-      `select 1 from password_resets
-        where token_hash=$1 and used=false and expires_at>now() limit 1`,
-      [tokenHash]
-    );
-    res.json({ valid: r.rowCount > 0 });
-  } catch {
-    res.json({ valid: false });
-  }
-});
+      <div id="hint" class="muted" style="padding:6px 16px"></div>
+    </div>
+  </main>
 
-app.post("/api/reset/confirm", async (req, res) => {
-  try {
-    const { token, newPassword } = req.body || {};
-    if (!token || typeof newPassword !== "string" || newPassword.length < 8) {
-      return res.status(400).json({ status: "error", message: "Invalid request" });
+  <script>
+    const API_BASE = 'https://gpts-help-production.up.railway.app';
+    const $ = s => document.querySelector(s);
+    const h = s => { $('#hint').textContent = s || ''; };
+
+    // Markdown rendering for bot messages
+    const addRow = (role, text) => {
+      const r = document.createElement('div'); r.className = `row ${role}`;
+      const b = document.createElement('div'); b.className = 'bubble';
+      if (role === 'bot' && window.renderMarkdown) b.innerHTML = window.renderMarkdown(text);
+      else b.textContent = text;
+      r.appendChild(b);
+      const t = $('#transcript'); t.appendChild(r); t.scrollTop = t.scrollHeight;
+      if (role === 'bot' && window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise([b]).catch(()=>{});
+      return b; // return bubble element for richer UI injections
+    };
+
+    // session
+    const getEmail = () => localStorage.getItem('gpts_email') || '';
+    const setActiveId = id => localStorage.setItem('gpts_active_conversation', id || '');
+    const getActiveId = () => localStorage.getItem('gpts_active_conversation') || '';
+
+    // sidebar state
+    let conversations = [];
+    let filtered = [];
+    let openMenuConvId = null;
+
+    // diagnostic session state
+    let diag = { sessionId: null, currentQ: null, total: 0 };
+
+    // thumbnails
+    let selectedFile = null; let previewUrl = null;
+    $('#attach').onclick = () => $('#file').click();
+    $('#file').onchange = () => {
+      const f = $('#file').files[0];
+      if(!f){ selectedFile=null; $('#thumbs').classList.add('hide'); return; }
+      if(!/^image\//.test(f.type)){ alert('Please select an image.'); return; }
+      selectedFile = f;
+      if(previewUrl) URL.revokeObjectURL(previewUrl);
+      previewUrl = URL.createObjectURL(f);
+      $('#thumbs').innerHTML = `<img src="${previewUrl}" alt="preview">`;
+      $('#thumbs').classList.remove('hide');
+    };
+
+    // API
+    async function checkSubscription(email){
+      const r = await fetch(`${API_BASE}/api/user/${encodeURIComponent(email)}`);
+      return r.ok ? r.json() : { subscribed:false };
     }
-    const tokenHash = sha256Hex(token);
-    const r = await pool.query(
-      `select pr.id, pr.user_id, u.email, u.plan
-         from password_resets pr
-         join users u on u.id = pr.user_id
-        where pr.token_hash=$1 and pr.used=false and pr.expires_at>now()
-        order by pr.id desc limit 1`,
-      [tokenHash]
-    );
-    if (!r.rowCount) return res.status(400).json({ status: "error", message: "Invalid or expired token" });
+    async function listConversations(email){
+      const r = await fetch(`${API_BASE}/api/conversations?userId=${encodeURIComponent(email)}`);
+      if(!r.ok) throw new Error('Failed to load conversations');
+      return r.json();
+    }
+    async function createConversation(email, title='New chat'){
+      const r = await fetch(`${API_BASE}/api/conversations`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ userId: email, title })
+      });
+      const d = await r.json(); if(!r.ok) throw new Error(d.error || 'Failed to create');
+      return d;
+    }
+    async function deleteConversation(email, id){
+      const r = await fetch(`${API_BASE}/api/conversations/${id}`, {
+        method:'DELETE', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ userId: email })
+      });
+      return r.ok;
+    }
+    async function renameConversation(email, id, title){
+      const r = await fetch(`${API_BASE}/api/conversations/${id}`, {
+        method:'PATCH', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ userId: email, title })
+      });
+      if (!r.ok) { const d = await r.json().catch(()=>({})); throw new Error(d.error || 'Rename failed'); }
+      return true;
+    }
+    async function getMessages(email, id){
+      const r = await fetch(`${API_BASE}/api/conversations/${id}?userId=${encodeURIComponent(email)}`);
+      const d = await r.json(); if(!r.ok) throw new Error(d.error || 'Failed to load messages');
+      return d.messages || [];
+    }
+    async function askText(email, gptType, message, conversationId){
+      const r = await fetch(`${API_BASE}/api/chat`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ userId: email, gptType, message, conversationId })
+      });
+      const data = await r.json();
+      if(!r.ok) throw new Error(data.error || 'Chat failed');
+      return data;
+    }
+    async function askPhoto(email, gptType, file, attempt, conversationId){
+      const fd = new FormData();
+      fd.append('userId', email);
+      fd.append('gptType', gptType);
+      if (attempt) fd.append('attempt', attempt);
+      if (conversationId) fd.append('conversationId', conversationId);
+      fd.append('image', file);
+      const r = await fetch(`${API_BASE}/api/photo-solve`, { method:'POST', body: fd });
+      const data = await r.json();
+      if(!r.ok) throw new Error(data.error || 'Photo solve failed');
+      return data;
+    }
 
-    const { id: prId, user_id: userId, email, plan } = r.rows[0];
-    const salt = crypto.randomBytes(16).toString("hex");
-    const buf = await scrypt(newPassword, salt, 64);
-    await pool.query(`update users set pass_salt=$2, pass_hash=$3, updated_at=now() where id=$1`, [userId, salt, buf.toString("hex")]);
-    await pool.query(`update password_resets set used=true where id=$1`, [prId]);
+    // Tutor APIs
+    async function startDiagnostic(){
+      const email = getEmail();
+      const activeId = getActiveId();
+      try{
+        const r = await fetch(`${API_BASE}/api/tutor/start-diagnostic`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ userId: email, level: 'auto', count: 6, conversationId: activeId || undefined })
+        });
+        const d = await r.json(); if(!r.ok) throw new Error(d.error || 'Failed to start diagnostic');
+        diag.sessionId = d.sessionId; diag.currentQ = d.question; diag.total = 6;
 
-    setSessionCookie(res, { email, plan: plan || "FREE" });
-    res.json({ status: "ok" });
-  } catch (e) {
-    console.error("reset/confirm", e);
-    res.status(500).json({ status: "error", message: "Could not reset password" });
-  }
-});
-
-// ---------------- Paystack ----------------
-app.post("/api/paystack/verify", async (req, res) => {
-  try {
-    const { reference } = req.body || {};
-    if (!reference) return res.status(400).json({ status: "error", message: "Missing reference" });
-
-    const psRes = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
-      headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}` }
-    });
-    const data = await psRes.json();
-
-    await pool.query(
-      `insert into paystack_receipts(email, reference, plan_code, status, raw)
-       values($1,$2,$3,$4,$5)
-       on conflict(reference) do nothing`,
-      [data?.data?.customer?.email || null, reference, data?.data?.plan?.plan_code || null, data?.data?.status || null, data]
-    );
-
-    if (data?.status && data?.data?.status === "success") {
-      const customerEmail = data.data?.customer?.email || null;
-      const planCode = data.data?.plan?.plan_code || null;
-      const label = mapPlanCodeToLabel(planCode);
-      if (customerEmail) {
-        await upsertUser(customerEmail);
-        if (label !== "ONE_TIME") {
-          await pool.query(`update users set plan=$2, updated_at=now() where email=$1`, [customerEmail, label]);
+        if (d.conversationId) {
+          setActiveId(d.conversationId);
+          await openConversation(d.conversationId); // loads assistant's Q1
         }
-        setSessionCookie(res, { email: customerEmail, plan: label === "ONE_TIME" ? "FREE" : label });
+        renderChoiceBar(1, diag.total); // show clickable A–D without duplicating the question
+      }catch(e){
+        addRow('bot', 'Error starting diagnostic: ' + e.message);
       }
-      return res.json({ status: "success", email: customerEmail, plan: label, reference });
     }
-    res.json({ status: "pending", data });
-  } catch (e) {
-    console.error("paystack verify", e);
-    res.status(500).json({ status: "error", message: "Verification failed" });
-  }
-});
+    async function answerDiagnostic(letter){
+      const email = getEmail();
+      if (!diag.sessionId || !diag.currentQ) { addRow('bot','No active diagnostic.'); return; }
+      try{
+        const r = await fetch(`${API_BASE}/api/tutor/answer-diagnostic`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            userId: email,
+            sessionId: diag.sessionId,
+            questionId: diag.currentQ.id,
+            answer: letter,
+            conversationId: getActiveId() || undefined
+          })
+        });
+        const d = await r.json(); if(!r.ok) throw new Error(d.error || 'Failed to submit answer');
 
-// ---------------- Auth guard ----------------
-async function requireUser(req, res) {
-  const s = session(req);
-  if (!s?.email) { res.status(401).json({ status: "unauthenticated" }); return null; }
-  const u = await getUserByEmail(s.email);
-  if (!u) { res.status(401).json({ status: "unauthenticated" }); return null; }
-  return u;
-}
-
-// ---------------- Conversations ----------------
-app.get("/api/conversations", async (req, res) => {
-  const u = await requireUser(req, res); if (!u) return;
-  const r = await pool.query(
-    `select id, title, archived from conversations
-     where user_id=$1 order by created_at desc`,
-    [u.id]
-  );
-  res.json(r.rows);
-});
-
-app.post("/api/conversations", async (req, res) => {
-  const u = await requireUser(req, res); if (!u) return;
-  const title = (req.body?.title || "New chat").trim();
-  const r = await pool.query(
-    `insert into conversations(user_id, title) values($1,$2) returning id, title`,
-    [u.id, title]
-  );
-  res.json(r.rows[0]);
-});
-
-app.patch("/api/conversations/:id", async (req, res) => {
-  const u = await requireUser(req, res); if (!u) return;
-  const id = Number(req.params.id);
-  const { title, archived } = req.body || {};
-
-  const sets = [], vals = [id, u.id];
-  if (typeof title === "string") { sets.push(`title=$${sets.length + 3}`); vals.push(title.trim() || "Untitled"); }
-  if (typeof archived === "boolean") { sets.push(`archived=$${sets.length + 3}`); vals.push(!!archived); }
-  if (!sets.length) return res.json({ ok: true });
-
-  await pool.query(
-    `update conversations set ${sets.join(", ")}, updated_at=now()
-     where id=$1 and user_id=$2`,
-    vals
-  );
-  res.json({ ok: true });
-});
-
-app.delete("/api/conversations/:id", async (req, res) => {
-  const u = await requireUser(req, res); if (!u) return;
-  const id = Number(req.params.id);
-  await pool.query(`delete from conversations where id=$1 and user_id=$2`, [id, u.id]);
-  res.json({ ok: true });
-});
-
-app.get("/api/conversations/:id", async (req, res) => {
-  const u = await requireUser(req, res); if (!u) return;
-  const id = Number(req.params.id);
-  const conv = await pool.query(`select id, title from conversations where id=$1 and user_id=$2`, [id, u.id]);
-  if (!conv.rowCount) return res.status(404).json({ error: "not found" });
-  const msgs = await pool.query(`select role, content, created_at from messages where conversation_id=$1 order by id`, [id]);
-  res.json({ id, title: conv.rows[0].title, messages: msgs.rows });
-});
-
-// Share link: create/return token
-app.post("/api/conversations/:id/share", async (req, res) => {
-  const u = await requireUser(req, res); if (!u) return;
-  const id = Number(req.params.id);
-  const own = await pool.query(`select id from conversations where id=$1 and user_id=$2`, [id, u.id]);
-  if (!own.rowCount) return res.status(404).json({ error: "not found" });
-
-  const existing = await pool.query(`select token from share_links where conversation_id=$1 and revoked=false order by id desc limit 1`, [id]);
-  if (existing.rowCount) return res.json({ token: existing.rows[0].token });
-
-  const token = crypto.randomBytes(20).toString("hex");
-  await pool.query(`insert into share_links(conversation_id, token) values($1,$2)`, [id, token]);
-  res.json({ token });
-});
-
-// Public read-only view
-app.get("/api/share/:token", async (req, res) => {
-  const { token } = req.params;
-  const s = await pool.query(
-    `select c.id, c.title
-       from share_links sl
-       join conversations c on c.id = sl.conversation_id
-      where sl.token=$1 and sl.revoked=false`,
-    [token]
-  );
-  if (!s.rowCount) return res.status(404).json({ error: "invalid_or_revoked" });
-  const convId = s.rows[0].id;
-  const msgs = await pool.query(`select role, content, created_at from messages where conversation_id=$1 order by id`, [convId]);
-  res.json({ title: s.rows[0].title, messages: msgs.rows });
-});
-
-// ---------------- Chat ----------------
-app.post("/api/chat", async (req, res) => {
-  try {
-    const u = await requireUser(req, res); if (!u) return;
-    const { message, gptType, conversationId } = req.body || {};
-    if (!message) return res.status(400).json({ error: "message required" });
-
-    // find or create conversation
-    let convId = conversationId ? Number(conversationId) : null;
-    if (convId) {
-      const own = await pool.query(`select id from conversations where id=$1 and user_id=$2`, [convId, u.id]);
-      if (!own.rowCount) convId = null;
+        if (d.conversationId) {
+          setActiveId(d.conversationId);
+          await openConversation(d.conversationId); // shows user's answer + next question or summary
+        }
+        if (!d.done) {
+          diag.currentQ = d.question;
+          const idx = (d.progress?.current || 0) + 1;
+          diag.total = d.progress?.total || diag.total || 6;
+          renderChoiceBar(idx, diag.total);
+        } else {
+          diag = { sessionId: null, currentQ: null, total: 0 };
+        }
+      }catch(e){
+        addRow('bot','Error: ' + e.message);
+      }
     }
-    if (!convId) {
-      const r = await pool.query(
-        `insert into conversations(user_id, title) values($1,$2) returning id`,
-        [u.id, (message.slice(0, 40) || "New chat")]
-      );
-      convId = r.rows[0].id;
+    async function nextProblem(){
+      const email = getEmail();
+      try{
+        const r = await fetch(`${API_BASE}/api/tutor/next-problem`, {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ userId: email, conversationId: getActiveId() || undefined })
+        });
+        const d = await r.json(); if(!r.ok) throw new Error(d.error || 'Failed to get problem');
+
+        if (d.conversationId) {
+          setActiveId(d.conversationId);
+          await openConversation(d.conversationId); // shows the posted problem (with steps/answer)
+        } else {
+          addRow('bot','Got a new problem.');
+        }
+      }catch(e){
+        addRow('bot','Error: ' + e.message);
+      }
     }
 
-    const hist = await pool.query(`select role, content from messages where conversation_id=$1 order by id`, [convId]);
-    const system =
-      gptType === "math"
-        ? "You are Math GPT. Solve math problems step-by-step with clear reasoning, and show workings. Be accurate and concise."
-        : "You are a helpful writing assistant. Be clear, structured, and helpful.";
-
-    const msgs = [{ role: "system", content: system }, ...hist.rows, { role: "user", content: message }];
-
-    await pool.query(`insert into messages(conversation_id, role, content) values($1,$2,$3)`, [convId, "user", message]);
-
-    const answer = await openaiChat(msgs);
-
-    await pool.query(`insert into messages(conversation_id, role, content) values($1,$2,$3)`, [convId, "assistant", answer]);
-
-    res.json({ response: answer, conversationId: convId });
-  } catch (e) {
-    console.error("chat", e);
-    res.status(500).json({ error: "Chat failed" });
-  }
-});
-
-// ---------------- Photo Solve ----------------
-app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
-  try {
-    const u = await requireUser(req, res); if (!u) return;
-    const { gptType, conversationId, attempt } = req.body || {};
-    if (!req.file) return res.status(400).json({ error: "image required" });
-
-    let convId = conversationId ? Number(conversationId) : null;
-    if (convId) {
-      const own = await pool.query(`select id from conversations where id=$1 and user_id=$2`, [convId, u.id]);
-      if (!own.rowCount) convId = null;
-    }
-    if (!convId) {
-      const r = await pool.query(`insert into conversations(user_id, title) values($1,$2) returning id`, [u.id, "Photo solve"]);
-      convId = r.rows[0].id;
+    function renderChoiceBar(idx, total){
+      const label = `Answer Q${idx}/${total}. Tap A–D:`;
+      const bubble = addRow('bot', label);
+      const bar = document.createElement('div'); bar.className = 'choicebar';
+      ['A','B','C','D'].forEach(letter => {
+        const btn = document.createElement('button');
+        btn.className = 'btn ghost';
+        btn.textContent = letter;
+        btn.onclick = () => answerDiagnostic(letter);
+        bar.appendChild(btn);
+      });
+      const prog = document.createElement('div'); prog.className='progress';
+      prog.textContent = 'Or type A, B, C, or D.';
+      bubble.appendChild(bar); bubble.appendChild(prog);
+      if (window.MathJax && MathJax.typesetPromise) MathJax.typesetPromise([bubble]).catch(()=>{});
     }
 
-    const mime = req.file.mimetype || "image/png";
-    const b64 = req.file.buffer.toString("base64");
-    const dataUrl = `data:${mime};base64,${b64}`;
+    // Build a conversation row with kebab menu and inline rename
+    function buildConvRow(item, activeId){
+      const row = document.createElement('div');
+      row.className = 'conv' + (String(item.id)===String(activeId) ? ' active':'');
+      row.dataset.id = item.id;
 
-    const system =
-      gptType === "math"
-        ? "You are Math GPT. Read the problem from the image and solve it step-by-step. Explain clearly."
-        : "You are a helpful assistant. Describe and analyze the content of the image, then answer the user's request.";
+      const title = document.createElement('div'); title.className = 'title'; title.textContent = item.title || 'Untitled';
+      const time  = document.createElement('div'); time.className = 'time'; time.textContent = new Date(item.updated_at).toLocaleString();
 
-    await pool.query(`insert into messages(conversation_id, role, content) values($1,$2,$3)`,
-      [convId, "user", attempt ? `(Photo) ${attempt}` : "(Photo uploaded)"]);
+      const kebab = document.createElement('button'); kebab.className = 'kebab'; kebab.setAttribute('aria-label','Chat menu'); kebab.textContent = '⋯';
 
-    const r = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: OPENAI_DEFAULT_MODEL,
-        messages: [
-          { role: "system", content: system },
-          { role: "user",
-            content: [
-              { type: "text", text: attempt ? `Note from user: ${attempt}\nSolve:` : "Solve this problem step-by-step:" },
-              { type: "image_url", image_url: { url: dataUrl } },
-            ]
+      const menu = document.createElement('div'); menu.className = 'menu';
+      menu.innerHTML = `
+        <button class="share">Share (copy link)</button>
+        <button class="rename">Rename</button>
+        <button class="delete danger">Delete</button>
+      `;
+
+      // Open conversation (disabled during inline editing)
+      row.addEventListener('click', () => {
+        if (row.classList.contains('editing')) return;
+        openConversation(item.id);
+      });
+
+      // Toggle menu
+      kebab.onclick = (e) => {
+        e.stopPropagation();
+        closeAllMenus();
+        menu.classList.toggle('show');
+        openMenuConvId = menu.classList.contains('show') ? item.id : null;
+      };
+
+      // Menu actions
+      menu.querySelector('.share').onclick = async (e) => {
+        e.stopPropagation(); menu.classList.remove('show'); openMenuConvId = null;
+        const url = `${location.origin}${location.pathname}?cid=${item.id}`;
+        try { await navigator.clipboard.writeText(url); h('Share link copied'); setTimeout(()=>h(''),2000); }
+        catch { prompt('Copy this link:', url); }
+      };
+
+      // INLINE RENAME
+      const beginInlineRename = () => {
+        menu.classList.remove('show'); openMenuConvId = null;
+        if (row.classList.contains('editing')) return;
+        row.classList.add('editing');
+
+        const current = title.textContent;
+        const input = document.createElement('input');
+        input.className = 'title-input';
+        input.value = current;
+        input.setAttribute('maxlength', '80');
+
+        row.replaceChild(input, title);
+        input.focus();
+        input.select();
+
+        const commit = async () => {
+          const next = (input.value || '').trim();
+          if (!next || next === current) { cancel(); return; }
+          input.disabled = true;
+          try {
+            await renameConversation(getEmail(), item.id, next);
+            item.title = next;
+            title.textContent = next;
+            row.replaceChild(title, input);
+            row.classList.remove('editing');
+            await refreshSidebar();
+            h('Chat renamed'); setTimeout(()=>h(''),1200);
+          } catch (err) {
+            input.disabled = false;
+            h(err.message || 'Rename failed'); setTimeout(()=>h(''),2500);
+            input.focus();
+            input.select();
           }
-        ],
-        temperature: 0.2
-      })
+        };
+
+        const cancel = () => {
+          row.replaceChild(title, input);
+          row.classList.remove('editing');
+        };
+
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') { e.preventDefault(); commit(); }
+          else if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+        });
+
+        input.addEventListener('blur', () => {
+          if (row.classList.contains('editing')) commit();
+        });
+      };
+
+      menu.querySelector('.rename').onclick = (e) => { e.stopPropagation(); beginInlineRename(); };
+      menu.querySelector('.delete').onclick = async (e) => {
+        e.stopPropagation();
+        if (!confirm('Delete this chat?')) { menu.classList.remove('show'); openMenuConvId = null; return; }
+        const ok = await deleteConversation(getEmail(), item.id);
+        if (ok) {
+          if (String(getActiveId()) === String(item.id)) setActiveId('');
+          await refreshSidebar();
+          if(!getActiveId()) { await newChat(); }
+        } else {
+          h('Delete failed'); setTimeout(()=>h(''),2000);
+        }
+        menu.classList.remove('show'); openMenuConvId = null;
+      };
+
+      row.appendChild(title); row.appendChild(time); row.appendChild(kebab); row.appendChild(menu);
+      return row;
+    }
+
+    function closeAllMenus(){
+      document.querySelectorAll('.menu.show').forEach(m => m.classList.remove('show'));
+      openMenuConvId = null;
+    }
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.menu') && !e.target.closest('.kebab')) closeAllMenus();
     });
-    if (!r.ok) throw new Error(`OpenAI vision ${r.status}: ${await r.text()}`);
-    const data = await r.json();
-    const answer = data?.choices?.[0]?.message?.content || "No result";
 
-    await pool.query(`insert into messages(conversation_id, role, content) values($1,$2,$3)`, [convId, "assistant", answer]);
-    res.json({ response: answer, conversationId: convId });
-  } catch (e) {
-    console.error("photo-solve", e);
-    res.status(500).json({ error: "Photo solve failed" });
-  }
-});
+    // Sidebar rendering
+    function renderList(list){
+      const c = $('#convlist'); c.innerHTML = '';
+      const active = getActiveId();
+      list.forEach(item => c.appendChild(buildConvRow(item, active)));
+    }
 
-// ---------------- Start ----------------
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`GPTs Help server running on :${PORT}`);
-  if (!JWT_SECRET) {
-    console.warn("[WARN] JWT_SECRET not set. Using a random secret; sessions reset on deploy.");
-  }
-});
+    async function refreshSidebar(){
+      const email = getEmail();
+      conversations = await listConversations(email);
+      const q = $('#q').value.trim().toLowerCase();
+      filtered = q ? conversations.filter(x => (x.title||'').toLowerCase().includes(q)) : conversations;
+      renderList(filtered);
+    }
+
+    async function openConversation(id){
+      setActiveId(id);
+      $('#transcript').innerHTML = '';
+      const msgs = await getMessages(getEmail(), id);
+      msgs.forEach(m => addRow(m.role, m.content));
+      await refreshSidebar();
+      document.querySelector('.composer')?.scrollIntoView({ block:'end' });
+    }
+
+    async function newChat(){
+      const email = getEmail();
+      const conv = await createConversation(email, 'New chat');
+      setActiveId(conv.id);
+      $('#transcript').innerHTML = '';
+      addRow('bot', 'New chat started. Ask me anything, or attach a photo of a problem!');
+      await refreshSidebar();
+      document.querySelector('.composer')?.scrollIntoView({ block:'end' });
+    }
+
+    async function send(){
+      const email = getEmail();
+      const gptType = $('#gptType').value;
+      const msg = $('#message').value.trim();
+      const status = $('#status');
+      let convId = getActiveId();
+
+      if(!convId){
+        const c = await createConversation(email, msg ? msg.slice(0,40) : 'New chat');
+        convId = c.id; setActiveId(convId); await refreshSidebar();
+      }
+
+      if (selectedFile) addRow('user', msg ? `📷 ${msg}` : '📷 Photo sent');
+      else if (msg) addRow('user', msg);
+      else return;
+
+      $('#message').value = '';
+      status.textContent = 'Thinking…';
+
+      try{
+        const data = selectedFile
+          ? await askPhoto(email, gptType, selectedFile, msg, convId)
+          : await askText(email, gptType, msg, convId);
+
+        if (data.conversationId && String(data.conversationId) !== String(convId)) {
+          setActiveId(data.conversationId); convId = data.conversationId;
+        }
+        // Reload full conversation from server to ensure consistency
+        await openConversation(convId);
+      }catch(e){
+        addRow('bot', 'Error: ' + e.message);
+      }finally{
+        status.textContent = '';
+        if (selectedFile){ selectedFile=null; if(previewUrl) URL.revokeObjectURL(previewUrl); $('#thumbs').classList.add('hide'); $('#file').value=''; }
+        document.querySelector('.composer')?.scrollIntoView({ block:'end' });
+      }
+    }
+
+    // events
+    $('#send').onclick = send;
+    $('#message').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+    });
+    $('#q').oninput = refreshSidebar;
+    $('#newChat').onclick = newChat;
+    $('#toAccount').onclick = () => location.href = 'index.html';
+    $('#btnDiagnostic').onclick = startDiagnostic;
+    $('#btnNextProblem').onclick = nextProblem;
+
+    function doSignout(){ localStorage.removeItem('gpts_email'); location.href = 'index.html'; }
+    $('#signout').onclick = doSignout; $('#floatingSignout').onclick = doSignout;
+
+    // Keep composer visible on mobile keyboard show/hide
+    if (window.visualViewport) {
+      const vv = window.visualViewport;
+      const onVV = () => document.querySelector('.composer')?.scrollIntoView({ block:'end' });
+      vv.addEventListener('resize', onVV); vv.addEventListener('scroll', onVV);
+    }
+
+    // Open a shared link like ?cid=123
+    function getQueryParam(name){
+      const m = new RegExp('[?&]'+name+'=([^&]+)').exec(location.search);
+      return m ? decodeURIComponent(m[1]) : null;
+    }
+
+    (async function init(){
+      const email = getEmail();
+      if(!email){ location.href='index.html'; return; }
+      document.getElementById('emailPill').textContent = email;
+
+      const sub = await checkSubscription(email);
+      if(!sub.subscribed){ location.href='index.html'; return; }
+
+      await refreshSidebar();
+
+      const sharedCid = getQueryParam('cid');
+      if (sharedCid) {
+        try { await openConversation(sharedCid); }
+        catch { /* ignore */ }
+      } else {
+        const active = getActiveId();
+        if(active){ await openConversation(active); }
+        else { addRow('bot', 'Welcome back! Pick a chat on the left or start a new one.'); }
+      }
+
+      h('Tip: Hover a chat for ⋯ to Share, Rename inline, or Delete. Start Diagnostic for a mini-plan.');
+      document.querySelector('.composer')?.scrollIntoView({ block:'end' });
+    })();
+  </script>
+</body>
+</html>
