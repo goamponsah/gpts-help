@@ -286,10 +286,23 @@
       }).then(r=>r.json()),
       deleteConv:(id)=>fetch(`/api/conversations/${id}`,{method:'DELETE',credentials:'include'}).then(r=>r.json()),
       getConvMsgs:(id)=>fetch(`/api/conversations/${id}`, { credentials:'include' }).then(r=>r.json()),
-      chat:(payload)=>fetch('/api/chat',{
-        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
-        body:JSON.stringify(payload)
-      }).then(r=>r.json()),
+      chat: async (payload) => {
+        const r = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify(payload)
+        });
+        let j = null;
+        try { j = await r.json(); } catch { j = {}; }
+        if (!r.ok) {
+          const msg =
+            r.status === 401 ? 'Your session expired. Please log in again.' :
+            j?.error || 'Chat failed.';
+          throw new Error(msg);
+        }
+        return j;
+      },
       me:()=>fetch('/api/me', { credentials:'include' }).then(r=>r.json()),
       photoSolve: async (fd)=>{
         const r = await fetch('/api/photo-solve',{method:'POST',credentials:'include',body:fd});
@@ -709,7 +722,6 @@
         document.body.classList.add('viewer');
         // disable composer controls
         [sendBtn, photoBtn, promptEl].forEach(el => { el.disabled = true; });
-        // hide new-chat + logout (still there if you want, but fine to keep)
         viewerBanner.style.display = 'block';
         await showSharedConversation(token);
         updatePlaceholder(); autoresize();
@@ -725,4 +737,3 @@
   </script>
 </body>
 </html>
-
