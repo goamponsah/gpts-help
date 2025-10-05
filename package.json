@@ -1,28 +1,27 @@
 {
   "name": "gpts-help",
   "version": "1.0.0",
-  "description": "GPTs Help - AI tutoring and content generation suite with Paystack integration",
-  "main": "server.js",
+  "private": true,
+  "description": "GPTs Help – AI tutoring and content suite with Paystack, email/password auth, and Postgres persistence",
   "type": "module",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "nodemon server.js",
-    "build": "npm install --omit=dev"
+    "dev": "nodemon server.js"
   },
   "dependencies": {
-    "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "express": "^4.21.1",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
-    "pg": "^8.11.5"
+    "pg": "^8.12.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.17.0"
   },
   "keywords": [
     "AI",
@@ -30,7 +29,8 @@
     "Paystack",
     "Math",
     "Content",
-    "Tutoring"
+    "Tutoring",
+    "Postgres"
   ],
   "author": "Your Name",
   "license": "MIT"
