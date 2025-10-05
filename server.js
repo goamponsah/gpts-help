@@ -1,646 +1,731 @@
-import express from 'express';
-import cors from 'cors';
-import cookieParser from 'cookie-parser';
-import pkg from 'pg';
-import jwt from 'jsonwebtoken';
-import bcrypt from 'bcryptjs';
-import crypto from 'crypto';
-import multer from 'multer';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+// server.js (ESM, Node 18+)
+// package.json should have: { "type": "module" }
+// Dependencies: express, cookie-parser, cors, jsonwebtoken, multer, pg
+// Env you should set (Railway Variables):
+//   DATABASE_URL, JWT_SECRET, OPENAI_API_KEY, OPENAI_MODEL (optional)
+//   PAYSTACK_PUBLIC_KEY, PAYSTACK_SECRET_KEY, PLAN_CODE_PLUS_MONTHLY, PLAN_CODE_PRO_ANNUAL, PAYSTACK_CURRENCY (optional)
+//   RESEND_API_KEY (for email), MAIL_FROM (e.g. "GPTs Help <no-reply@yourdomain.com>")
+//   FRONTEND_ORIGIN (if FE/BE split), CANONICAL_HOST (optional), STRICT_CANONICAL (optional)
+// Files in /public must include index.html, chat.html, reset-password.html
 
-const { Pool } = pkg;
+import express from "express";
+import cookieParser from "cookie-parser";
+import cors from "cors";
+import jwt from "jsonwebtoken";
+import crypto from "node:crypto";
+import util from "node:util";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import multer from "multer";
+import pg from "pg";
 
-// --- App & infra ---
-const app = express();
-const PORT = process.env.PORT || 3000;
-app.set('trust proxy', 1); // secure cookies behind proxy
+const { Pool } = pg;
 
-// ES module dirname
+// ---------------- Path helpers ----------------
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const __dirname = path.dirname(__filename);
 
-// --- Database ---
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-});
+// ---------------- App ----------------
+const app = express();
 
-// --- Config / Secrets ---
-const JWT_SECRET = process.env.JWT_SECRET || 'change-this-in-production';
-const PAYSTACK_PUBLIC_KEY = process.env.PAYSTACK_PUBLIC_KEY || '';
-const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY || '';
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY || ''; // optional
+// ---------------- ENV ----------------
+const {
+  DATABASE_URL,
+  JWT_SECRET,
+  OPENAI_API_KEY,
+  OPENAI_MODEL,
+  PAYSTACK_PUBLIC_KEY,
+  PAYSTACK_SECRET_KEY,
+  PLAN_CODE_PLUS_MONTHLY,
+  PLAN_CODE_PRO_ANNUAL,
+  PAYSTACK_CURRENCY = "GHS",
+  FRONTEND_ORIGIN,
+  NODE_ENV,
+  RESEND_API_KEY,
+  MAIL_FROM = "GPTs Help <no-reply@example.com>",
+  CANONICAL_HOST,
+  STRICT_CANONICAL
+} = process.env;
 
-// --- Middleware ---
-app.use(cors({
-  origin: true,
-  credentials: true,
-}));
-app.use(express.json({ limit: '50mb' }));
+const OPENAI_DEFAULT_MODEL = OPENAI_MODEL || "gpt-4o-mini";
+if (!DATABASE_URL) console.error("[ERROR] DATABASE_URL not set");
+if (!JWT_SECRET) console.warn("[WARN] JWT_SECRET not set; sessions will reset on deploy");
+if (!OPENAI_API_KEY) console.warn("[WARN] OPENAI_API_KEY not set");
+
+// ---------------- Middleware ----------------
+if (FRONTEND_ORIGIN) {
+  app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
+}
+app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
-app.use(express.urlencoded({ extended: true }));
-app.use(express.static(join(__dirname, 'public')));
 
-// Request log (simple)
-app.use((req, _res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
-  next();
-});
-
-// --- Auth middleware ---
-const authenticateToken = async (req, res, next) => {
-  const token = req.cookies.token || req.headers.authorization?.replace('Bearer ', '');
-  if (!token) return res.status(401).json({ status: 'error', message: 'Authentication required' });
-
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    const userResult = await pool.query('SELECT id, email, plan FROM users WHERE id = $1', [decoded.userId]);
-    if (userResult.rows.length === 0) {
-      return res.status(401).json({ status: 'error', message: 'User not found' });
-    }
-    req.user = userResult.rows[0];
+// Optional strict canonical redirect
+if (STRICT_CANONICAL === "true" && CANONICAL_HOST) {
+  const CANON = CANONICAL_HOST.replace(/\/+$/, "");
+  app.use((req, res, next) => {
+    const proto = req.get("x-forwarded-proto") || req.protocol;
+    const host = req.get("x-forwarded-host") || req.get("host");
+    const current = `${proto}://${host}`;
+    if (current !== CANON) return res.redirect(301, CANON + req.originalUrl);
     next();
-  } catch (err) {
-    console.error('Auth error:', err);
-    return res.status(401).json({ status: 'error', message: 'Invalid token' });
-  }
-};
+  });
+}
 
-// --- Utilities ---
-const ok = (payload = {}) => ({ status: 'ok', ...payload });
-
-// Multer for photo-solve (in-memory; not storing files on disk)
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 6 * 1024 * 1024 } });
-
-// --- HEALTH/DEBUG ---
-app.get('/api/health', async (_req, res) => {
-  try {
-    await pool.query('SELECT 1');
-    const users = await pool.query('SELECT COUNT(*) AS count FROM users');
-    const recent = await pool.query('SELECT email, created_at FROM users ORDER BY created_at DESC LIMIT 5');
-    res.json(ok({
-      database: 'connected',
-      total_users: Number(users.rows[0].count),
-      recent_users: recent.rows,
-      timestamp: new Date().toISOString(),
-    }));
-  } catch (error) {
-    console.error('Health check failed:', error);
-    res.status(500).json({ status: 'error', database: 'disconnected', message: error.message });
-  }
+// Static files
+app.use(express.static(path.join(__dirname, "public")));
+app.get("/reset-password", (_req, res) => {
+  res.sendFile(path.join(__dirname, "public", "reset-password.html"));
 });
 
-app.post('/api/debug/reset-users', async (_req, res) => {
-  try {
-    await pool.query('DELETE FROM users WHERE email LIKE $1', ['%@%']);
-    const remaining = await pool.query('SELECT COUNT(*) as count FROM users');
-    res.json(ok({ message: 'Test users cleared', remaining_users: Number(remaining.rows[0].count) }));
-  } catch (e) {
-    res.status(500).json({ status: 'error', message: e.message });
+// Uploads (memory)
+const upload = multer({ storage: multer.memoryStorage() });
+
+// ---------------- Database ----------------
+const pool = new Pool({
+  connectionString: DATABASE_URL,
+  ssl: NODE_ENV === "production" ? { rejectUnauthorized: false } : false
+});
+
+// Idempotent schema setup (safe across deploys)
+async function ensureSchema() {
+  // 1) Base tables
+  await pool.query(`
+    create table if not exists users (
+      id            bigserial primary key,
+      email         text not null unique,
+      pass_salt     text,
+      pass_hash     text,
+      plan          text not null default 'FREE',
+      created_at    timestamptz not null default now(),
+      updated_at    timestamptz not null default now()
+    );
+
+    create table if not exists conversations (
+      id            bigserial primary key,
+      user_id       bigint,
+      title         text not null,
+      archived      boolean not null default false,
+      created_at    timestamptz not null default now(),
+      updated_at    timestamptz not null default now()
+    );
+
+    create table if not exists messages (
+      id            bigserial primary key,
+      conversation_id bigint,
+      role          text,
+      content       text,
+      created_at    timestamptz not null default now()
+    );
+
+    create table if not exists share_links (
+      id               bigserial primary key,
+      conversation_id  bigint,
+      token            text not null unique,
+      revoked          boolean not null default false,
+      created_at       timestamptz not null default now()
+    );
+
+    create table if not exists paystack_receipts (
+      id            bigserial primary key,
+      email         text,
+      reference     text not null unique,
+      plan_code     text,
+      status        text,
+      raw           jsonb,
+      created_at    timestamptz not null default now()
+    );
+
+    create table if not exists password_resets (
+      id            bigserial primary key,
+      user_id       bigint,
+      token_hash    text not null,
+      expires_at    timestamptz not null,
+      used          boolean not null default false,
+      created_at    timestamptz not null default now()
+    );
+  `);
+
+  // 2) Add any missing legacy columns
+  await pool.query(`
+    alter table if exists conversations
+      add column if not exists user_id    bigint,
+      add column if not exists title      text not null default 'New chat',
+      add column if not exists archived   boolean not null default false,
+      add column if not exists created_at timestamptz not null default now(),
+      add column if not exists updated_at timestamptz not null default now();
+
+    alter table if exists messages
+      add column if not exists conversation_id bigint,
+      add column if not exists role           text,
+      add column if not exists content        text,
+      add column if not exists created_at     timestamptz not null default now();
+
+    alter table if exists share_links
+      add column if not exists conversation_id bigint,
+      add column if not exists token           text,
+      add column if not exists revoked         boolean not null default false,
+      add column if not exists created_at      timestamptz not null default now();
+
+    alter table if exists password_resets
+      add column if not exists user_id    bigint,
+      add column if not exists token_hash text,
+      add column if not exists expires_at timestamptz,
+      add column if not exists used       boolean not null default false,
+      add column if not exists created_at timestamptz not null default now();
+  `);
+
+  // 2a) Very old DBs may lack users.id — create & backfill
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+         WHERE table_name = 'users' AND column_name = 'id'
+      ) THEN
+        CREATE SEQUENCE IF NOT EXISTS users_id_seq;
+        ALTER TABLE users ADD COLUMN id bigint;
+        ALTER TABLE users ALTER COLUMN id SET DEFAULT nextval('users_id_seq'::regclass);
+        UPDATE users SET id = nextval('users_id_seq'::regclass) WHERE id IS NULL;
+      END IF;
+    END $$;
+  `);
+
+  // 2b) Ensure PRIMARY KEY on users.id (ignore if already present)
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+         WHERE conrelid = 'users'::regclass AND contype = 'p'
+      ) THEN
+        BEGIN
+          ALTER TABLE users ADD CONSTRAINT users_pkey PRIMARY KEY (id);
+        EXCEPTION WHEN duplicate_object THEN
+          NULL;
+        END;
+      END IF;
+    END $$;
+  `);
+
+  // 3) Foreign keys (ignore duplicates)
+  await pool.query(`
+    DO $$ BEGIN
+      ALTER TABLE conversations
+        ADD CONSTRAINT conversations_user_fk
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+    DO $$ BEGIN
+      ALTER TABLE messages
+        ADD CONSTRAINT messages_conversation_fk
+        FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+    DO $$ BEGIN
+      ALTER TABLE share_links
+        ADD CONSTRAINT share_links_conversation_fk
+        FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+    DO $$ BEGIN
+      ALTER TABLE password_resets
+        ADD CONSTRAINT password_resets_user_fk
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+    EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+  `);
+
+  // 4) Indexes
+  await pool.query(`
+    create index if not exists conversations_user_idx
+      on conversations(user_id, created_at desc);
+    create index if not exists messages_conv_idx
+      on messages(conversation_id, id);
+    create index if not exists password_resets_token_idx
+      on password_resets(token_hash);
+  `);
+}
+await ensureSchema();
+
+// ---------------- JWT session ----------------
+const SJWT = JWT_SECRET || crypto.randomBytes(48).toString("hex");
+function cookieOptions() {
+  const cross = Boolean(FRONTEND_ORIGIN);
+  return { httpOnly: true, secure: true, sameSite: cross ? "None" : "Lax", path: "/", maxAge: 30*24*60*60*1000 };
+}
+function setSessionCookie(res, payload) {
+  const token = jwt.sign(payload, SJWT, { expiresIn: "30d" });
+  res.cookie("sid", token, cookieOptions());
+}
+function clearSessionCookie(res) { res.clearCookie("sid", { ...cookieOptions(), maxAge: 0 }); }
+function session(req) {
+  const { sid } = req.cookies || {};
+  if (!sid) return null;
+  try { return jwt.verify(sid, SJWT); } catch { return null; }
+}
+
+// ---------------- Password hashing ----------------
+const scrypt = util.promisify(crypto.scrypt);
+async function hashPassword(pw) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const buf = await scrypt(pw, salt, 64);
+  return { salt, hash: buf.toString("hex") };
+}
+async function verifyPassword(pw, salt, hash) {
+  if (!salt || !hash) return false;
+  const buf = await scrypt(pw, salt, 64);
+  const a = Buffer.from(hash, "hex");
+  const b = Buffer.from(buf.toString("hex"), "hex");
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+}
+
+// ---------------- Helpers ----------------
+function sha256Hex(str){ return crypto.createHash("sha256").update(str).digest("hex"); }
+function absoluteBaseUrl(req){
+  if (CANONICAL_HOST) return CANONICAL_HOST.replace(/\/+$/,'');
+  const proto = req.get("x-forwarded-proto") || req.protocol;
+  const host  = req.get("x-forwarded-host") || req.get("host");
+  return `${proto}://${host}`;
+}
+function mapPlanCodeToLabel(planCode) {
+  if (!planCode) return "ONE_TIME";
+  if (planCode === PLAN_CODE_PLUS_MONTHLY) return "PLUS";
+  if (planCode === PLAN_CODE_PRO_ANNUAL) return "PRO";
+  return "ONE_TIME";
+}
+
+async function upsertUser(email, plan = "FREE") {
+  const r = await pool.query(
+    `insert into users(email, plan) values($1,$2)
+       on conflict(email) do update set email = excluded.email
+     returning id, email, plan`,
+    [email, plan]
+  );
+  return r.rows[0];
+}
+async function getUserByEmail(email) {
+  const r = await pool.query(`select * from users where email=$1`, [email]);
+  return r.rows[0] || null;
+}
+async function setUserPassword(email, pass) {
+  const { salt, hash } = await hashPassword(pass);
+  await pool.query(`update users set pass_salt=$2, pass_hash=$3, updated_at=now() where email=$1`, [email, salt, hash]);
+}
+
+async function openaiChat(messages) {
+  const r = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: OPENAI_DEFAULT_MODEL, messages, temperature: 0.2 })
+  });
+  if (!r.ok) throw new Error(`OpenAI ${r.status}: ${await r.text()}`);
+  const data = await r.json();
+  return data?.choices?.[0]?.message?.content || "";
+}
+
+// Email via Resend (simple REST call)
+async function sendEmail({ to, subject, html, text }) {
+  if (!RESEND_API_KEY) {
+    console.warn("[WARN] RESEND_API_KEY not set — email NOT sent.");
+    return { sent: false };
   }
+  const r = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: MAIL_FROM, to: [to], subject, html, text })
+  });
+  if (!r.ok) throw new Error(`Resend error ${r.status}: ${await r.text()}`);
+  return { sent: true };
+}
+
+// ---------------- Health & Public config ----------------
+app.get("/api/health", (_req, res) => res.json({ ok: true }));
+app.get("/api/public-config", (_req, res) => {
+  res.json({
+    paystackPublicKey: PAYSTACK_PUBLIC_KEY || null,
+    currency: PAYSTACK_CURRENCY || "GHS",
+    planPlusMonthly: PLAN_CODE_PLUS_MONTHLY || null,
+    planProAnnual: PLAN_CODE_PRO_ANNUAL || null
+  });
 });
 
-// --- Public config for frontend ---
-app.get('/api/public-config', (_req, res) => {
-  res.json(ok({ paystackPublicKey: PAYSTACK_PUBLIC_KEY || 'pk_test_placeholder' }));
-});
-
-// --- AUTH ---
-app.post('/api/signup-free', async (req, res) => {
+// ---------------- Auth ----------------
+app.post("/api/signup-free", async (req, res) => {
   try {
     const { email, password } = req.body || {};
-    if (!email || !password) return res.status(400).json({ status: 'error', message: 'Email and password are required' });
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ status: 'error', message: 'Invalid email format' });
-    if (password.length < 8) return res.status(400).json({ status: 'error', message: 'Password must be at least 8 characters' });
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+      return res.status(400).json({ status: "error", message: "Valid email required" });
+    }
+    const u = await upsertUser(email, "FREE");
+    if (password && password.length >= 8) await setUserPassword(email, password);
+    setSessionCookie(res, { email: u.email, plan: u.plan });
+    res.json({ status: "success", user: { email: u.email } });
+  } catch (e) {
+    console.error("signup-free", e);
+    res.status(500).json({ status: "error", message: "Could not create user" });
+  }
+});
 
-    const existing = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [email]);
-    if (existing.rows.length) {
-      return res.status(400).json({ status: 'error', message: 'An account with this email already exists. Please try logging in.' });
+app.post("/api/login", async (req, res) => {
+  try {
+    const { email, password } = req.body || {};
+    if (!email || !password) {
+      return res.status(400).json({ status: "error", message: "Email and password required" });
+    }
+    const u = await getUserByEmail(email);
+    if (!u) return res.status(401).json({ status: "error", message: "No account found. Please sign up." });
+
+    if (!u.pass_hash) {
+      if (password.length < 8) return res.status(400).json({ status: "error", message: "Password must be at least 8 characters." });
+      await setUserPassword(email, password);
+    } else {
+      const ok = await verifyPassword(password, u.pass_salt, u.pass_hash);
+      if (!ok) return res.status(401).json({ status: "error", message: "Invalid email or password." });
     }
 
-    const passHash = await bcrypt.hash(password, 12);
-    const result = await pool.query(
-      `INSERT INTO users (email, pass_hash, plan, created_at, updated_at)
-       VALUES ($1, $2, $3, NOW(), NOW())
-       RETURNING id, email, plan`,
-      [email.toLowerCase(), passHash, 'FREE']
+    setSessionCookie(res, { email: u.email, plan: u.plan || "FREE" });
+    res.json({ status: "ok", user: { email: u.email } });
+  } catch (e) {
+    console.error("login", e);
+    res.status(500).json({ status: "error", message: "Login failed" });
+  }
+});
+
+app.get("/api/me", async (req, res) => {
+  const s = session(req);
+  if (!s?.email) return res.status(401).json({ status: "unauthenticated" });
+  const u = await getUserByEmail(s.email);
+  if (!u) return res.status(401).json({ status: "unauthenticated" });
+  res.json({ status: "ok", user: { email: u.email, plan: u.plan } });
+});
+
+app.post("/api/logout", (_req, res) => { clearSessionCookie(res); res.json({ status: "ok" }); });
+
+// ---------------- Password reset ----------------
+app.post("/api/reset/request", async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    // Always return OK to avoid user enumeration
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) return res.json({ status: "ok" });
+
+    const u = await pool.query(`select id, email from users where email=$1`, [email]);
+    if (!u.rowCount) return res.json({ status: "ok" });
+
+    const userId = u.rows[0].id;
+    const token = crypto.randomBytes(32).toString("hex");
+    const tokenHash = sha256Hex(token);
+    const expires = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
+
+    await pool.query(`insert into password_resets(user_id, token_hash, expires_at) values($1,$2,$3)`, [userId, tokenHash, expires]);
+
+    const base = CANONICAL_HOST || absoluteBaseUrl(req);
+    const link = `${base}/reset-password?t=${token}`;
+
+    const subject = "Reset your GPTs Help password";
+    const text = `Click the link below to reset your password:\n${link}\n\nIf you didn’t request this, you can ignore this email.`;
+    const html = `
+      <div style="font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif">
+        <p>Click the button below to reset your password:</p>
+        <p><a href="${link}" style="display:inline-block;padding:10px 16px;background:#6f42c1;color:#fff;border-radius:8px;text-decoration:none">Reset password</a></p>
+        <p>Or paste this link into your browser:<br>${link}</p>
+        <p style="color:#6c757d;font-size:12px">If you didn’t request this, you can ignore this email.</p>
+      </div>
+    `.trim();
+
+    try { await sendEmail({ to: email, subject, html, text }); }
+    catch (mailErr) { console.error("Email send failed:", mailErr); }
+
+    res.json({ status: "ok" }); // no dev-only link returned
+  } catch (e) {
+    console.error("reset/request", e);
+    res.json({ status: "ok" });
+  }
+});
+
+app.get("/api/reset/validate", async (req, res) => {
+  try {
+    const token = String(req.query.token || "");
+    if (!token) return res.json({ valid: false });
+    const tokenHash = sha256Hex(token);
+    const r = await pool.query(
+      `select 1 from password_resets
+        where token_hash=$1 and used=false and expires_at>now() limit 1`,
+      [tokenHash]
     );
-    const user = result.rows[0];
-
-    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
-    res.cookie('token', token, {
-      httpOnly: true, secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
-
-    res.json(ok({ message: 'Account created successfully!', redirect: '/chat.html', user }));
-  } catch (e) {
-    console.error('SIGNUP ERROR:', e);
-    res.status(500).json({ status: 'error', message: 'Unable to create account. Please try again.' });
+    res.json({ valid: r.rowCount > 0 });
+  } catch {
+    res.json({ valid: false });
   }
 });
 
-app.post('/api/login', async (req, res) => {
+app.post("/api/reset/confirm", async (req, res) => {
   try {
-    const { email, password } = req.body || {};
-    if (!email || !password) return res.status(400).json({ status: 'error', message: 'Email and password are required' });
+    const { token, newPassword } = req.body || {};
+    if (!token || typeof newPassword !== "string" || newPassword.length < 8) {
+      return res.status(400).json({ status: "error", message: "Invalid request" });
+    }
+    const tokenHash = sha256Hex(token);
+    const r = await pool.query(
+      `select pr.id, pr.user_id, u.email, u.plan
+         from password_resets pr
+         join users u on u.id = pr.user_id
+        where pr.token_hash=$1 and pr.used=false and pr.expires_at>now()
+        order by pr.id desc limit 1`,
+      [tokenHash]
+    );
+    if (!r.rowCount) return res.status(400).json({ status: "error", message: "Invalid or expired token" });
 
-    const userResult = await pool.query('SELECT id, email, pass_hash, plan FROM users WHERE LOWER(email) = LOWER($1)', [email]);
-    if (!userResult.rows.length) return res.status(401).json({ status: 'error', message: 'Invalid email or password' });
+    const { id: prId, user_id: userId, email, plan } = r.rows[0];
+    const salt = crypto.randomBytes(16).toString("hex");
+    const buf = await scrypt(newPassword, salt, 64);
+    await pool.query(`update users set pass_salt=$2, pass_hash=$3, updated_at=now() where id=$1`, [userId, salt, buf.toString("hex")]);
+    await pool.query(`update password_resets set used=true where id=$1`, [prId]);
 
-    const user = userResult.rows[0];
-    const valid = await bcrypt.compare(password, user.pass_hash);
-    if (!valid) return res.status(401).json({ status: 'error', message: 'Invalid email or password' });
-
-    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
-    res.cookie('token', token, {
-      httpOnly: true, secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax', maxAge: 7 * 24 * 60 * 60 * 1000,
-    });
-
-    res.json(ok({ message: 'Login successful!', redirect: '/chat.html', user: { id: user.id, email: user.email, plan: user.plan } }));
+    setSessionCookie(res, { email, plan: plan || "FREE" });
+    res.json({ status: "ok" });
   } catch (e) {
-    console.error('LOGIN ERROR:', e);
-    res.status(500).json({ status: 'error', message: 'Unable to login. Please try again.' });
+    console.error("reset/confirm", e);
+    res.status(500).json({ status: "error", message: "Could not reset password" });
   }
 });
 
-app.get('/api/me', authenticateToken, async (req, res) => {
-  try {
-    res.json(ok({ user: { id: req.user.id, email: req.user.email, plan: req.user.plan } }));
-  } catch (e) {
-    res.status(500).json({ status: 'error', message: 'Internal server error' });
-  }
-});
-
-app.post('/api/logout', (_req, res) => {
-  res.clearCookie('token');
-  res.json(ok({ message: 'Logged out successfully' }));
-});
-
-// --- PAYSTACK VERIFY (used by frontend callback) ---
-app.post('/api/paystack/verify', authenticateToken, async (req, res) => {
+// ---------------- Paystack ----------------
+app.post("/api/paystack/verify", async (req, res) => {
   try {
     const { reference } = req.body || {};
-    if (!reference) return res.status(400).json({ status: 'error', message: 'Missing reference' });
-    if (!PAYSTACK_SECRET_KEY) return res.status(500).json({ status: 'error', message: 'Server missing PAYSTACK_SECRET_KEY' });
+    if (!reference) return res.status(400).json({ status: "error", message: "Missing reference" });
 
-    const resp = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
-      headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}` },
+    const psRes = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
+      headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}` }
     });
-    const data = await resp.json();
+    const data = await psRes.json();
 
-    if (!data || data.status !== true) {
-      return res.status(400).json({ status: 'error', message: 'Verification failed', raw: data });
-    }
-    const pay = data.data;
-    if (pay.status !== 'success') {
-      return res.status(400).json({ status: 'error', message: `Payment not successful: ${pay.status}` });
-    }
+    await pool.query(
+      `insert into paystack_receipts(email, reference, plan_code, status, raw)
+       values($1,$2,$3,$4,$5)
+       on conflict(reference) do nothing`,
+      [data?.data?.customer?.email || null, reference, data?.data?.plan?.plan_code || null, data?.data?.status || null, data]
+    );
 
-    const planCode = pay.plan || pay.metadata?.plan || null;
-    const mappedPlan =
-      planCode === 'PLN_t8tii7sryvwsxxf' ? 'PLUS' :
-      planCode === 'PLN_3gkd3qo1pv8rylt' ? 'PRO'  : 'PLUS';
-
-    await pool.query('UPDATE users SET plan = $1, updated_at = NOW() WHERE id = $2', [mappedPlan, req.user.id]);
-
-    res.json(ok({ message: 'Payment verified and plan updated', plan: mappedPlan, email: req.user.email }));
-  } catch (e) {
-    console.error('Verify error:', e);
-    res.status(500).json({ status: 'error', message: 'Verification error' });
-  }
-});
-
-// --- PAYSTACK WEBHOOK (optional but recommended) ---
-app.post('/api/paystack/webhook', express.raw({ type: '*/*' }), async (req, res) => {
-  try {
-    if (!PAYSTACK_SECRET_KEY) return res.sendStatus(500);
-    const signature = req.headers['x-paystack-signature'];
-    const computed = crypto.createHmac('sha512', PAYSTACK_SECRET_KEY).update(req.body).digest('hex');
-    if (!signature || signature !== computed) {
-      console.warn('Webhook signature mismatch');
-      return res.sendStatus(401);
-    }
-
-    const event = JSON.parse(req.body.toString('utf8'));
-    const evt = event?.event;
-
-    if (evt === 'charge.success' || String(evt).startsWith('subscription.')) {
-      const paidEmail = event?.data?.customer?.email?.toLowerCase();
-      const planCode  = event?.data?.plan || event?.data?.subscription_code || null;
-      const mappedPlan =
-        planCode === 'PLN_t8tii7sryvwsxxf' ? 'PLUS' :
-        planCode === 'PLN_3gkd3qo1pv8rylt' ? 'PRO'  : 'PLUS';
-
-      if (paidEmail) {
-        const u = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [paidEmail]);
-        if (u.rows.length) {
-          await pool.query('UPDATE users SET plan = $1, updated_at = NOW() WHERE id = $2', [mappedPlan, u.rows[0].id]);
+    if (data?.status && data?.data?.status === "success") {
+      const customerEmail = data.data?.customer?.email || null;
+      const planCode = data.data?.plan?.plan_code || null;
+      const label = mapPlanCodeToLabel(planCode);
+      if (customerEmail) {
+        await upsertUser(customerEmail);
+        if (label !== "ONE_TIME") {
+          await pool.query(`update users set plan=$2, updated_at=now() where email=$1`, [customerEmail, label]);
         }
+        setSessionCookie(res, { email: customerEmail, plan: label === "ONE_TIME" ? "FREE" : label });
       }
+      return res.json({ status: "success", email: customerEmail, plan: label, reference });
+    }
+    res.json({ status: "pending", data });
+  } catch (e) {
+    console.error("paystack verify", e);
+    res.status(500).json({ status: "error", message: "Verification failed" });
+  }
+});
+
+// ---------------- Auth guard ----------------
+async function requireUser(req, res) {
+  const s = session(req);
+  if (!s?.email) { res.status(401).json({ status: "unauthenticated" }); return null; }
+  const u = await getUserByEmail(s.email);
+  if (!u) { res.status(401).json({ status: "unauthenticated" }); return null; }
+  return u;
+}
+
+// ---------------- Conversations ----------------
+app.get("/api/conversations", async (req, res) => {
+  const u = await requireUser(req, res); if (!u) return;
+  const r = await pool.query(
+    `select id, title, archived from conversations
+     where user_id=$1 order by created_at desc`,
+    [u.id]
+  );
+  res.json(r.rows);
+});
+
+app.post("/api/conversations", async (req, res) => {
+  const u = await requireUser(req, res); if (!u) return;
+  const title = (req.body?.title || "New chat").trim();
+  const r = await pool.query(
+    `insert into conversations(user_id, title) values($1,$2) returning id, title`,
+    [u.id, title]
+  );
+  res.json(r.rows[0]);
+});
+
+app.patch("/api/conversations/:id", async (req, res) => {
+  const u = await requireUser(req, res); if (!u) return;
+  const id = Number(req.params.id);
+  const { title, archived } = req.body || {};
+
+  const sets = [], vals = [id, u.id];
+  if (typeof title === "string") { sets.push(`title=$${sets.length + 3}`); vals.push(title.trim() || "Untitled"); }
+  if (typeof archived === "boolean") { sets.push(`archived=$${sets.length + 3}`); vals.push(!!archived); }
+  if (!sets.length) return res.json({ ok: true });
+
+  await pool.query(
+    `update conversations set ${sets.join(", ")}, updated_at=now()
+     where id=$1 and user_id=$2`,
+    vals
+  );
+  res.json({ ok: true });
+});
+
+app.delete("/api/conversations/:id", async (req, res) => {
+  const u = await requireUser(req, res); if (!u) return;
+  const id = Number(req.params.id);
+  await pool.query(`delete from conversations where id=$1 and user_id=$2`, [id, u.id]);
+  res.json({ ok: true });
+});
+
+app.get("/api/conversations/:id", async (req, res) => {
+  const u = await requireUser(req, res); if (!u) return;
+  const id = Number(req.params.id);
+  const conv = await pool.query(`select id, title from conversations where id=$1 and user_id=$2`, [id, u.id]);
+  if (!conv.rowCount) return res.status(404).json({ error: "not found" });
+  const msgs = await pool.query(`select role, content, created_at from messages where conversation_id=$1 order by id`, [id]);
+  res.json({ id, title: conv.rows[0].title, messages: msgs.rows });
+});
+
+// Share link: create/return token
+app.post("/api/conversations/:id/share", async (req, res) => {
+  const u = await requireUser(req, res); if (!u) return;
+  const id = Number(req.params.id);
+  const own = await pool.query(`select id from conversations where id=$1 and user_id=$2`, [id, u.id]);
+  if (!own.rowCount) return res.status(404).json({ error: "not found" });
+
+  const existing = await pool.query(`select token from share_links where conversation_id=$1 and revoked=false order by id desc limit 1`, [id]);
+  if (existing.rowCount) return res.json({ token: existing.rows[0].token });
+
+  const token = crypto.randomBytes(20).toString("hex");
+  await pool.query(`insert into share_links(conversation_id, token) values($1,$2)`, [id, token]);
+  res.json({ token });
+});
+
+// Public read-only view
+app.get("/api/share/:token", async (req, res) => {
+  const { token } = req.params;
+  const s = await pool.query(
+    `select c.id, c.title
+       from share_links sl
+       join conversations c on c.id = sl.conversation_id
+      where sl.token=$1 and sl.revoked=false`,
+    [token]
+  );
+  if (!s.rowCount) return res.status(404).json({ error: "invalid_or_revoked" });
+  const convId = s.rows[0].id;
+  const msgs = await pool.query(`select role, content, created_at from messages where conversation_id=$1 order by id`, [convId]);
+  res.json({ title: s.rows[0].title, messages: msgs.rows });
+});
+
+// ---------------- Chat ----------------
+app.post("/api/chat", async (req, res) => {
+  try {
+    const u = await requireUser(req, res); if (!u) return;
+    const { message, gptType, conversationId } = req.body || {};
+    if (!message) return res.status(400).json({ error: "message required" });
+
+    // find or create conversation
+    let convId = conversationId ? Number(conversationId) : null;
+    if (convId) {
+      const own = await pool.query(`select id from conversations where id=$1 and user_id=$2`, [convId, u.id]);
+      if (!own.rowCount) convId = null;
+    }
+    if (!convId) {
+      const r = await pool.query(
+        `insert into conversations(user_id, title) values($1,$2) returning id`,
+        [u.id, (message.slice(0, 40) || "New chat")]
+      );
+      convId = r.rows[0].id;
     }
 
-    res.sendStatus(200);
+    const hist = await pool.query(`select role, content from messages where conversation_id=$1 order by id`, [convId]);
+    const system =
+      gptType === "math"
+        ? "You are Math GPT. Solve math problems step-by-step with clear reasoning, and show workings. Be accurate and concise."
+        : "You are a helpful writing assistant. Be clear, structured, and helpful.";
+
+    const msgs = [{ role: "system", content: system }, ...hist.rows, { role: "user", content: message }];
+
+    await pool.query(`insert into messages(conversation_id, role, content) values($1,$2,$3)`, [convId, "user", message]);
+
+    const answer = await openaiChat(msgs);
+
+    await pool.query(`insert into messages(conversation_id, role, content) values($1,$2,$3)`, [convId, "assistant", answer]);
+
+    res.json({ response: answer, conversationId: convId });
   } catch (e) {
-    console.error('Webhook error:', e);
-    res.sendStatus(500);
+    console.error("chat", e);
+    res.status(500).json({ error: "Chat failed" });
   }
 });
 
-// --- CHAT DATA MODEL ENDPOINTS ---
-// IMPORTANT: We DO NOT trust userId from the client; we always use req.user.id.
-
-app.get('/api/conversations', authenticateToken, async (req, res) => {
+// ---------------- Photo Solve ----------------
+app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
   try {
-    const rows = await pool.query(
-      `SELECT id, title, archived, created_at, updated_at
-         FROM conversations
-        WHERE user_id = $1
-        ORDER BY updated_at DESC, id DESC`,
-      [req.user.id]
-    );
-    res.json(rows.rows);
-  } catch (e) {
-    console.error('/api/conversations error:', e);
-    res.status(500).json({ status: 'error', message: 'Failed to list conversations' });
-  }
-});
+    const u = await requireUser(req, res); if (!u) return;
+    const { gptType, conversationId, attempt } = req.body || {};
+    if (!req.file) return res.status(400).json({ error: "image required" });
 
-app.post('/api/conversations', authenticateToken, async (req, res) => {
-  try {
-    const title = (req.body?.title || 'New chat').trim();
-    const q = await pool.query(
-      `INSERT INTO conversations (user_id, title, archived, created_at, updated_at)
-       VALUES ($1, $2, false, NOW(), NOW())
-       RETURNING id, title, archived`,
-      [req.user.id, title]
-    );
-    res.json(q.rows[0]);
-  } catch (e) {
-    console.error('create conversation error:', e);
-    res.status(500).json({ status: 'error', message: 'Failed to create conversation' });
-  }
-});
-
-app.patch('/api/conversations/:id', authenticateToken, async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    const { title, archived } = req.body || {};
-    // ensure ownership
-    const own = await pool.query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2', [id, req.user.id]);
-    if (!own.rows.length) return res.status(404).json({ status: 'error', message: 'Conversation not found' });
-
-    if (typeof title === 'string' && title.trim().length) {
-      await pool.query('UPDATE conversations SET title=$1, updated_at=NOW() WHERE id=$2', [title.trim(), id]);
+    let convId = conversationId ? Number(conversationId) : null;
+    if (convId) {
+      const own = await pool.query(`select id from conversations where id=$1 and user_id=$2`, [convId, u.id]);
+      if (!own.rowCount) convId = null;
     }
-    if (typeof archived === 'boolean') {
-      await pool.query('UPDATE conversations SET archived=$1, updated_at=NOW() WHERE id=$2', [archived, id]);
+    if (!convId) {
+      const r = await pool.query(`insert into conversations(user_id, title) values($1,$2) returning id`, [u.id, "Photo solve"]);
+      convId = r.rows[0].id;
     }
-    res.json(ok());
-  } catch (e) {
-    console.error('rename/archive conversation error:', e);
-    res.status(500).json({ status: 'error', message: 'Failed to update conversation' });
-  }
-});
 
-app.delete('/api/conversations/:id', authenticateToken, async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    // ensure ownership
-    const own = await pool.query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2', [id, req.user.id]);
-    if (!own.rows.length) return res.status(404).json({ status: 'error', message: 'Conversation not found' });
-    await pool.query('DELETE FROM conversations WHERE id=$1', [id]);
-    res.json(ok());
-  } catch (e) {
-    console.error('delete conversation error:', e);
-    res.status(500).json({ status: 'error', message: 'Failed to delete conversation' });
-  }
-});
+    const mime = req.file.mimetype || "image/png";
+    const b64 = req.file.buffer.toString("base64");
+    const dataUrl = `data:${mime};base64,${b64}`;
 
-app.get('/api/conversations/:id', authenticateToken, async (req, res) => {
-  try {
-    const id = Number(req.params.id);
-    // ensure ownership
-    const own = await pool.query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2', [id, req.user.id]);
-    if (!own.rows.length) return res.status(404).json({ status: 'error', message: 'Conversation not found' });
+    const system =
+      gptType === "math"
+        ? "You are Math GPT. Read the problem from the image and solve it step-by-step. Explain clearly."
+        : "You are a helpful assistant. Describe and analyze the content of the image, then answer the user's request.";
 
-    const msgs = await pool.query(
-      `SELECT role, content, created_at
-         FROM messages
-        WHERE conversation_id=$1
-        ORDER BY id ASC`,
-      [id]
-    );
-    res.json({ messages: msgs.rows });
-  } catch (e) {
-    console.error('get messages error:', e);
-    res.status(500).json({ status: 'error', message: 'Failed to get messages' });
-  }
-});
+    await pool.query(`insert into messages(conversation_id, role, content) values($1,$2,$3)`,
+      [convId, "user", attempt ? `(Photo) ${attempt}` : "(Photo uploaded)"]);
 
-// --- CHAT COMPLETION (with optional OpenAI) ---
-async function modelReply({ message, gptType }) {
-  // Simple safe fallback if no OPENAI_API_KEY
-  if (!OPENAI_API_KEY) {
-    const assistant =
-      gptType === 'math'
-        ? "I'll walk you through the problem step-by-step. (Dev mode: set OPENAI_API_KEY to enable real solutions.)"
-        : "Here's a clean, structured draft. (Dev mode: set OPENAI_API_KEY to enable real generation.)";
-    return assistant;
-  }
-
-  // Basic OpenAI responses (Responses API or chat.completions). Using fetch for portability.
-  const sys = gptType === 'math'
-    ? "You are Math GPT. Solve clearly with steps, hints and multiple methods when useful."
-    : "You are ContentGPT. Write concise, high-quality content with clear structure.";
-
-  try {
-    const resp = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: OPENAI_DEFAULT_MODEL,
         messages: [
-          { role: 'system', content: sys },
-          { role: 'user', content: message }
+          { role: "system", content: system },
+          { role: "user",
+            content: [
+              { type: "text", text: attempt ? `Note from user: ${attempt}\nSolve:` : "Solve this problem step-by-step:" },
+              { type: "image_url", image_url: { url: dataUrl } },
+            ]
+          }
         ],
-        temperature: gptType === 'math' ? 0.2 : 0.7,
-      }),
+        temperature: 0.2
+      })
     });
-    const data = await resp.json();
-    const text = data?.choices?.[0]?.message?.content || 'No response.';
-    return text;
+    if (!r.ok) throw new Error(`OpenAI vision ${r.status}: ${await r.text()}`);
+    const data = await r.json();
+    const answer = data?.choices?.[0]?.message?.content || "No result";
+
+    await pool.query(`insert into messages(conversation_id, role, content) values($1,$2,$3)`, [convId, "assistant", answer]);
+    res.json({ response: answer, conversationId: convId });
   } catch (e) {
-    console.error('OpenAI error:', e);
-    return "I couldn't reach the model right now. Please try again.";
-  }
-}
-
-app.post('/api/chat', authenticateToken, async (req, res) => {
-  try {
-    const { message, gptType = 'math', conversationId } = req.body || {};
-    if (!message || typeof message !== 'string') {
-      return res.status(400).json({ status: 'error', message: 'Missing message' });
-    }
-
-    // ensure conversation or create
-    let convId = Number(conversationId) || null;
-    if (convId) {
-      const own = await pool.query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2', [convId, req.user.id]);
-      if (!own.rows.length) return res.status(404).json({ status: 'error', message: 'Conversation not found' });
-    } else {
-      const q = await pool.query(
-        `INSERT INTO conversations (user_id, title, archived, created_at, updated_at)
-         VALUES ($1, $2, false, NOW(), NOW())
-         RETURNING id`,
-        [req.user.id, 'New chat']
-      );
-      convId = q.rows[0].id;
-    }
-
-    // save user message
-    await pool.query(
-      `INSERT INTO messages (conversation_id, role, content, created_at)
-       VALUES ($1, 'user', $2, NOW())`,
-      [convId, message]
-    );
-
-    // model reply
-    const replyText = await modelReply({ message, gptType });
-
-    // save assistant message
-    await pool.query(
-      `INSERT INTO messages (conversation_id, role, content, created_at)
-       VALUES ($1, 'assistant', $2, NOW())`,
-      [convId, replyText]
-    );
-
-    // bump conversation updated_at
-    await pool.query('UPDATE conversations SET updated_at = NOW() WHERE id = $1', [convId]);
-
-    res.json({ conversationId: convId, response: replyText });
-  } catch (e) {
-    console.error('/api/chat error:', e);
-    res.status(500).json({ status: 'error', message: 'Chat failed' });
+    console.error("photo-solve", e);
+    res.status(500).json({ error: "Photo solve failed" });
   }
 });
 
-// --- PHOTO SOLVE ---
-app.post('/api/photo-solve', authenticateToken, upload.single('image'), async (req, res) => {
-  try {
-    const { gptType = 'math', conversationId, attempt = '' } = req.body || {};
-    const file = req.file;
-    if (!file) return res.status(400).json({ status: 'error', message: 'Missing image file' });
-
-    // ensure conversation or create
-    let convId = Number(conversationId) || null;
-    if (convId) {
-      const own = await pool.query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2', [convId, req.user.id]);
-      if (!own.rows.length) return res.status(404).json({ status: 'error', message: 'Conversation not found' });
-    } else {
-      const q = await pool.query(
-        `INSERT INTO conversations (user_id, title, archived, created_at, updated_at)
-         VALUES ($1, $2, false, NOW(), NOW())
-         RETURNING id`,
-        [req.user.id, 'Photo: Uploaded']
-      );
-      convId = q.rows[0].id;
-    }
-
-    // save user message (describe image input)
-    const note = attempt ? `User note: ${attempt}` : 'Photo uploaded.';
-    await pool.query(
-      `INSERT INTO messages (conversation_id, role, content, created_at)
-       VALUES ($1, 'user', $2, NOW())`,
-      [convId, note]
-    );
-
-    // Simple fallback text; if you wire image-to-text, replace this block
-    let reply = "I received the image. (To enable visual solving, integrate an image-capable model.)";
-
-    if (OPENAI_API_KEY) {
-      // Optional: lightweight vision hint using gpt-4o-mini with image URL (you'd need to persist & serve it)
-      // For now, we just acknowledge due to no CDN link.
-      reply = gptType === 'math'
-        ? "I have the photo. Describe the equation or crop the relevant part, and I’ll solve it step-by-step."
-        : "I have the photo. Tell me what output you need (caption, blog intro, alt text, etc.).";
-    }
-
-    await pool.query(
-      `INSERT INTO messages (conversation_id, role, content, created_at)
-       VALUES ($1, 'assistant', $2, NOW())`,
-      [convId, reply]
-    );
-    await pool.query('UPDATE conversations SET updated_at = NOW() WHERE id = $1', [convId]);
-
-    res.json({ conversationId: convId, response: reply });
-  } catch (e) {
-    console.error('/api/photo-solve error:', e);
-    res.status(500).json({ status: 'error', message: 'Photo solve failed' });
+// ---------------- Start ----------------
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`GPTs Help server running on :${PORT}`);
+  if (!JWT_SECRET) {
+    console.warn("[WARN] JWT_SECRET not set. Using a random secret; sessions reset on deploy.");
   }
 });
-
-// --- PUBLIC SHARE ---
-function randomToken(len = 40) {
-  return crypto.randomBytes(Math.ceil(len / 2)).toString('hex').slice(0, len);
-}
-
-app.post('/api/share', authenticateToken, async (req, res) => {
-  try {
-    const { conversationId } = req.body || {};
-    const id = Number(conversationId);
-    if (!id) return res.status(400).json({ status: 'error', message: 'Missing conversationId' });
-
-    const own = await pool.query('SELECT id FROM conversations WHERE id=$1 AND user_id=$2', [id, req.user.id]);
-    if (!own.rows.length) return res.status(404).json({ status: 'error', message: 'Conversation not found' });
-
-    // reuse existing share if any
-    const exists = await pool.query('SELECT token FROM shares WHERE conversation_id=$1', [id]);
-    let token = exists.rows[0]?.token;
-    if (!token) {
-      token = randomToken(40);
-      await pool.query(
-        `INSERT INTO shares (conversation_id, token, created_at)
-         VALUES ($1, $2, NOW())`,
-        [id, token]
-      );
-    }
-    const url = `${process.env.PUBLIC_BASE_URL || ''}${process.env.PUBLIC_BASE_URL ? '' : ''}/chat.html?t=${token}`;
-    // If you deploy at domain root, PUBLIC_BASE_URL can be blank; location.origin will be used by the client anyway.
-
-    res.json(ok({ url }));
-  } catch (e) {
-    console.error('/api/share error:', e);
-    res.status(500).json({ status: 'error', message: 'Failed to create share link' });
-  }
-});
-
-app.get('/api/public/conversation', async (req, res) => {
-  try {
-    const token = String(req.query.t || '');
-    if (!token) return res.status(400).json({ status: 'error', message: 'Missing token' });
-
-    const s = await pool.query(
-      `SELECT c.id, c.title
-         FROM shares sh
-         JOIN conversations c ON c.id = sh.conversation_id
-        WHERE sh.token = $1`,
-      [token]
-    );
-    if (!s.rows.length) return res.status(404).json({ status: 'error', message: 'Not found or expired' });
-
-    const convId = s.rows[0].id;
-    const msgs = await pool.query(
-      `SELECT role, content, created_at
-         FROM messages
-        WHERE conversation_id=$1
-        ORDER BY id ASC`,
-      [convId]
-    );
-    res.json(ok({ title: s.rows[0].title, messages: msgs.rows }));
-  } catch (e) {
-    console.error('/api/public/conversation error:', e);
-    res.status(500).json({ status: 'error', message: 'Failed to load public conversation' });
-  }
-});
-
-// --- PAGES ---
-app.get('/chat.html', authenticateToken, (_req, res) => {
-  res.sendFile(join(__dirname, 'public', 'chat.html'));
-});
-
-app.get('/', (_req, res) => {
-  res.sendFile(join(__dirname, 'public', 'index.html'));
-});
-
-// Alias so /reset-password (link in HTML) works
-app.get('/reset-password', (_req, res) => {
-  res.sendFile(join(__dirname, 'public', 'reset-password.html'));
-});
-app.get('/reset-password.html', (_req, res) => {
-  res.sendFile(join(__dirname, 'public', 'reset-password.html'));
-});
-
-// Fallback to index.html (client-side routing, if any)
-app.get('*', (_req, res) => {
-  res.sendFile(join(__dirname, 'public', 'index.html'));
-});
-
-// --- SCHEMA ---
-async function ensureSchema() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      id BIGSERIAL PRIMARY KEY,
-      email TEXT NOT NULL UNIQUE,
-      pass_hash TEXT NOT NULL,
-      plan TEXT NOT NULL DEFAULT 'FREE',
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS conversations (
-      id BIGSERIAL PRIMARY KEY,
-      user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      title TEXT NOT NULL,
-      archived BOOLEAN NOT NULL DEFAULT FALSE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE INDEX IF NOT EXISTS idx_conversations_user ON conversations(user_id);
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS messages (
-      id BIGSERIAL PRIMARY KEY,
-      conversation_id BIGINT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-      role TEXT NOT NULL CHECK (role IN ('user','assistant')),
-      content TEXT NOT NULL,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE INDEX IF NOT EXISTS idx_messages_conv ON messages(conversation_id);
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS shares (
-      id BIGSERIAL PRIMARY KEY,
-      conversation_id BIGINT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
-      token TEXT NOT NULL UNIQUE,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    );
-    CREATE INDEX IF NOT EXISTS idx_shares_conv ON shares(conversation_id);
-  `);
-
-  console.log('DB schema ready');
-}
-
-// --- START ---
-async function startServer() {
-  try {
-    await pool.query('SELECT 1');
-    console.log('Database connected');
-    await ensureSchema();
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log(`🚀 Server running on port ${PORT}`);
-      console.log(`🔗 Health: http://localhost:${PORT}/api/health`);
-    });
-  } catch (e) {
-    console.error('Failed to start:', e);
-    process.exit(1);
-  }
-}
-
-// --- Error handler ---
-app.use((err, _req, res, _next) => {
-  console.error('Server error:', err);
-  res.status(500).json({ error: 'Internal Server Error' });
-});
-
-process.on('uncaughtException', (e) => console.error('Uncaught Exception:', e));
-process.on('unhandledRejection', (r, p) => console.error('Unhandled Rejection at:', p, 'reason:', r));
-
-startServer();
-
