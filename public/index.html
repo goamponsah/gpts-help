@@ -1,183 +1,446 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>GPTs Help — Sign in</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'self';" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>GPTs Help – Learn Smarter with AI</title>
   <style>
-    :root{
-      --bg:#0e0f13;
-      --panel:#13141a;
-      --text:#e7eaf1;
-      --muted:#9aa3b2;
-      --brand:#5865f2;
-      --accent:#22c55e;
-      --danger:#ef4444;
-      --border:#232634;
-      --radius:14px;
-      --shadow:0 10px 30px rgba(0,0,0,.35);
+    :root {
+      --brand: #6f42c1;  /* Purple */
+      --accent: #ffc107; /* Amber */
+      --bg: #f8f9fa;
+      --text: #212529;
+      --muted: #6c757d;
+      --border: #e9ecef;
     }
-    *{box-sizing:border-box}
-    html,body{height:100%;margin:0}
-    body{
-      background:radial-gradient(1200px 800px at 20% -10%, #171925 0%, #0e0f13 55%) fixed;
-      color:var(--text);
-      font-family:Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-      display:flex; align-items:center; justify-content:center;
-      padding:24px;
-    }
-    .card{
-      width:100%; max-width:460px; background:var(--panel);
-      border:1px solid var(--border); border-radius:var(--radius);
-      box-shadow:var(--shadow); padding:28px;
-    }
-    h1{margin:0 0 8px; font-size:22px; font-weight:700}
-    p.sub{margin:0 0 22px; color:var(--muted); font-size:14px}
-    label{display:block; font-size:13px; margin:14px 0 6px; color:#cbd5e1}
-    input{
-      width:100%; padding:12px 14px; font-size:14px; color:var(--text);
-      background:#0f1117; border:1px solid var(--border); border-radius:10px;
-      outline:none; transition:border-color .15s ease;
-    }
-    input:focus{border-color:#3b82f6}
-    .row{display:flex; gap:10px}
-    .btn{
-      appearance:none; border:0; cursor:pointer;
-      padding:12px 14px; border-radius:10px; font-weight:600; font-size:14px;
-      background:var(--brand); color:white; width:100%; transition:transform .05s ease, opacity .2s ease;
-    }
-    .btn:active{transform:translateY(1px)}
-    .btn.secondary{background:#202331; color:#e2e8f0; border:1px solid var(--border)}
-    .hint{margin-top:10px; color:var(--muted); font-size:12px}
-    .status{margin-top:14px; font-size:13px; min-height:20px}
-    .status.ok{color:var(--accent)}
-    .status.err{color:var(--danger)}
-    .topbar{
-      display:flex; align-items:center; justify-content:space-between; margin-bottom:16px
-    }
-    .logo{
-      display:flex; align-items:center; gap:10px; font-weight:700; letter-spacing:.2px
-    }
-    .dot{width:10px;height:10px;border-radius:50%;background:var(--brand);box-shadow:0 0 14px #5865f2aa}
-    .link{color:#93c5fd; text-decoration:none}
-    .link:hover{text-decoration:underline}
+    *{ box-sizing: border-box; }
+    body { margin:0; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color:var(--text); background:var(--bg); }
+    a { color: inherit; text-decoration: none; }
+    button { cursor: pointer; }
+
+    /* Header */
+    header { position: sticky; top:0; z-index:10; background:#fff; border-bottom:1px solid var(--border); }
+    .header-wrap { max-width:1200px; margin:0 auto; padding:.75rem 1rem; display:flex; align-items:center; justify-content:space-between; }
+    .brand { font-weight:800; letter-spacing:.2px; }
+    .actions { display:flex; gap:.5rem; align-items:center; }
+    .btn { padding:.55rem .9rem; font-weight:700; border-radius:10px; border:1px solid var(--border); background:#fff; }
+    .btn-outline { background:#fff; color:#5c37b1; }
+    .btn-primary { background:var(--accent); color:#000; border-color:transparent; }
+    .btn-ghost { background:transparent; border-color:transparent; color:#5c37b1; }
+
+    /* Hero */
+    .hero { background:linear-gradient(135deg, var(--brand), #9c6fff); color:#fff; text-align:center; padding:5rem 1.25rem; }
+    .hero h1 { font-size:clamp(2rem,4vw,3rem); margin:0 0 1rem; }
+    .hero p { font-size:1.15rem; max-width:760px; margin:0 auto 2rem; opacity:.95; }
+    .hero .cta { display:flex; gap:.75rem; justify-content:center; }
+
+    /* Sections */
+    .container { max-width: 1200px; margin: 0 auto; padding: 2rem 1rem; }
+    h2 { margin:.5rem 0 1rem; }
+
+    /* Features */
+    .features { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:1.2rem; margin-top:1rem; }
+    .card { background:#fff; border:1px solid #eee; border-radius:12px; padding:1.25rem; box-shadow:0 4px 10px rgba(0,0,0,0.04); }
+
+    /* Pricing */
+    .plans { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1.25rem; margin-top:1rem; }
+    .plan { background:#fff; border:1px solid #eee; border-radius:14px; padding:2rem; position:relative; text-align:center; }
+    .plan h3 { margin-bottom:.5rem; }
+    .price { font-size:2rem; color:var(--brand); margin:.25rem 0 1rem; }
+    .plan ul { list-style:none; padding:0; margin:1rem 0; color:var(--muted); text-align:left; }
+    .plan li { margin:.35rem 0; }
+    .badge { position:absolute; top:12px; right:12px; background:var(--brand); color:#fff; font-size:.75rem; padding:.25rem .5rem; border-radius:999px; }
+
+    /* Testimonials */
+    .testimonials { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1.25rem; margin-top:1rem; }
+    .testimonial { background:#fff; border:1px solid #eee; border-radius:12px; padding:1.25rem; font-style:italic; }
+
+    footer { text-align:center; padding:2rem; color:var(--muted); margin-top:2rem; border-top:1px solid var(--border); }
+
+    /* Modal (Auth) */
+    .overlay { position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; align-items:center; justify-content:center; z-index:1000; }
+    .overlay.open { display:flex; }
+    .modal { width:min(520px,92vw); background:#fff; color:#111; border-radius:16px; border:1px solid #eee; box-shadow:0 18px 40px rgba(0,0,0,.12); }
+    .modal-header { display:flex; align-items:center; justify-content:space-between; padding:14px 16px; border-bottom:1px solid #eee; }
+    .modal-title { font-weight:700; }
+    .modal-close { border:0; background:transparent; font-size:20px; cursor:pointer; color:#777; }
+    .modal-body { padding:16px; }
+    .tabs { display:flex; gap:.25rem; margin-bottom:12px; }
+    .tab { flex:1; padding:.6rem; border-radius:12px; text-align:center; border:1px solid #e7e7e7; cursor:pointer; background:#fafafa; font-weight:700; color:#333; }
+    .tab.active { background:#ede8ff; border-color:#dccfff; color:#4d33a8; }
+    .form-grid { display:grid; gap:.6rem; }
+    .input { width:100%; padding:.7rem .8rem; border:1px solid #ddd; border-radius:10px; font-size:15px; }
+    .hint { font-size:12px; color:#6c757d; }
+    .row-actions { display:flex; align-items:center; justify-content:space-between; }
+    .error { color:#b71c1c; font-size:13px; min-height:18px; }
+    .success { color:#1b5e20; font-size:13px; min-height:18px; }
   </style>
 </head>
 <body>
-  <main class="card" aria-labelledby="title">
-    <div class="topbar">
-      <div class="logo"><span class="dot"></span> GPTs Help</div>
-      <a class="link" href="/chat.html" title="Go to chat">Go to chat</a>
+  <!-- Header -->
+  <header>
+    <div class="header-wrap">
+      <div class="brand">GPTs Help</div>
+      <div class="actions" id="authActions">
+        <button class="btn btn-outline" id="btnSignIn">Sign in</button>
+        <button class="btn btn-primary" id="btnSignUp">Sign up for free</button>
+      </div>
     </div>
+  </header>
 
-    <h1 id="title">Sign in</h1>
-    <p class="sub">Enter your email and password to continue.</p>
+  <!-- Hero -->
+  <section class="hero">
+    <h1>Master Math & Create Content with AI</h1>
+    <p>Get step-by-step math tutoring and professional AI content tools – all in one subscription.</p>
+    <div class="cta">
+      <button class="btn btn-primary" id="btnTryFreeHero">Start Free</button>
+      <button class="btn" id="btnViewPricing">See Pricing</button>
+    </div>
+  </section>
 
-    <form id="login-form" novalidate>
-      <label for="email">Email</label>
-      <input id="email" name="email" type="email" autocomplete="email" required placeholder="you@example.com" />
+  <!-- Features -->
+  <section class="container">
+    <h2>Why Choose GPTs Help?</h2>
+    <div class="features">
+      <div class="card"><h3>Step-by-Step Math</h3><p>Clear explanations with proofs, hints, and multiple methods.</p></div>
+      <div class="card"><h3>Exam-Ready Practice</h3><p>Adaptive practice sets with instant feedback.</p></div>
+      <div class="card"><h3>Content Suite</h3><p>Generate polished blog posts, essays, and scripts in minutes.</p></div>
+      <div class="card"><h3>Secure & Fast</h3><p>Trusted Paystack payments. Your data stays private.</p></div>
+    </div>
+  </section>
 
-      <label for="password">Password</label>
-      <input id="password" name="password" type="password" autocomplete="current-password" required placeholder="••••••••" />
-
-      <div class="row" style="margin-top:18px">
-        <button class="btn" id="submitBtn" type="submit">Sign in</button>
-        <a class="btn secondary" href="/signup.html" role="button" aria-label="Create account">Create account</a>
+  <!-- Pricing (no email box here) -->
+  <section class="container" id="pricing">
+    <h2>Choose Your Plan</h2>
+    <div class="plans">
+      <!-- Free -->
+      <div class="plan">
+        <h3>Free Plan</h3>
+        <div class="price">₵0 / mo</div>
+        <ul>
+          <li>Up to 10 math problems / month</li>
+          <li>Basic AI explanations</li>
+          <li>Limited content exports</li>
+        </ul>
+        <button class="btn" id="btnFreePlan">Sign up free</button>
       </div>
 
-      <div class="status" id="status" aria-live="polite"></div>
-      <div class="hint">Trouble signing in? <a class="link" href="/reset.html">Reset your password</a>.</div>
-    </form>
+      <!-- Plus Monthly -->
+      <div class="plan">
+        <div class="badge">Popular</div>
+        <h3>Plus Monthly</h3>
+        <div class="price">₵99 / mo</div>
+        <ul>
+          <li>Unlimited math problem solving</li>
+          <li>Advanced explanations & proofs</li>
+          <li>Full content suite</li>
+        </ul>
+        <button class="btn btn-primary" id="btnPlusMonthly">Subscribe Monthly</button>
+      </div>
 
-    <p class="hint" style="margin-top:18px">
-      By continuing you agree to our <a class="link" href="/terms.html">Terms</a> and <a class="link" href="/privacy.html">Privacy</a>.
-    </p>
-  </main>
+      <!-- Pro Annual -->
+      <div class="plan">
+        <h3>Pro Annual</h3>
+        <div class="price">₵790 / yr</div>
+        <ul>
+          <li>Everything in Plus</li>
+          <li>Annual discount (save 34%)</li>
+          <li>Team collaboration tools</li>
+        </ul>
+        <button class="btn btn-primary" id="btnProAnnual">Subscribe Annually</button>
+      </div>
+    </div>
+  </section>
 
+  <!-- Testimonials -->
+  <section class="container">
+    <h2>What Our Users Say</h2>
+    <div class="testimonials">
+      <div class="testimonial">“I finally understood calculus limits—your hints + step-by-step solved it!”<br><strong>— Ama A., Student</strong></div>
+      <div class="testimonial">“We cut blog production time by 70%. The content suite is a lifesaver.”<br><strong>— Michael T., Creator</strong></div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    &copy; <span id="year"></span> GPTs Help. All rights reserved.
+  </footer>
+
+  <!-- Auth Modal -->
+  <div class="overlay" id="authOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+      <div class="modal-header">
+        <div class="modal-title" id="authTitle">Welcome</div>
+        <button class="modal-close" id="authClose">×</button>
+      </div>
+      <div class="modal-body">
+        <div class="tabs">
+          <button class="tab active" id="tabSignIn">Sign in</button>
+          <button class="tab" id="tabSignUp">Sign up</button>
+        </div>
+
+        <!-- Sign In Form -->
+        <div id="formSignIn" class="form-grid">
+          <input class="input" id="siEmail" type="email" placeholder="Email" autocomplete="email" />
+          <input class="input" id="siPassword" type="password" placeholder="Password" autocomplete="current-password" />
+          <div class="row-actions">
+            <span class="hint"><a href="#" id="linkForgot">Forgot password?</a></span>
+            <button class="btn btn-primary" id="btnDoSignIn">Sign in</button>
+          </div>
+          <div class="error" id="siError"></div>
+        </div>
+
+        <!-- Sign Up Form -->
+        <div id="formSignUp" class="form-grid" style="display:none">
+          <input class="input" id="suEmail" type="email" placeholder="Email" autocomplete="email" />
+          <input class="input" id="suPassword" type="password" placeholder="Password (min 8 chars)" autocomplete="new-password" />
+          <button class="btn btn-primary" id="btnDoSignUp">Create free account</button>
+          <div class="error" id="suError"></div>
+        </div>
+
+        <!-- Forgot Password -->
+        <div id="formForgot" class="form-grid" style="display:none">
+          <input class="input" id="fpEmail" type="email" placeholder="Enter your email" autocomplete="email" />
+          <button class="btn btn-primary" id="btnDoForgot">Send reset link</button>
+          <div class="success" id="fpSuccess"></div>
+          <div class="error" id="fpError"></div>
+          <button class="btn btn-ghost" id="backToSignIn" style="margin-top:4px">← Back to sign in</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Paystack -->
+  <script src="https://js.paystack.co/v2/inline.js"></script>
   <script>
-    // Utility: parse query params (supports ?next=/some/path)
-    function getQuery() {
-      const params = {};
-      const qs = new URLSearchParams(window.location.search);
-      qs.forEach((v,k)=>params[k]=v);
-      return params;
-    }
+    // ---------- Helpers ----------
+    const authOverlay = document.getElementById('authOverlay');
+    const authClose = document.getElementById('authClose');
+    const tabSignIn = document.getElementById('tabSignIn');
+    const tabSignUp = document.getElementById('tabSignUp');
+    const formSignIn = document.getElementById('formSignIn');
+    const formSignUp = document.getElementById('formSignUp');
+    const formForgot = document.getElementById('formForgot');
+    const siEmail = document.getElementById('siEmail');
+    const siPassword = document.getElementById('siPassword');
+    const siError = document.getElementById('siError');
+    const suEmail = document.getElementById('suEmail');
+    const suPassword = document.getElementById('suPassword');
+    const suError = document.getElementById('suError');
+    const fpEmail = document.getElementById('fpEmail');
+    const fpSuccess = document.getElementById('fpSuccess');
+    const fpError = document.getElementById('fpError');
 
-    const form = document.getElementById('login-form');
-    const statusEl = document.getElementById('status');
-    const submitBtn = document.getElementById('submitBtn');
+    const btnSignIn = document.getElementById('btnSignIn');
+    const btnSignUp = document.getElementById('btnSignUp');
+    const btnTryFreeHero = document.getElementById('btnTryFreeHero');
+    const btnViewPricing = document.getElementById('btnViewPricing');
+    const btnFreePlan = document.getElementById('btnFreePlan');
+    const btnPlusMonthly = document.getElementById('btnPlusMonthly');
+    const btnProAnnual = document.getElementById('btnProAnnual');
+    const linkForgot = document.getElementById('linkForgot');
+    const backToSignIn = document.getElementById('backToSignIn');
 
-    // Optional: if already authenticated, the user can jump straight to chat.
-    // We don't rely on a /api/auth/me endpoint; instead, we offer the header link above.
-    // If you DO have /api/auth/me (returns 200 when logged in), uncomment below to auto-redirect.
-    /*
-    (async function checkSession(){
-      try{
-        const r = await fetch('/api/auth/me', { credentials: 'include' });
-        if(r.ok){ window.location.replace('/chat.html'); }
-      }catch(_){} 
-    })();
-    */
+    const authActions = document.getElementById('authActions');
 
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      statusEl.textContent = '';
-      submitBtn.disabled = true;
-      submitBtn.textContent = 'Signing in…';
+    let PAYSTACK_PUBLIC_KEY = null;
+    let PLAN_CODE_PLUS_MONTHLY = null;
+    let PLAN_CODE_PRO_ANNUAL = null;
+    let PAYSTACK_CURRENCY = "GHS";
 
-      const formData = new FormData(form);
-      const payload = Object.fromEntries(formData.entries());
-
-      // Basic client-side validation
-      if(!payload.email || !payload.password){
-        statusEl.textContent = 'Email and password are required.';
-        statusEl.className = 'status err';
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Sign in';
-        return;
-      }
-
+    // Public config
+    async function loadConfig() {
       try {
-        const res = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',        // CRITICAL: allows the server to set/read the cookie
-          body: JSON.stringify(payload)
+        const res = await fetch("/api/public-config");
+        const cfg = await res.json();
+        PAYSTACK_PUBLIC_KEY = cfg.paystackPublicKey;
+        PLAN_CODE_PLUS_MONTHLY = cfg.planPlusMonthly;
+        PLAN_CODE_PRO_ANNUAL  = cfg.planProAnnual;
+        PAYSTACK_CURRENCY = cfg.currency || "GHS";
+      } catch {}
+    }
+    loadConfig();
+
+    // If already signed in, offer "Open Chat" instead
+    async function checkMe() {
+      try {
+        const r = await fetch('/api/me', { credentials:'include' }).then(r=>r.json());
+        if (r.status === 'ok') {
+          authActions.innerHTML = `
+            <button class="btn btn-outline" id="btnOpenChat">Open Chat</button>
+            <button class="btn" id="btnLogout">Sign out</button>
+          `;
+          document.getElementById('btnOpenChat').addEventListener('click', ()=> location.href='/chat.html');
+          document.getElementById('btnLogout').addEventListener('click', async ()=>{
+            try { await fetch('/api/logout', { method:'POST', credentials:'include' }) } catch {}
+            location.reload();
+          });
+        }
+      } catch {}
+    }
+    checkMe();
+
+    // ---------- Modal controls ----------
+    function openAuth(mode='signin') {
+      siError.textContent=''; suError.textContent=''; fpError.textContent=''; fpSuccess.textContent='';
+      formForgot.style.display = 'none';
+      if (mode === 'signup') {
+        formSignIn.style.display = 'none';
+        formSignUp.style.display = 'grid';
+        tabSignIn.classList.remove('active');
+        tabSignUp.classList.add('active');
+        suEmail.focus();
+      } else {
+        formSignUp.style.display = 'none';
+        formSignIn.style.display = 'grid';
+        tabSignUp.classList.remove('active');
+        tabSignIn.classList.add('active');
+        siEmail.focus();
+      }
+      authOverlay.classList.add('open');
+      authOverlay.setAttribute('aria-hidden','false');
+    }
+    function closeAuth(){ authOverlay.classList.remove('open'); authOverlay.setAttribute('aria-hidden','true'); }
+
+    btnSignIn.addEventListener('click', ()=>openAuth('signin'));
+    btnSignUp.addEventListener('click', ()=>openAuth('signup'));
+    btnTryFreeHero.addEventListener('click', ()=>openAuth('signup'));
+    btnViewPricing.addEventListener('click', ()=>document.getElementById('pricing').scrollIntoView({behavior:'smooth'}));
+    btnFreePlan.addEventListener('click', ()=>openAuth('signup'));
+    authClose.addEventListener('click', closeAuth);
+    authOverlay.addEventListener('click', (e)=>{ if(e.target===authOverlay) closeAuth(); });
+
+    tabSignIn.addEventListener('click', ()=>openAuth('signin'));
+    tabSignUp.addEventListener('click', ()=>openAuth('signup'));
+
+    // ---------- Auth actions ----------
+    document.getElementById('btnDoSignIn').addEventListener('click', async ()=>{
+      siError.textContent='';
+      const email = siEmail.value.trim();
+      const password = siPassword.value.trim();
+      if (!email || !password) { siError.textContent = 'Enter email and password.'; return; }
+      try{
+        const r = await fetch('/api/login', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          credentials:'include',
+          body: JSON.stringify({ email, password })
+        }).then(r=>r.json());
+        if (r.status === 'ok') {
+          location.href = '/chat.html'; // <-- redirect after sign in
+        } else {
+          siError.textContent = r.message || 'Sign in failed.';
+        }
+      }catch{ siError.textContent='Sign in failed.'; }
+    });
+
+    document.getElementById('btnDoSignUp').addEventListener('click', async ()=>{
+      suError.textContent='';
+      const email = suEmail.value.trim();
+      const password = suPassword.value.trim();
+      if (!email || password.length < 8) { suError.textContent = 'Use a valid email and 8+ char password.'; return; }
+      try{
+        const r = await fetch('/api/signup-free', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          credentials:'include',
+          body: JSON.stringify({ email, password })
+        }).then(r=>r.json());
+        if (r.status === 'success') {
+          location.href = '/chat.html'; // <-- redirect after sign up
+        } else {
+          suError.textContent = r.message || 'Could not create account.';
+        }
+      }catch{ suError.textContent='Could not create account.'; }
+    });
+
+    // Forgot password
+    linkForgot.addEventListener('click', (e)=>{
+      e.preventDefault();
+      formSignIn.style.display='none';
+      formSignUp.style.display='none';
+      formForgot.style.display='grid';
+      fpEmail.value = siEmail.value || '';
+      fpSuccess.textContent=''; fpError.textContent='';
+      fpEmail.focus();
+    });
+    backToSignIn.addEventListener('click', ()=>openAuth('signin'));
+
+    document.getElementById('btnDoForgot').addEventListener('click', async ()=>{
+      fpSuccess.textContent=''; fpError.textContent='';
+      const email = fpEmail.value.trim();
+      if (!email) { fpError.textContent='Enter your email.'; return; }
+      try{
+        await fetch('/api/reset/request', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ email })
         });
-
-        // Try to read JSON; fall back to text
-        let data = null, text = '';
-        const ct = res.headers.get('content-type') || '';
-        if (ct.includes('application/json')) {
-          data = await res.json();
-        } else {
-          text = await res.text();
-        }
-
-        if (res.ok) {
-          statusEl.textContent = 'Signed in. Redirecting…';
-          statusEl.className = 'status ok';
-
-          // Prefer server-provided redirect path; else honor ?next=; else default to /chat.html
-          const q = getQuery();
-          const target = (data && data.redirect) || q.next || '/chat.html';
-
-          // Small delay so user sees feedback
-          setTimeout(() => { window.location.assign(target); }, 150);
-        } else {
-          const msg = (data && (data.error || data.message)) || text || 'Login failed';
-          statusEl.textContent = msg;
-          statusEl.className = 'status err';
-        }
-      } catch (err) {
-        statusEl.textContent = 'Network error. Check your connection and try again.';
-        statusEl.className = 'status err';
-      } finally {
-        submitBtn.disabled = false;
-        submitBtn.textContent = 'Sign in';
+        fpSuccess.textContent = 'If that email exists, a reset link has been sent.';
+      }catch{
+        fpSuccess.textContent = 'If that email exists, a reset link has been sent.';
       }
     });
+
+    // ---------- Paystack ----------
+    function requirePaystackKey() {
+      if (!PAYSTACK_PUBLIC_KEY) { alert('Payment key not loaded. Please try again later.'); return false; }
+      return true;
+    }
+
+    async function ensureAuthedOrPrompt() {
+      try {
+        const r = await fetch('/api/me', { credentials:'include' }).then(r=>r.json());
+        if (r.status === 'ok') return true;
+      } catch {}
+      openAuth('signin');
+      return false;
+    }
+
+    function startPaystack(planCode, label) {
+      if (!requirePaystackKey()) return;
+      const popup = new PaystackPop();
+      popup.newTransaction({
+        key: PAYSTACK_PUBLIC_KEY,
+        email: "", // Paystack will ask if not bound; we rely on session verify after callback
+        currency: PAYSTACK_CURRENCY,
+        plan: planCode,
+        reference: "gptshelp_" + Date.now() + "_" + Math.random().toString(36).slice(2,8),
+        callback: async (response) => {
+          try {
+            const verify = await fetch("/api/paystack/verify", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({ reference: response.reference })
+            }).then(r=>r.json());
+            if (verify.status === "success") {
+              alert(label + " subscription activated!");
+              location.href = "/chat.html";
+            } else {
+              alert("Verification failed or pending. Ref: " + response.reference);
+            }
+          } catch {
+            alert("Verification error. Ref: " + response.reference);
+          }
+        },
+        onCancel: () => alert("Payment cancelled.")
+      });
+    }
+
+    btnPlusMonthly.addEventListener('click', async ()=>{
+      if (!(await ensureAuthedOrPrompt())) return;
+      if (!PLAN_CODE_PLUS_MONTHLY) { alert('Plan not configured.'); return; }
+      startPaystack(PLAN_CODE_PLUS_MONTHLY, "Plus Monthly");
+    });
+    btnProAnnual.addEventListener('click', async ()=>{
+      if (!(await ensureAuthedOrPrompt())) return;
+      if (!PLAN_CODE_PRO_ANNUAL) { alert('Plan not configured.'); return; }
+      startPaystack(PLAN_CODE_PRO_ANNUAL, "Pro Annual");
+    });
+
+    // Footer year
+    document.getElementById("year").textContent = new Date().getFullYear();
   </script>
 </body>
 </html>
