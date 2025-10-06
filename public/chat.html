@@ -4,16 +4,6 @@
   <meta charset="utf-8" />
   <title>GPTs Help — Chat</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-
-  <!-- KaTeX (for LaTeX math rendering in assistant replies) -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"></script>
-
-  <!-- Markdown renderer + sanitizer -->
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
-
   <style>
     :root{
       --sidebar-w:280px;
@@ -27,7 +17,6 @@
       --border:#232634;
       --vh:100vh;
       --composer-h:88px;  /* updated via JS to match real height */
-      --radius:14px;
     }
     *{box-sizing:border-box}
     html,body{height:100%;margin:0}
@@ -67,7 +56,7 @@
     .readOnlyBanner{display:none;padding:10px 14px;border-bottom:1px solid var(--border);background:#10121a;color:#cbd2e1;font-size:14px}
     .readOnlyBanner.show{display:block}
 
-    /* Messages scroll; give bottom padding so fixed composer doesn't cover last line */
+    /* Messages scroll; bottom padding = composer height so last line isn't hidden */
     .messages{
       overflow-y:auto;
       padding:20px 18px calc(20px + var(--composer-h));
@@ -105,7 +94,9 @@
       background:linear-gradient(#0e0f13,#0f1117);
       padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));
     }
-    @media (max-width:900px){ .composer{ left:0; } }
+    @media (max-width:900px){
+      .composer{ left:0; }
+    }
 
     .row{max-width:900px;margin:0 auto;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
     .input{display:flex;align-items:flex-end;gap:8px;background:#0f1117;border:1px solid var(--border);border-radius:9999px;padding:6px 10px;min-height:42px}
@@ -133,6 +124,19 @@
     .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);padding:10px 14px;font-size:13px;background:#141722;color:#e7eaf1;border:1px solid var(--border);border-radius:9999px;display:none;z-index:1100}
     .toast.show{display:block}
   </style>
+
+  <!-- Markdown renderer + sanitizer -->
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+
+  <!-- MathJax for LaTeX (inline $...$, display $$...$$) -->
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
+      svg: { fontCache: 'global' }
+    };
+  </script>
+  <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
 </head>
 <body>
   <div class="app">
@@ -230,7 +234,7 @@
     const logoutBtn = document.getElementById('logoutBtn');
     const roBanner = document.getElementById('roBanner');
 
-    /* Share modal elements */
+    /* Share modal */
     const shareOverlay = document.getElementById('shareOverlay');
     const shareLinkInput = document.getElementById('shareLinkInput');
     const createShareBtn = document.getElementById('createShareBtn');
@@ -271,32 +275,13 @@
       return e;
     }
     function showToast(msg='Link copied to clipboard'){ toastEl.textContent=msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'),1500); }
+    function makeTitleFrom(text, prefix=""){ const t0=(text||"").replace(/\s+/g," ").trim(); if(!t0) return prefix?`${prefix}`:"New chat"; let t=t0.replace(/^#{1,6}\s*/gm,"").replace(/\*\*(.*?)\*\*/g,"$1").replace(/\*(.*?)\*/g,"$1").replace(/`{1,3}([\s\S]*?)`{1,3}/g,"$1").replace(/\[(.*?)\]\((.*?)\)/g,"$1").replace(/!\[(.*?)\]\((.*?)\)/g,"$1"); t=t.split(/[\n\.!?]/)[0].trim()||t0; t=t.charAt(0).toUpperCase()+t.slice(1); const MAX=50; if(t.length>MAX) t=t.slice(0,MAX-1).trim()+"…"; return prefix?`${prefix} ${t}`:t; }
 
-    // Title helper
-    function makeTitleFrom(text, prefix=""){
-      const t0=(text||"").replace(/\s+/g," ").trim(); if(!t0) return prefix?`${prefix}`:"New chat";
-      let t=t0.replace(/^#{1,6}\s*/gm,"").replace(/\*\*(.*?)\*\*/g,"$1").replace(/\*(.*?)\*/g,"$1").replace(/`{1,3}([\s\S]*?)`{1,3}/g,"$1").replace(/\[(.*?)\]\((.*?)\)/g,"$1").replace(/!\[(.*?)\]\((.*?)\)/g,"$1");
-      t=t.split(/[\n\.!?]/)[0].trim()||t0; t=t.charAt(0).toUpperCase()+t.slice(1); const MAX=50; if(t.length>MAX) t=t.slice(0,MAX-1).trim()+"…"; return prefix?`${prefix} ${t}`:t;
-    }
-
-    // Render assistant message with Markdown + KaTeX
-    function renderAssistantHTML(text){
-      const html = DOMPurify.sanitize(marked.parse(text || '', { breaks: true }));
-      const wrapper = document.createElement('div');
-      wrapper.innerHTML = html;
-      // Render LaTeX ($...$ and $$...$$)
-      try{
-        renderMathInElement(wrapper, {
-          delimiters: [
-            {left: "$$", right: "$$", display: true},
-            {left: "\\[", right: "\\]", display: true},
-            {left: "$", right: "$", display: false},
-            {left: "\\(", right: "\\)", display: false}
-          ],
-          throwOnError: false
-        });
-      }catch{}
-      return wrapper;
+    // After rendering assistant content, typeset LaTeX if MathJax is present
+    async function typesetMath(container){
+      if (window.MathJax && MathJax.typesetPromise) {
+        try { await MathJax.typesetPromise([container]); } catch {}
+      }
     }
 
     function renderMessage(role, text, when=''){
@@ -304,15 +289,15 @@
       row.className=`msg ${role}`;
       const bubble=document.createElement('div');
       bubble.className='bubble';
-      if(when){
-        const small=document.createElement('small');
-        small.className='meta';
-        small.textContent=when;
-        bubble.appendChild(small);
-      }
+      if(when){ const small=document.createElement('small'); small.className='meta'; small.textContent=when; bubble.appendChild(small); }
       if(role==='assistant'){
-        bubble.appendChild(renderAssistantHTML(text));
-      } else {
+        const html=DOMPurify.sanitize(marked.parse(text||'',{breaks:true}));
+        const wrapper=document.createElement('div');
+        wrapper.innerHTML=html;
+        bubble.appendChild(wrapper);
+        // Queue math typesetting
+        setTimeout(()=>typesetMath(wrapper), 0);
+      }else{
         bubble.appendChild(document.createTextNode(text||''));
       }
       row.appendChild(bubble);
@@ -322,11 +307,8 @@
     function renderImageMessage(caption,url){
       const row=document.createElement('div');
       row.className='msg user';
-      const bubble=document.createElement('div');
-      bubble.className='bubble';
-      const small=document.createElement('small');
-      small.className='meta';
-      small.textContent='';
+      const bubble=document.createElement('div'); bubble.className='bubble';
+      const small=document.createElement('small'); small.className='meta'; small.textContent='';
       bubble.appendChild(small);
       bubble.appendChild(document.createTextNode(caption||'📷 Photo uploaded'));
       if(url){ const img=document.createElement('img'); img.className='thumb'; img.src=url; img.alt='uploaded image'; bubble.appendChild(img);}
@@ -339,19 +321,8 @@
     function now(){ return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
 
     /* Share modal */
-    function openShareModal(convId){
-      pendingShareConvId=convId;
-      shareOverlay.classList.add('open');
-      shareOverlay.setAttribute('aria-hidden','false');
-      shareLinkInput.value='';
-      shareLinkInput.placeholder='Generating…';
-      setTimeout(()=>createShareBtn.focus(),10);
-    }
-    function closeShareModal(){
-      shareOverlay.classList.remove('open');
-      shareOverlay.setAttribute('aria-hidden','true');
-      pendingShareConvId=null;
-    }
+    function openShareModal(convId){ pendingShareConvId=convId; shareOverlay.classList.add('open'); shareOverlay.setAttribute('aria-hidden','false'); shareLinkInput.value=''; shareLinkInput.placeholder='Generating…'; setTimeout(()=>createShareBtn.focus(),10); }
+    function closeShareModal(){ shareOverlay.classList.remove('open'); shareOverlay.setAttribute('aria-hidden','true'); pendingShareConvId=null; }
     shareCloseBtn.addEventListener('click', closeShareModal);
     shareOverlay.addEventListener('click', (e)=>{ if(e.target===shareOverlay) closeShareModal(); });
     document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && shareOverlay.classList.contains('open')) closeShareModal(); });
@@ -433,14 +404,17 @@
         const payload={ message:text, gptType:gptTypeEl.value||'math' };
         if(currentConvId) payload.conversationId=currentConvId;
         const res=await api.chat(payload);
-        if(!currentConvId && res.conversationId){
-          currentConvId=res.conversationId;
-          const autoTitle=makeTitleFrom(text);
-          try{ await api.renameConv(currentConvId, autoTitle); }catch{}
-          await loadConversations(currentConvId);
+        if(res.error){
+          renderMessage('assistant', `⚠️ ${res.error}`); scrollToBottom();
+        }else{
+          if(!currentConvId && res.conversationId){
+            currentConvId=res.conversationId;
+            const autoTitle=makeTitleFrom(text);
+            try{ await api.renameConv(currentConvId, autoTitle); }catch{}
+            await loadConversations(currentConvId);
+          }
+          renderMessage('assistant', res.response||''); scrollToBottom();
         }
-        const reply = res.response || res.error || 'Sorry, no response.';
-        renderMessage('assistant', reply); scrollToBottom();
       }catch(err){
         renderMessage('assistant','Sorry, something went wrong. Please try again.'); scrollToBottom();
       }finally{
@@ -471,14 +445,17 @@
         const wasNew=!currentConvId;
         const res=await api.photoSolve(fd);
 
-        if(wasNew && res.conversationId){
-          currentConvId=res.conversationId;
-          const autoTitle=makeTitleFrom(note||'Photo','Photo:');
-          try{ await api.renameConv(currentConvId, autoTitle); }catch{}
-          await loadConversations(currentConvId);
+        if(res.error){
+          renderMessage('assistant', `⚠️ ${res.error}`); scrollToBottom();
+        }else{
+          if(wasNew && res.conversationId){
+            currentConvId=res.conversationId;
+            const autoTitle=makeTitleFrom(note||'Photo','Photo:');
+            try{ await api.renameConv(currentConvId, autoTitle); }catch{}
+            await loadConversations(currentConvId);
+          }
+          renderMessage('assistant', res.response||'No response text returned.'); scrollToBottom();
         }
-        const reply = res.response || res.error || 'No response text returned.';
-        renderMessage('assistant', reply); scrollToBottom();
       }catch{
         renderMessage('assistant','Photo solve failed. Please try another image.'); scrollToBottom();
       }finally{
