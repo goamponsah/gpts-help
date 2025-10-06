@@ -2,11 +2,10 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>GPTs Help — Chat</title>
+  <title>Math GPT — Chat</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root{
-      --sidebar-w:280px;
       --bg:#0e0f13;
       --panel:#13141a;
       --muted:#9aa3b2;
@@ -15,7 +14,6 @@
       --user:#1c2333;     /* user bubble */
       --assistant:#13141a;/* assistant bubble */
       --border:#232634;
-      --vh:100vh;
       --radius:14px;
     }
     *{box-sizing:border-box}
@@ -26,717 +24,225 @@
       font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,sans-serif;
     }
 
-    /* Layout */
-    .app{
-      height:calc(var(--vh));
+    .wrap{
       display:grid;
-      grid-template-columns:var(--sidebar-w) 1fr;
+      grid-template-rows: 1fr auto;
+      height:100%;
+      max-width: 1100px;
+      margin: 0 auto;
     }
-    @media (max-width:900px){ .app{ grid-template-columns:1fr } .sidebar{ display:none } }
 
-    /* Sidebar */
-    .sidebar{
-      display:grid; grid-template-rows:auto 1fr auto;
-      border-right:1px solid var(--border); background:#0f1117; min-height:0;
+    /* Chat area */
+    .chat{
+      padding: 20px 16px 8px;
+      overflow:auto;
     }
-    .side-top{ padding:12px 12px; border-bottom:1px solid var(--border);
-      display:flex; gap:8px; align-items:center; justify-content:space-between }
-    .logo{ font-weight:700; letter-spacing:.2px }
-    .new-chat{ background:var(--panel); color:var(--text); border:1px solid var(--border);
-      border-radius:10px; padding:8px 10px; cursor:pointer; font-size:13px }
-    .side-list{ overflow-y:auto; padding:10px 8px 10px 12px; min-height:0 }
-    .conv{
-      position:relative; display:flex; align-items:center; gap:8px; padding:8px 10px;
-      border-radius:10px; border:1px solid transparent; font-size:14px; margin-bottom:6px;
-      white-space:nowrap; overflow:visible; cursor:pointer;
-    }
-    .conv:hover{ background:#151824; border-color:#1b1f2b }
-    .conv.active{ background:#171b28; border-color:#2a3352 }
-    .conv-title{ flex:1; overflow:hidden; text-overflow:ellipsis }
-    .conv-menu-btn{ opacity:0; transition:opacity .15s; border:0; background:transparent; color:var(--muted); cursor:pointer; padding:2px 4px; border-radius:6px }
-    .conv:hover .conv-menu-btn{ opacity:1 }
-    .menu{
-      position:absolute; right:8px; top:32px;
-      background:var(--panel); border:1px solid var(--border); border-radius:10px;
-      overflow:hidden; display:none; z-index:10; min-width:180px;
-      box-shadow:0 10px 24px rgba(0,0,0,.35)
-    }
-    .menu.open{ display:block }
-    .menu button{ display:block; width:100%; text-align:left; background:transparent; color:var(--text); border:0; padding:10px 12px; cursor:pointer; font-size:14px }
-    .menu button:hover{ background:#1a1d2a }
-    .side-bottom{ position:sticky; bottom:0; padding:10px; border-top:1px solid var(--border); background:#0f1117 }
-    .logout{ width:100%; background:transparent; border:1px solid var(--border); color:var(--text); padding:9px 10px; border-radius:10px; cursor:pointer; font-size:13px }
-    .logout:hover{ background:#151824 }
 
-    /* Main area: messages (1fr) + composer (auto) */
-    .main{ display:grid; grid-template-rows:1fr auto; min-height:0 }
-    .messages{
-      overflow-y:auto; padding:20px 18px; min-height:0; scroll-behavior:smooth;
-      background:radial-gradient(1200px 400px at 50% -200px, rgba(88,101,242,.08), transparent 60%);
+    .msg{
+      display:flex;
+      gap:10px;
+      margin: 10px 0;
+      align-items:flex-end;
     }
-    .public-banner{
-      display:none; position:sticky; top:0; z-index:1;
-      padding:8px 12px; margin:-8px 0 8px;
-      border:1px solid var(--border); border-radius:10px;
-      background:linear-gradient(180deg, rgba(240,180,41,.12), transparent 70%);
-      color:#fff; font-size:13px;
-    }
-    .public .public-banner{ display:block; }
-
-    /* Chat bubbles */
-    .msg{ max-width:900px; margin:0 auto 12px auto; display:flex; }
+    .msg.user{justify-content:flex-end}
     .bubble{
-      max-width:68ch; padding:12px 14px; border:1px solid var(--border);
-      border-radius:12px; line-height:1.55; font-size:15px; white-space:normal;
-      background:var(--assistant);
+      max-width: 78ch;
+      padding: 12px 14px;
+      border:1px solid var(--border);
+      border-radius: 16px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-wrap: break-word;
     }
-    .meta{ display:block; color:var(--muted); margin-bottom:6px; font-size:12px; }
+    .msg.user .bubble{
+      background: var(--user);
+    }
+    .msg.assistant .bubble{
+      background: var(--assistant);
+    }
 
-    /* Assistant on LEFT */
-    .msg.assistant{ justify-content:flex-start; }
-    .msg.assistant .bubble{ background:var(--assistant); border-top-left-radius:8px; border-top-right-radius:12px; }
-    .msg.assistant .meta{ text-align:left; }
+    .bubble img{
+      max-width: 360px; height:auto; display:block; border-radius:10px; margin-top:8px;
+      border:1px solid var(--border);
+    }
 
-    /* User on RIGHT */
-    .msg.user{ justify-content:flex-end; }
-    .msg.user .bubble{ background:var(--user); border-top-left-radius:12px; border-top-right-radius:8px; }
-    .msg.user .meta{ text-align:right; }
-    .msg.user .thumb{ margin-left:auto; }
-
-    .thumb{ display:block; max-width:240px; height:auto; border-radius:8px; margin-top:8px; border:1px solid var(--border) }
-
-    /* Nicer markdown defaults */
-    .bubble p{ margin:.4rem 0; }
-    .bubble h1,.bubble h2,.bubble h3{ margin:.6rem 0 .4rem; }
-    .bubble ul,.bubble ol{ padding-left:1.2rem; margin:.4rem 0; }
-    .bubble code{ background:#0b0d12; padding:2px 6px; border-radius:6px; border:1px solid var(--border); }
-    .bubble pre{ background:#0b0d12; padding:10px; border-radius:10px; border:1px solid var(--border); overflow:auto; }
-
-    /* Composer — compact, ChatGPT-like */
+    /* Composer fixed at bottom */
     .composer{
-      border-top:1px solid var(--border);
-      background:linear-gradient(#0e0f13,#0f1117);
-      padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));
+      position:sticky;
+      bottom:0;
+      background: linear-gradient(180deg, rgba(14,15,19,0) 0%, var(--bg) 24%);
+      padding: 12px 10px 18px;
+      border-top: 1px solid var(--border);
     }
-    .row{
-      max-width:900px; margin:0 auto;
-      display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center;
+    .bar{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      background: var(--panel);
+      border:1px solid var(--border);
+      border-radius: 16px;
+      padding: 8px;
     }
-    .input{
-      display:flex; align-items:flex-end; gap:8px;
-      background:#0f1117; border:1px solid var(--border);
-      border-radius:9999px; padding:6px 10px;
-      min-height:42px;
+    .bar input[type="file"]{
+      display:none;
     }
-    .ta-wrap{ flex:1; display:flex; flex-direction:column; }
-    .meta-row{
-      display:flex; gap:8px; align-items:center; color:var(--muted); font-size:11px; margin:2px 2px 4px 6px;
+    .bar button, .bar label{
+      border:1px solid var(--border);
+      background:#141622;
+      color:var(--text);
+      padding:8px 12px;
+      border-radius: 12px;
+      cursor:pointer;
+      font-weight:600;
     }
-    select{
-      background:#0f1117; color:var(--text); border:1px solid var(--border);
-      border-radius:8px; padding:4px 6px; font-size:11px;
+    .bar button:disabled{opacity:.6; cursor:not-allowed}
+    .bar textarea{
+      flex:1;
+      resize:none;
+      min-height: 24px;
+      max-height: 120px;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: var(--text);
+      font-size: 16px;
+      line-height: 1.35;
+      padding: 8px;
     }
-    textarea{
-      width:100%; resize:none; min-height:24px; max-height:120px;
-      background:transparent; color:var(--text); outline:none; border:0; font:inherit; line-height:1.45; padding:0 4px 2px 6px;
+    .hint{color:var(--muted); font-size:12px; margin-top:6px}
+    .topbar{
+      display:flex; align-items:center; justify-content:space-between;
+      padding: 10px 16px; border-bottom:1px solid var(--border); background:var(--panel);
+      position:sticky; top:0; z-index:10;
     }
-    .controls{
-      display:inline-flex; gap:6px;
-    }
-    .icon-btn{
-      width:36px; height:36px; display:inline-flex; align-items:center; justify-content:center;
-      border-radius:9999px; border:1px solid var(--border); background:#141722; color:#dfe3ec;
-      cursor:pointer; font-size:16px; line-height:1;
-    }
-    .icon-btn.primary{ background:var(--brand); color:#fff; border-color:transparent }
-    .icon-btn:disabled{ opacity:.6; cursor:not-allowed }
-
-    /* Share modal */
-    .overlay{
-      position:fixed; inset:0; background:rgba(0,0,0,.5);
-      display:none; align-items:center; justify-content:center; z-index:1000;
-    }
-    .overlay.open{ display:flex; }
-    .modal{
-      width:min(560px, 92vw);
-      background:#0f1117; border:1px solid var(--border); border-radius:16px;
-      padding:18px; box-shadow:0 18px 40px rgba(0,0,0,.45);
-    }
-    .modal-header{ display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
-    .modal-title{ font-weight:600; }
-    .modal-sub{ color:var(--muted); font-size:13px; margin-bottom:12px; }
-    .modal-row{
-      display:grid; grid-template-columns:1fr auto; gap:8px; align-items:center;
-      background:#0f1117;
-    }
-    .modal input[type="text"]{
-      width:100%; padding:12px 14px; border:1px solid var(--border); border-radius:9999px;
-      background:#0e0f13; color:var(--text); font-size:14px;
-    }
-    .btn{
-      border:1px solid var(--border); background:#141722; color:var(--text);
-      border-radius:9999px; padding:10px 14px; cursor:pointer; font-size:14px;
-    }
-    .btn.primary{ background:var(--brand); color:#fff; border-color:transparent; }
-    .modal-close{
-      border:0; background:transparent; color:var(--muted); cursor:pointer; font-size:20px; line-height:1;
-    }
-    .toast{
-      position:fixed; left:50%; bottom:22px; transform:translateX(-50%);
-      padding:10px 14px; font-size:13px; background:#141722; color:#e7eaf1; border:1px solid var(--border);
-      border-radius:9999px; display:none; z-index:1100;
-    }
-    .toast.show{ display:block; }
-
-    /* Public (read-only) state */
-    .public .conv-menu-btn,
-    .public .new-chat,
-    .public .logout{ pointer-events:none; opacity:.6; }
-    .public .controls .icon-btn,
-    .public select,
-    .public textarea{ pointer-events:none; opacity:.6; }
+    .brand{font-weight:700}
   </style>
-
-  <!-- Markdown renderer + sanitizer -->
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+  <!-- MathJax for LaTeX -->
+  <script>
+    window.MathJax = {
+      tex: { inlineMath: [['\\(','\\)'], ['$', '$']], displayMath: [['$$','$$']] },
+      svg: { scale: 1, minScaleAdjust: 100 }, options: { skipHtmlTags: ['script','noscript','style','textarea','pre'] }
+    };
+  </script>
+  <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
 </head>
 <body>
-  <div class="app">
-    <!-- Sidebar -->
-    <aside class="sidebar">
-      <div class="side-top">
-        <div class="logo">GPTs Help</div>
-        <button class="new-chat" id="newChatBtn">+ New Chat</button>
-      </div>
-
-      <div class="side-list" id="convList"></div>
-
-      <div class="side-bottom">
-        <button class="logout" id="logoutBtn">Sign out</button>
-      </div>
-    </aside>
-
-    <!-- Main -->
-    <main class="main" id="main">
-      <div class="messages" id="messages">
-        <div class="public-banner" id="publicBanner">
-          Anyone with this link can view this chat. You can’t send messages in public view.
-        </div>
-      </div>
-
-      <form class="composer" id="composer">
-        <div class="row">
-          <!-- compact pill input -->
-          <div class="input">
-            <div class="ta-wrap">
-              <div class="meta-row">
-                <label for="gptType">Assistant</label>
-                <select id="gptType">
-                  <option value="math">Math GPT</option>
-                  <option value="content">ContentGPT</option>
-                </select>
-                <span id="status" style="margin-left:auto;"></span>
-              </div>
-              <textarea id="prompt" placeholder="Message Math GPT…" autocomplete="off"></textarea>
-            </div>
-          </div>
-
-          <div class="controls">
-            <button class="icon-btn" id="photoBtn" type="button" title="Photo Solve" aria-label="Photo Solve">📷</button>
-            <button class="icon-btn primary" id="sendBtn" type="submit" title="Send" aria-label="Send">➤</button>
-            <input type="file" id="photoFile" accept="image/png,image/jpeg,image/jpg,image/webp" hidden />
-          </div>
-        </div>
-      </form>
-    </main>
+  <div class="topbar">
+    <div class="brand">Math GPT</div>
+    <div class="hint">Type a prompt or add a photo. Press Enter to send.</div>
   </div>
 
-  <!-- Share Modal -->
-  <div class="overlay" id="shareOverlay" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
-      <div class="modal-header">
-        <div class="modal-title" id="shareTitle">Share public link to chat</div>
-        <button class="modal-close" id="shareCloseBtn" aria-label="Close">×</button>
+  <div class="wrap">
+    <div id="chat" class="chat"></div>
+
+    <div class="composer">
+      <div class="bar">
+        <label for="image">📷 Photo</label>
+        <input id="image" type="file" accept="image/*" />
+        <textarea id="prompt" rows="1" placeholder="Message Math GPT..."></textarea>
+        <button id="send">Send</button>
       </div>
-      <div class="modal-sub">Your name, custom instructions, and any messages you add after sharing stay private.</div>
-      <div class="modal-row">
-        <input type="text" id="shareLinkInput" placeholder="https://yourapp.com/share/…" readonly />
-        <button class="btn primary" id="createShareBtn">Create link</button>
-      </div>
+      <div class="hint" id="fileName"></div>
     </div>
   </div>
-  <div class="toast" id="toast">Link copied to clipboard</div>
 
   <script>
-    /* mobile 100vh fix */
-    function setVh(){ const vh = window.innerHeight * 0.01; document.documentElement.style.setProperty('--vh', `${vh*100}px`); }
-    setVh(); window.addEventListener('resize', setVh);
-
-    /* API (all with credentials so cookie session is sent) */
-    const api = {
-      listConvs: (email)=>fetch(`/api/conversations?userId=${encodeURIComponent(email)}`, { credentials:'include' }).then(r=>r.json()),
-      createConv:(email,title)=>fetch('/api/conversations',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({userId:email,title})}).then(r=>r.json()),
-      renameConv:(email,id,title)=>fetch(`/api/conversations/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({userId:email,title})}).then(r=>r.json()),
-      deleteConv:(email,id)=>fetch(`/api/conversations/${id}`,{method:'DELETE',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({userId:email})}).then(r=>r.json()),
-      archiveConv:(email,id,archived=true)=>fetch(`/api/conversations/${id}`,{
-        method:'PATCH', headers:{'Content-Type':'application/json'}, credentials:'include',
-        body:JSON.stringify({userId:email, archived})
-      }).then(r=>r.json()),
-      getConvMsgs:(email,id)=>fetch(`/api/conversations/${id}?userId=${encodeURIComponent(email)}`, { credentials:'include' }).then(r=>r.json()),
-      chat:(payload)=>fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(payload)}).then(r=>r.json()),
-      me:()=>fetch('/api/me', { credentials:'include' }).then(r=>r.json()),
-      photoSolve:(fd)=>fetch('/api/photo-solve',{method:'POST',credentials:'include',body:fd}).then(r=>r.json()),
-      logout:()=>fetch('/api/logout',{method:'POST',credentials:'include'}),
-
-      /* PUBLIC + SHARE endpoints */
-      getPublicConv:(token)=>fetch(`/api/public/conversation?t=${encodeURIComponent(token)}`).then(r=>r.json()),
-      createShare:(email,conversationId)=>fetch('/api/share',{
-        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
-        body:JSON.stringify({userId:email, conversationId})
-      }).then(r=>r.json()),
-    };
-
-    /* Elements */
-    const mainEl = document.getElementById('main');
-    const messagesEl = document.getElementById('messages');
-    const convListEl = document.getElementById('convList');
+    const chatEl = document.getElementById('chat');
     const promptEl = document.getElementById('prompt');
-    const composerEl = document.getElementById('composer');
-    const sendBtn = document.getElementById('sendBtn');
-    const photoBtn = document.getElementById('photoBtn');
-    const photoFile = document.getElementById('photoFile');
-    const gptTypeEl = document.getElementById('gptType');
-    const statusEl = document.getElementById('status');
-    const newChatBtn = document.getElementById('newChatBtn');
-    const logoutBtn = document.getElementById('logoutBtn');
-    const publicBanner = document.getElementById('publicBanner');
+    const imageEl = document.getElementById('image');
+    const sendBtn = document.getElementById('send');
+    const fileNameEl = document.getElementById('fileName');
 
-    /* Share modal elements */
-    const shareOverlay = document.getElementById('shareOverlay');
-    const shareLinkInput = document.getElementById('shareLinkInput');
-    const createShareBtn = document.getElementById('createShareBtn');
-    const shareCloseBtn = document.getElementById('shareCloseBtn');
-    const toastEl = document.getElementById('toast');
-
-    let userEmail = localStorage.getItem('userEmail') || '';
-    let currentConvId = null;
-    let pendingShareConvId = null;
-
-    /* URL params: if ?t=TOKEN exists, show public read-only */
-    const urlParams = new URLSearchParams(location.search);
-    const publicToken = urlParams.get('t');
-    const isPublic = !!publicToken;
-
-    /* --- Dynamic placeholder tied to selected assistant --- */
-    function updatePlaceholder() {
-      const name = gptTypeEl.options[gptTypeEl.selectedIndex]?.text || "Assistant";
-      promptEl.placeholder = `Message ${name}…`;
-      promptEl.setAttribute('aria-label', `Message ${name}`);
-      promptEl.setAttribute('title', `Message ${name}`);
-    }
-    gptTypeEl.addEventListener('change', updatePlaceholder);
-    updatePlaceholder();
-
-    /* Auth guard (cookie-based) — skipped in public mode */
-    async function guardAuth(){
-      try{
-        const me = await api.me();
-        if (me.status !== 'ok' || !me.user?.email) {
-          window.location.replace('/index.html'); 
-          return false;
-        }
-        userEmail = me.user.email;
-        localStorage.setItem('userEmail', userEmail);
-        return true;
-      } catch {
-        window.location.replace('/index.html');
-        return false;
-      }
-    }
-
-    /* Helpers */
-    function el(tag, attrs={}, ...children){
-      const e=document.createElement(tag);
-      Object.entries(attrs).forEach(([k,v])=>{
-        if(k==='class') e.className=v;
-        else if(k.startsWith('on') && typeof v==='function') e.addEventListener(k.substring(2), v);
-        else if(v!=null) e.setAttribute(k,v);
-      });
-      children.forEach(c=> typeof c==='string' ? e.appendChild(document.createTextNode(c)) : c && e.appendChild(c));
-      return e;
-    }
-
-    function showToast(msg='Link copied to clipboard'){
-      toastEl.textContent = msg;
-      toastEl.classList.add('show');
-      setTimeout(()=> toastEl.classList.remove('show'), 1500);
-    }
-
-    // Clean text and make a short, neat title (ChatGPT-like)
-    function makeTitleFrom(text, prefix="") {
-      const t0 = (text || "").replace(/\s+/g, " ").trim();
-      if (!t0) return prefix ? `${prefix}` : "New chat";
-      let t = t0
-        .replace(/^#{1,6}\s*/gm, "")
-        .replace(/\*\*(.*?)\*\*/g, "$1")
-        .replace(/\*(.*?)\*/g, "$1")
-        .replace(/`{1,3}([\s\S]*?)`{1,3}/g, "$1")
-        .replace(/\[(.*?)\]\((.*?)\)/g, "$1")
-        .replace(/!\[(.*?)\]\((.*?)\)/g, "$1");
-      t = t.split(/[\n\.!?]/)[0].trim();
-      if (!t) t = t0;
-      t = t.charAt(0).toUpperCase() + t.slice(1);
-      const MAX = 50;
-      if (t.length > MAX) t = t.slice(0, MAX - 1).trim() + "…";
-      return prefix ? `${prefix} ${t}` : t;
-    }
-
-    // Markdown-rendered assistant messages
-    function renderMessage(role, text, when=''){
-      const row = document.createElement('div');
-      row.className = `msg ${role}`;
-
-      const bubble = document.createElement('div');
-      bubble.className = 'bubble';
-
-      if (when) {
-        const small = document.createElement('small');
-        small.className = 'meta';
-        small.textContent = when;
-        bubble.appendChild(small);
-      }
-
-      if (role === 'assistant') {
-        const html = DOMPurify.sanitize(marked.parse(text || '', { breaks: true }));
-        const wrapper = document.createElement('div');
-        wrapper.innerHTML = html;
-        bubble.appendChild(wrapper);
-      } else {
-        bubble.appendChild(document.createTextNode(text || ''));
-      }
-
-      row.appendChild(bubble);
-      messagesEl.appendChild(row);
-    }
-
-    function renderImageMessage(caption,url){
-      const row = document.createElement('div');
-      row.className = 'msg user';
-      const bubble = document.createElement('div');
-      bubble.className = 'bubble';
-      const small = document.createElement('small');
-      small.className = 'meta';
-      small.textContent = '';
-      bubble.appendChild(small);
-      bubble.appendChild(document.createTextNode(caption||'📷 Photo uploaded'));
-      if(url){ const img=document.createElement('img'); img.className='thumb'; img.src=url; img.alt='uploaded image'; bubble.appendChild(img); }
-      row.appendChild(bubble);
-      messagesEl.appendChild(row);
-    }
-
-    function clearMessages(){
-      messagesEl.innerHTML='';
-      if (isPublic && publicBanner && !messagesEl.contains(publicBanner)) {
-        messagesEl.appendChild(publicBanner);
-      }
-    }
-    function scrollToBottom(){ messagesEl.scrollTop = messagesEl.scrollHeight; }
-    function now(){ return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
-
-    /* SHARE MODAL LOGIC */
-    function openShareModal(convId){
-      pendingShareConvId = convId;
-      shareOverlay.classList.add('open');
-      shareOverlay.setAttribute('aria-hidden','false');
-      shareLinkInput.value = '';
-      shareLinkInput.placeholder = `${location.origin}/chat.html?c=${convId}`;
-      setTimeout(()=>createShareBtn.focus(), 10);
-    }
-    function closeShareModal(){
-      shareOverlay.classList.remove('open');
-      shareOverlay.setAttribute('aria-hidden','true');
-      pendingShareConvId = null;
-    }
-    shareCloseBtn.addEventListener('click', closeShareModal);
-    shareOverlay.addEventListener('click', (e)=>{ if(e.target === shareOverlay) closeShareModal(); });
-    document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape' && shareOverlay.classList.contains('open')) closeShareModal(); });
-
-    // Create a public share link (prefer backend token URL)
-    createShareBtn.addEventListener('click', async ()=>{
-      const id = pendingShareConvId ?? currentConvId;
-      if(!id) return;
-
-      try{
-        const r = await api.createShare(userEmail, id);
-        if (r && r.status === 'ok' && r.url) {
-          shareLinkInput.value = r.url; // e.g., https://yourapp.com/chat.html?t=TOKEN
-        } else {
-          shareLinkInput.value = `${location.origin}/chat.html?c=${id}`; // fallback (requires auth)
-        }
-      }catch{
-        shareLinkInput.value = `${location.origin}/chat.html?c=${id}`;
-      }
-
-      shareLinkInput.select();
-      try{
-        await navigator.clipboard.writeText(shareLinkInput.value);
-        createShareBtn.textContent = 'Copied!';
-        showToast('Link copied to clipboard');
-        setTimeout(()=>{ createShareBtn.textContent = 'Create link'; }, 1200);
-      }catch{
-        showToast('Copy failed. Select and copy manually.');
-      }
+    // Show selected file name
+    imageEl.addEventListener('change', () => {
+      fileNameEl.textContent = imageEl.files[0] ? `Selected: ${imageEl.files[0].name}` : '';
     });
 
-    /* Conversations UI */
-    async function loadConversations(selectId=null){
-      const list=await api.listConvs(userEmail);
-      convListEl.innerHTML='';
-      list
-        .filter(c => !c.archived)
-        .forEach(c=>{
-          const row=el('div',{class:`conv ${c.id===selectId?'active':''}`});
-          const title=el('div',{class:'conv-title'},c.title);
-          const menuBtn=el('button',{class:'conv-menu-btn',title:'Options','aria-label':'Conversation options'},'⋯');
-          const menu=el('div',{class:'menu'});
-          const bShare=el('button',{},'Share');
-          const bRename=el('button',{},'Rename');
-          const bArchive=el('button',{},'Archive');
-          const bDelete=el('button',{},'Delete');
+    // Auto-resize textarea
+    promptEl.addEventListener('input', () => {
+      promptEl.style.height = 'auto';
+      promptEl.style.height = Math.min(promptEl.scrollHeight, 120) + 'px';
+    });
 
-          bShare.addEventListener('click',e=>{
-            e.stopPropagation();
-            menu.classList.remove('open');
-            openShareModal(c.id);
-          });
-
-          bRename.addEventListener('click',async e=>{
-            e.stopPropagation(); menu.classList.remove('open');
-            const input=el('input',{value:c.title,style:'width:100%; background:#12131a; color:#e7eaf1; border:1px solid #232634; border-radius:6px; padding:6px 8px;'});
-            row.replaceChild(input,title); input.focus();
-            const commit=async ()=>{
-              const t=(input.value||'New chat').trim();
-              await api.renameConv(userEmail,c.id,t); await loadConversations(c.id);
-            };
-            input.addEventListener('keydown',ke=>{ if(ke.key==='Enter') commit(); if(ke.key==='Escape') loadConversations(c.id); });
-            input.addEventListener('blur',commit);
-          });
-
-          bArchive.addEventListener('click', async e=>{
-            e.stopPropagation(); menu.classList.remove('open');
-            try{
-              await api.archiveConv(userEmail, c.id, true);
-              if(currentConvId===c.id){ currentConvId=null; clearMessages(); }
-              await loadConversations();
-            }catch(err){
-              alert('Archiving failed. Please try again.');
-            }
-          });
-
-          bDelete.addEventListener('click',async e=>{
-            e.stopPropagation(); menu.classList.remove('open');
-            if(confirm('Delete this chat?')){ 
-              await api.deleteConv(userEmail,c.id); 
-              if(currentConvId===c.id){ currentConvId=null; clearMessages(); } 
-              await loadConversations(); 
-            }
-          });
-
-          menu.appendChild(bShare); 
-          menu.appendChild(bRename); 
-          menu.appendChild(bArchive);
-          menu.appendChild(bDelete);
-
-          menuBtn.addEventListener('click',e=>{
-            e.stopPropagation();
-            document.querySelectorAll('.menu.open').forEach(m=>{ if(m!==menu) m.classList.remove('open'); });
-            menu.classList.toggle('open');
-          });
-
-          row.addEventListener('click',async ()=>{
-            currentConvId=c.id;
-            document.querySelectorAll('.conv').forEach(n=>n.classList.remove('active'));
-            row.classList.add('active');
-            await showConversation(c.id);
-          });
-
-          row.appendChild(title); row.appendChild(menuBtn); row.appendChild(menu);
-          convListEl.appendChild(row);
-        });
-
-      // Click outside to close menus
-      document.addEventListener('click', (e)=>{
-        if (!e.target.closest('.menu') && !e.target.closest('.conv-menu-btn')) {
-          document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'));
-        }
-      }, {capture:false});
-    }
-
-    async function showConversation(id){
-      clearMessages();
-      const r=await api.getConvMsgs(userEmail,id);
-      (r.messages||[]).forEach(m=> renderMessage(m.role==='user'?'user':'assistant', m.content));
-      scrollToBottom();
-    }
-
-    /* Public view: fetch and render read-only snapshot (no auth) */
-    async function loadPublicConversation(token){
-      // mark UI as public/read-only
-      document.body.classList.add('public');
-      publicBanner.style.display = 'block';
-
-      // hide some sidebar actions visually
-      document.querySelectorAll('.conv-menu-btn,.new-chat,.logout').forEach(el=>{ el.style.display='none'; });
-
-      clearMessages();
-      try{
-        const r = await api.getPublicConv(token);
-        // Expected: { title, messages:[{role,content}], ... }
-        if (r && r.title) {
-          // show single active item with title
-          convListEl.innerHTML='';
-          const row=el('div',{class:'conv active'});
-          const title=el('div',{class:'conv-title'}, r.title);
-          row.appendChild(title);
-          convListEl.appendChild(row);
-        }
-        (r.messages||[]).forEach(m=> renderMessage(m.role==='user'?'user':'assistant', m.content));
-      }catch(e){
-        renderMessage('assistant','This public link is invalid or expired.');
-      }
-      // disable composer controls but keep layout
-      Array.from(composerEl.querySelectorAll('button,textarea,input,select')).forEach(el=>{
-        el.disabled = true;
-      });
-      scrollToBottom();
-    }
-
-    /* Auto-resize + Enter to send */
-    function autoresize(){
-      promptEl.style.height='auto';
-      promptEl.style.height=Math.min(120,promptEl.scrollHeight)+'px';
-    }
-    promptEl.addEventListener('input', autoresize);
-    promptEl.addEventListener('keydown', (e)=>{
-      if(e.key==='Enter' && !e.shiftKey && !e.isComposing){
+    // Enter to send (Shift+Enter for newline)
+    promptEl.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        if(!sendBtn.disabled) composerEl.requestSubmit();
+        send();
       }
     });
+    sendBtn.addEventListener('click', send);
 
-    /* Submit text */
-    composerEl.addEventListener('submit', async (e)=>{
-      e.preventDefault();
-      if (isPublic) return; // read-only guard
+    function addMessage(role, html, imageURL) {
+      const wrap = document.createElement('div');
+      wrap.className = `msg ${role}`;
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
 
-      const text=(promptEl.value||'').trim();
-      if(!text) return;
+      // Strip leading markdown headings "## **" etc. for cleanliness
+      const cleaned = (html || '')
+        .replace(/^\s*#+\s*\**/gm, '')      // remove markdown headings like ## **Title**
+        .replace(/^\s*\*\*(.+?)\*\*\s*$/gm, '$1'); // bold-only header lines
 
-      renderMessage('user', text, now()); scrollToBottom();
+      bubble.innerHTML = cleaned;
+      if (imageURL) {
+        const img = document.createElement('img');
+        img.src = imageURL;
+        bubble.appendChild(img);
+      }
+      wrap.appendChild(bubble);
+      chatEl.appendChild(wrap);
+      chatEl.scrollTop = chatEl.scrollHeight;
 
-      sendBtn.disabled=true; photoBtn.disabled=true; promptEl.disabled=true; statusEl.textContent='Thinking…';
-      try{
-        const payload={ message:text, gptType:gptTypeEl.value||'math', userId:userEmail };
-        const isNew = !currentConvId;
-        if(currentConvId) payload.conversationId=currentConvId;
+      // Typeset LaTeX after adding
+      if (window.MathJax && window.MathJax.typesetPromise) {
+        MathJax.typesetPromise([bubble]).catch(() => {});
+      }
+    }
 
-        const res=await api.chat(payload);
+    async function send() {
+      const message = promptEl.value.trim();
+      const file = imageEl.files[0] || null;
+      if (!message && !file) return;
 
-        if(isNew && res.conversationId){
-          currentConvId = res.conversationId;
-          const autoTitle = makeTitleFrom(text);
-          try { await api.renameConv(userEmail, currentConvId, autoTitle); } catch {}
-          await loadConversations(currentConvId);
+      // Show user message + image preview
+      let previewURL = null;
+      if (file) {
+        previewURL = URL.createObjectURL(file);
+      }
+      addMessage('user', message || '(photo only)', previewURL);
+
+      // disable controls while sending
+      sendBtn.disabled = true;
+      promptEl.disabled = true;
+
+      try {
+        const form = new FormData();
+        if (message) form.append('message', message);
+        if (file) form.append('image', file);
+
+        const resp = await fetch('/api/chat', { method: 'POST', body: form });
+        const data = await resp.json();
+
+        if (!resp.ok) {
+          addMessage('assistant', `Sorry, an error occurred.\n\n${data?.detail || data?.error || 'Unknown error'}`);
         } else {
-          await loadConversations(currentConvId||undefined);
+          const text = (data && data.answer) ? data.answer : 'No response text returned.';
+          addMessage('assistant', text);
         }
-
-        renderMessage('assistant', res.response||'');
-        scrollToBottom();
-      }catch(err){
-        renderMessage('assistant','Sorry, something went wrong. Please try again.'); scrollToBottom();
-      }finally{
-        promptEl.value=''; autoresize();
-        sendBtn.disabled=false; photoBtn.disabled=false; promptEl.disabled=false; promptEl.focus(); statusEl.textContent='';
+      } catch (err) {
+        addMessage('assistant', 'Network error. Please try again.');
+      } finally {
+        // reset
+        sendBtn.disabled = false;
+        promptEl.disabled = false;
+        promptEl.value = '';
+        promptEl.style.height = 'auto';
+        imageEl.value = '';
+        fileNameEl.textContent = '';
+        promptEl.focus();
       }
-    });
-
-    /* Photo Solve */
-    document.getElementById('photoBtn').addEventListener('click',()=>{ if(!isPublic) photoFile.click(); });
-    photoFile.addEventListener('change', async ()=>{
-      if(isPublic) return;
-      const file = photoFile.files && photoFile.files[0];
-      if(!file) return;
-      const okTypes=['image/png','image/jpeg','image/jpg','image/webp'];
-      if(!okTypes.includes(file.type)){ alert('Please choose a PNG, JPG, or WEBP image.'); photoFile.value=''; return; }
-      if(file.size>6*1024*1024){ alert('Image is larger than 6MB.'); photoFile.value=''; return; }
-
-      const note = prompt('Optional: add a short note (what you tried). Leave blank if not needed.') || '';
-
-      const objUrl=URL.createObjectURL(file);
-      renderImageMessage(note ? `📷 (with note) ${note}` : '📷 Photo uploaded', objUrl);
-      scrollToBottom();
-
-      sendBtn.disabled=true; photoBtn.disabled=true; promptEl.disabled=true; statusEl.textContent='Solving…';
-      try{
-        const fd=new FormData();
-        fd.append('image', file);
-        fd.append('userId', userEmail);
-        fd.append('gptType', gptTypeEl.value||'math');
-        if(note) fd.append('attempt', note);
-        if(currentConvId) fd.append('conversationId', currentConvId);
-
-        const wasNew = !currentConvId;
-
-        const res=await api.photoSolve(fd);
-
-        if(wasNew && res.conversationId){
-          currentConvId = res.conversationId;
-          const autoTitle = makeTitleFrom(note || 'Photo', 'Photo:');
-          try { await api.renameConv(userEmail, currentConvId, autoTitle); } catch {}
-          await loadConversations(currentConvId);
-        } else {
-          await loadConversations(currentConvId||undefined);
-        }
-
-        renderMessage('assistant', res.response||'No response text returned.');
-        scrollToBottom();
-      }catch(e){
-        renderMessage('assistant','Photo solve failed. Please try another image.'); scrollToBottom();
-      }finally{
-        URL.revokeObjectURL(objUrl); photoFile.value='';
-        sendBtn.disabled=false; photoBtn.disabled=false; promptEl.disabled=false; promptEl.focus(); statusEl.textContent='';
-      }
-    });
-
-    /* New chat & logout */
-    newChatBtn.addEventListener('click', async ()=>{
-      if(isPublic) return;
-      const c=await api.createConv(userEmail,'New chat');
-      currentConvId=c.id; await loadConversations(currentConvId); clearMessages(); promptEl.focus();
-    });
-
-    logoutBtn.addEventListener('click', async ()=>{
-      if(isPublic) return;
-      try { await api.logout(); } catch {}
-      localStorage.removeItem('userEmail');
-      window.location.replace('/index.html');
-    });
-
-    /* Init */
-    (async function init(){
-      if (isPublic) {
-        await loadPublicConversation(publicToken);
-        return;
-      }
-      const ok=await guardAuth(); if(!ok) return;
-      const fromUrl=urlParams.get('c');
-      await loadConversations(fromUrl?Number(fromUrl):null);
-      if(fromUrl){ currentConvId=Number(fromUrl); await showConversation(currentConvId); }
-      updatePlaceholder(); 
-      promptEl.focus(); autoresize();
-    })();
+    }
   </script>
 </body>
 </html>
