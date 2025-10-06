@@ -38,10 +38,7 @@
     /* Hero */
     .hero { background:linear-gradient(135deg, var(--brand), #9c6fff); color:#fff; text-align:center; padding:5rem 2rem; }
     .hero h1 { font-size:clamp(2rem,4vw,3rem); margin-bottom:1rem; }
-    .hero p { font-size:1.1rem; max-width:720px; margin:0 auto 2rem; opacity:.98; }
-    .btn { padding:.8rem 1.4rem; font-weight:700; border:none; border-radius:8px; cursor:pointer; }
-    .btn-primary { background:var(--accent); color:#000; }
-    .btn-secondary { background:#fff; color:var(--brand); border:1px solid var(--border); }
+    .hero p { font-size:1.1rem; max-width:720px; margin:0 auto 0; opacity:.98; }
 
     /* Features */
     .features { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:1.5rem; margin-top:2rem; }
@@ -89,6 +86,11 @@
     .inline { display:flex; align-items:center; gap:.5rem; }
     .link { color:var(--brand); background:none; border:0; padding:0; cursor:pointer; font-weight:600; }
 
+    /* Buttons (shared) */
+    .btn { padding:.8rem 1.4rem; font-weight:700; border:none; border-radius:8px; cursor:pointer; }
+    .btn-primary { background:var(--accent); color:#000; }
+    .btn-secondary { background:#fff; color:var(--brand); border:1px solid var(--border); }
+
     /* Spinner */
     .spinner {
       width:16px; height:16px; border:2px solid #fff; border-right-color:transparent;
@@ -112,15 +114,10 @@
     </div>
   </header>
 
-  <!-- Hero -->
+  <!-- Hero (no auth buttons here) -->
   <section class="hero">
     <h1>Master Math & Create Content with AI</h1>
-    <p>Get step-by-step math tutoring and professional AI content tools – all in one subscription. Start free today.</p>
-    <div class="row" style="justify-content:center; gap:.6rem;">
-      <button class="btn btn-primary" id="heroSignup">Sign up for free</button>
-      <button class="btn btn-secondary" id="heroLogin">Log in</button>
-    </div>
-    <div class="muted" style="margin-top:.8rem;">No credit card required for the free plan.</div>
+    <p>Get step-by-step math tutoring and professional AI content tools – all in one subscription.</p>
   </section>
 
   <!-- Features -->
@@ -134,14 +131,13 @@
     </div>
   </section>
 
-  <!-- Pricing -->
+  <!-- Pricing (no free signup/login buttons here) -->
   <section class="container" id="pricing">
     <h2>Choose Your Plan</h2>
-    <p>Enter your email to get started. Payments processed securely with Paystack.</p>
+    <p>Enter your email to subscribe to a paid plan. Payments processed securely with Paystack.</p>
     <input id="payerEmail" type="email" placeholder="Enter your email" style="padding:.7rem;width:300px;border-radius:8px;border:1px solid #ccc;margin:1rem 0;display:block">
 
     <div class="plans">
-      <!-- Free -->
       <div class="plan">
         <h3>Free Plan</h3>
         <div class="price">₵0 / mo</div>
@@ -150,11 +146,9 @@
           <li>Basic AI explanations</li>
           <li>Limited content exports</li>
         </ul>
-        <button class="btn btn-secondary" onclick="goFree()">Sign Up Free</button>
-        <div class="muted" style="margin-top:8px;">Already have an account? <a href="#" id="loginUnderFree">Log in</a></div>
+        <div class="muted">Create a free account using the button at the top-right.</div>
       </div>
 
-      <!-- Plus Monthly -->
       <div class="plan">
         <div class="badge">Popular</div>
         <h3>Plus Monthly</h3>
@@ -167,7 +161,6 @@
         <button class="btn btn-primary" onclick="subscribePlusMonthly()">Subscribe Monthly</button>
       </div>
 
-      <!-- Pro Annual -->
       <div class="plan">
         <h3>Pro Annual</h3>
         <div class="price">₵790 / yr</div>
@@ -246,7 +239,6 @@
         <input id="signupEmail" type="email" placeholder="you@example.com" autocomplete="email" />
         <div class="err" id="signupEmailErr"></div>
         <button class="btn btn-primary" id="signupEmailContinue" type="button">Continue</button>
-        <div class="muted" style="margin-top:10px;">Already have an account? <a href="#" id="signupGoLogin">Log in</a></div>
       </div>
 
       <!-- Step 2: Password -->
@@ -333,7 +325,6 @@
     }
 
     async function apiSignupFree(email, password){
-      // Server may ignore password; we send it if you support it.
       const r = await fetch("/api/signup-free", {
         method:"POST",
         headers:{ "Content-Type":"application/json" },
@@ -354,23 +345,7 @@
       } catch {}
     }
 
-    // ===== Free signup via pricing box (kept for convenience) =====
-    async function goFree() {
-      const email = requireEmail(); if (!email) return;
-      try{
-        const res = await apiSignupFree(email, null);
-        if (authOK(res)) {
-          localStorage.setItem("userEmail", authEmail(res));
-          setTimeout(()=>window.location.assign(NEXT_URL), 150);
-        } else {
-          alert("Error: " + (res?.message || "Signup failed"));
-        }
-      }catch{
-        alert("Network error. Please try again.");
-      }
-    }
-
-    // ===== Paystack subscriptions =====
+    // ===== Paystack subscriptions (paid) =====
     function subscribeWithPlan(planCode, label) {
       const email = requireEmail(); if (!email) return;
       if (!PAYSTACK_PUBLIC_KEY) { alert("Payment key not loaded."); return; }
@@ -410,7 +385,6 @@
     // ===== Log in modal logic =====
     const loginOverlay = document.getElementById("loginOverlay");
     const loginBtn = document.getElementById("loginBtn");
-    const heroLogin = document.getElementById("heroLogin");
     const loginClose = document.getElementById("loginClose");
 
     const loginStepEmail = document.getElementById("loginStepEmail");
@@ -467,14 +441,11 @@
         .finally(()=> setBtnLoading(loginSubmit, false, "Log in"));
     }
     loginBtn.addEventListener('click', openLogin);
-    heroLogin.addEventListener('click', openLogin);
     loginClose.addEventListener('click', closeLogin);
     loginOverlay.addEventListener('click', (e)=>{ if (e.target === loginOverlay) closeLogin(); });
     document.addEventListener('keydown', (e)=>{ if(e.key === "Escape" && loginOverlay.classList.contains("open")) closeLogin(); });
-
     loginEmailContinue.addEventListener('click', handleLoginEmailContinue);
     loginEmail.addEventListener('keydown', (e)=>{ if(e.key==='Enter') handleLoginEmailContinue(); });
-
     loginChangeEmail.addEventListener('click', ()=>{
       loginStepPassword.classList.remove("active");
       loginStepEmail.classList.add("active");
@@ -492,7 +463,6 @@
     // ===== Sign up modal logic =====
     const signupOverlay = document.getElementById("signupOverlay");
     const signupBtn = document.getElementById("signupBtn");
-    const heroSignup = document.getElementById("heroSignup");
     const signupClose = document.getElementById("signupClose");
 
     const signupStepEmail = document.getElementById("signupStepEmail");
@@ -507,7 +477,6 @@
     const signupPassword2 = document.getElementById("signupPassword2");
     const signupErr = document.getElementById("signupErr");
     const signupSubmit = document.getElementById("signupSubmit");
-    const signupGoLogin = document.getElementById("signupGoLogin");
 
     function openSignup(){
       signupEmailErr.textContent = '';
@@ -533,11 +502,6 @@
     }
     function passwordOk(p){ return typeof p === 'string' && p.length >= 8; }
 
-    // shared free-signup call; sets cookie
-    function signupFree(email, password){
-      return apiSignupFree(email, password);
-    }
-
     function handleSignupSubmit(){
       signupErr.textContent = '';
       const email = signupEmailEcho.textContent.trim() || signupEmail.value.trim();
@@ -547,7 +511,7 @@
       if (!passwordOk(p1)) { signupErr.textContent = "Password must be at least 8 characters."; return; }
       if (p1 !== p2) { signupErr.textContent = "Passwords do not match."; return; }
       setBtnLoading(signupSubmit, true, "Create account");
-      signupFree(email, p1)
+      apiSignupFree(email, p1)
         .then(r=>{
           if (authOK(r)) {
             localStorage.setItem("userEmail", authEmail(r));
@@ -561,14 +525,11 @@
     }
 
     signupBtn.addEventListener('click', openSignup);
-    heroSignup.addEventListener('click', openSignup);
     signupClose.addEventListener('click', closeSignup);
     signupOverlay.addEventListener('click', (e)=>{ if (e.target === signupOverlay) closeSignup(); });
     document.addEventListener('keydown', (e)=>{ if(e.key === "Escape" && signupOverlay.classList.contains("open")) closeSignup(); });
-
     signupEmailContinue.addEventListener('click', handleSignupEmailContinue);
     signupEmail.addEventListener('keydown', (e)=>{ if(e.key==='Enter') handleSignupEmailContinue(); });
-
     signupChangeEmail.addEventListener('click', ()=>{
       signupStepPassword.classList.remove("active");
       signupStepEmail.classList.add("active");
@@ -576,11 +537,6 @@
     });
     signupSubmit.addEventListener('click', handleSignupSubmit);
     signupPassword2.addEventListener('keydown', (e)=>{ if(e.key==='Enter') handleSignupSubmit(); });
-
-    signupGoLogin.addEventListener('click', (e)=>{ e.preventDefault(); closeSignup(); openLogin(); });
-
-    // Open login from pricing free card link
-    document.getElementById("loginUnderFree").addEventListener('click', (e)=>{ e.preventDefault(); openLogin(); });
 
     document.getElementById("year").textContent = new Date().getFullYear();
     checkSession();
