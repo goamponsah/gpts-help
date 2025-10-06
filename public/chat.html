@@ -32,13 +32,7 @@
       display:grid;
       grid-template-columns:var(--sidebar-w) 1fr;
     }
-    @media (max-width:900px){
-      .app{ grid-template-columns:1fr }
-      .sidebar{ display:none }
-    }
-    /* Hide sidebar in viewer mode (shared read-only) */
-    .viewer .sidebar{ display:none !important; }
-    .viewer .app{ grid-template-columns:1fr !important; }
+    @media (max-width:900px){ .app{ grid-template-columns:1fr } .sidebar{ display:none } }
 
     /* Sidebar */
     .sidebar{
@@ -59,10 +53,7 @@
     .conv:hover{ background:#151824; border-color:#1b1f2b }
     .conv.active{ background:#171b28; border-color:#2a3352 }
     .conv-title{ flex:1; overflow:hidden; text-overflow:ellipsis }
-    .conv-menu-btn{
-      opacity:0; transition:opacity .15s; border:0; background:transparent;
-      color:var(--muted); cursor:pointer; padding:2px 4px; border-radius:6px
-    }
+    .conv-menu-btn{ opacity:0; transition:opacity .15s; border:0; background:transparent; color:var(--muted); cursor:pointer; padding:2px 4px; border-radius:6px }
     .conv:hover .conv-menu-btn{ opacity:1 }
     .menu{
       position:absolute; right:8px; top:32px;
@@ -71,10 +62,7 @@
       box-shadow:0 10px 24px rgba(0,0,0,.35)
     }
     .menu.open{ display:block }
-    .menu button{
-      display:block; width:100%; text-align:left; background:transparent; color:var(--text);
-      border:0; padding:10px 12px; cursor:pointer; font-size:14px
-    }
+    .menu button{ display:block; width:100%; text-align:left; background:transparent; color:var(--text); border:0; padding:10px 12px; cursor:pointer; font-size:14px }
     .menu button:hover{ background:#1a1d2a }
     .side-bottom{ position:sticky; bottom:0; padding:10px; border-top:1px solid var(--border); background:#0f1117 }
     .logout{ width:100%; background:transparent; border:1px solid var(--border); color:var(--text); padding:9px 10px; border-radius:10px; cursor:pointer; font-size:13px }
@@ -86,6 +74,14 @@
       overflow-y:auto; padding:20px 18px; min-height:0; scroll-behavior:smooth;
       background:radial-gradient(1200px 400px at 50% -200px, rgba(88,101,242,.08), transparent 60%);
     }
+    .public-banner{
+      display:none; position:sticky; top:0; z-index:1;
+      padding:8px 12px; margin:-8px 0 8px;
+      border:1px solid var(--border); border-radius:10px;
+      background:linear-gradient(180deg, rgba(240,180,41,.12), transparent 70%);
+      color:#fff; font-size:13px;
+    }
+    .public .public-banner{ display:block; }
 
     /* Chat bubbles */
     .msg{ max-width:900px; margin:0 auto 12px auto; display:flex; }
@@ -116,7 +112,7 @@
     .bubble code{ background:#0b0d12; padding:2px 6px; border-radius:6px; border:1px solid var(--border); }
     .bubble pre{ background:#0b0d12; padding:10px; border-radius:10px; border:1px solid var(--border); overflow:auto; }
 
-    /* Composer — compact, ChatGPT-like (bottom anchored via grid) */
+    /* Composer — compact, ChatGPT-like */
     .composer{
       border-top:1px solid var(--border);
       background:linear-gradient(#0e0f13,#0f1117);
@@ -129,7 +125,8 @@
     .input{
       display:flex; align-items:flex-end; gap:8px;
       background:#0f1117; border:1px solid var(--border);
-      border-radius:9999px; padding:6px 10px; min-height:42px;
+      border-radius:9999px; padding:6px 10px;
+      min-height:42px;
     }
     .ta-wrap{ flex:1; display:flex; flex-direction:column; }
     .meta-row{
@@ -143,7 +140,9 @@
       width:100%; resize:none; min-height:24px; max-height:120px;
       background:transparent; color:var(--text); outline:none; border:0; font:inherit; line-height:1.45; padding:0 4px 2px 6px;
     }
-    .controls{ display:inline-flex; gap:6px; }
+    .controls{
+      display:inline-flex; gap:6px;
+    }
     .icon-btn{
       width:36px; height:36px; display:inline-flex; align-items:center; justify-content:center;
       border-radius:9999px; border:1px solid var(--border); background:#141722; color:#dfe3ec;
@@ -189,12 +188,13 @@
     }
     .toast.show{ display:block; }
 
-    /* Viewer banner */
-    .viewer-banner{
-      background:#10131f; border-bottom:1px solid var(--border); color:#d7dbeb;
-      padding:10px 14px; font-size:14px; display:none;
-    }
-    .viewer .viewer-banner{ display:block; }
+    /* Public (read-only) state */
+    .public .conv-menu-btn,
+    .public .new-chat,
+    .public .logout{ pointer-events:none; opacity:.6; }
+    .public .controls .icon-btn,
+    .public select,
+    .public textarea{ pointer-events:none; opacity:.6; }
   </style>
 
   <!-- Markdown renderer + sanitizer -->
@@ -202,10 +202,6 @@
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 </head>
 <body>
-  <div class="viewer-banner" id="viewerBanner">
-    🔗 You’re viewing a shared chat (read-only). <a href="/index.html" style="color:#8fa2ff">Sign in</a> to start chatting.
-  </div>
-
   <div class="app">
     <!-- Sidebar -->
     <aside class="sidebar">
@@ -222,8 +218,12 @@
     </aside>
 
     <!-- Main -->
-    <main class="main">
-      <div class="messages" id="messages"></div>
+    <main class="main" id="main">
+      <div class="messages" id="messages">
+        <div class="public-banner" id="publicBanner">
+          Anyone with this link can view this chat. You can’t send messages in public view.
+        </div>
+      </div>
 
       <form class="composer" id="composer">
         <div class="row">
@@ -261,7 +261,7 @@
       </div>
       <div class="modal-sub">Your name, custom instructions, and any messages you add after sharing stay private.</div>
       <div class="modal-row">
-        <input type="text" id="shareLinkInput" placeholder="https://yourapp.com/chat.html?token=…" readonly />
+        <input type="text" id="shareLinkInput" placeholder="https://yourapp.com/share/…" readonly />
         <button class="btn primary" id="createShareBtn">Create link</button>
       </div>
     </div>
@@ -275,50 +275,30 @@
 
     /* API (all with credentials so cookie session is sent) */
     const api = {
-      listConvs: ()=>fetch(`/api/conversations`, { credentials:'include' }).then(r=>r.json()),
-      createConv:(title)=>fetch('/api/conversations',{
-        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
-        body:JSON.stringify({title})
-      }).then(r=>r.json()),
-      updateConv:(id,patch)=>fetch(`/api/conversations/${id}`,{
+      listConvs: (email)=>fetch(`/api/conversations?userId=${encodeURIComponent(email)}`, { credentials:'include' }).then(r=>r.json()),
+      createConv:(email,title)=>fetch('/api/conversations',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({userId:email,title})}).then(r=>r.json()),
+      renameConv:(email,id,title)=>fetch(`/api/conversations/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({userId:email,title})}).then(r=>r.json()),
+      deleteConv:(email,id)=>fetch(`/api/conversations/${id}`,{method:'DELETE',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({userId:email})}).then(r=>r.json()),
+      archiveConv:(email,id,archived=true)=>fetch(`/api/conversations/${id}`,{
         method:'PATCH', headers:{'Content-Type':'application/json'}, credentials:'include',
-        body:JSON.stringify(patch)
+        body:JSON.stringify({userId:email, archived})
       }).then(r=>r.json()),
-      deleteConv:(id)=>fetch(`/api/conversations/${id}`,{method:'DELETE',credentials:'include'}).then(r=>r.json()),
-      getConvMsgs:(id)=>fetch(`/api/conversations/${id}`, { credentials:'include' }).then(r=>r.json()),
-      chat: async (payload) => {
-        const r = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify(payload)
-        });
-        let j = null;
-        try { j = await r.json(); } catch { j = {}; }
-        if (!r.ok) {
-          const msg =
-            r.status === 401 ? 'Your session expired. Please log in again.' :
-            j?.error || 'Chat failed.';
-          throw new Error(msg);
-        }
-        return j;
-      },
+      getConvMsgs:(email,id)=>fetch(`/api/conversations/${id}?userId=${encodeURIComponent(email)}`, { credentials:'include' }).then(r=>r.json()),
+      chat:(payload)=>fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(payload)}).then(r=>r.json()),
       me:()=>fetch('/api/me', { credentials:'include' }).then(r=>r.json()),
-      photoSolve: async (fd)=>{
-        const r = await fetch('/api/photo-solve',{method:'POST',credentials:'include',body:fd});
-        let j=null; try{ j = await r.json(); }catch{ j={}; }
-        if(!r.ok){
-          const msg = j?.error || (r.status===401?'Your session expired. Please log in again.':'Photo solve failed.');
-          throw new Error(msg);
-        }
-        return j;
-      },
-      share:(id)=>fetch(`/api/conversations/${id}/share`, {method:'POST',credentials:'include'}).then(r=>r.json()),
-      shareRead:(token)=>fetch(`/api/share/${encodeURIComponent(token)}`).then(r=>r.json()),
-      logout:()=>fetch('/api/logout',{method:'POST',credentials:'include'})
+      photoSolve:(fd)=>fetch('/api/photo-solve',{method:'POST',credentials:'include',body:fd}).then(r=>r.json()),
+      logout:()=>fetch('/api/logout',{method:'POST',credentials:'include'}),
+
+      /* PUBLIC + SHARE endpoints */
+      getPublicConv:(token)=>fetch(`/api/public/conversation?t=${encodeURIComponent(token)}`).then(r=>r.json()),
+      createShare:(email,conversationId)=>fetch('/api/share',{
+        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
+        body:JSON.stringify({userId:email, conversationId})
+      }).then(r=>r.json()),
     };
 
     /* Elements */
+    const mainEl = document.getElementById('main');
     const messagesEl = document.getElementById('messages');
     const convListEl = document.getElementById('convList');
     const promptEl = document.getElementById('prompt');
@@ -330,7 +310,7 @@
     const statusEl = document.getElementById('status');
     const newChatBtn = document.getElementById('newChatBtn');
     const logoutBtn = document.getElementById('logoutBtn');
-    const viewerBanner = document.getElementById('viewerBanner');
+    const publicBanner = document.getElementById('publicBanner');
 
     /* Share modal elements */
     const shareOverlay = document.getElementById('shareOverlay');
@@ -339,10 +319,14 @@
     const shareCloseBtn = document.getElementById('shareCloseBtn');
     const toastEl = document.getElementById('toast');
 
+    let userEmail = localStorage.getItem('userEmail') || '';
     let currentConvId = null;
     let pendingShareConvId = null;
-    let viewerMode = false;
-    let viewerToken = null;
+
+    /* URL params: if ?t=TOKEN exists, show public read-only */
+    const urlParams = new URLSearchParams(location.search);
+    const publicToken = urlParams.get('t');
+    const isPublic = !!publicToken;
 
     /* --- Dynamic placeholder tied to selected assistant --- */
     function updatePlaceholder() {
@@ -352,19 +336,20 @@
       promptEl.setAttribute('title', `Message ${name}`);
     }
     gptTypeEl.addEventListener('change', updatePlaceholder);
+    updatePlaceholder();
 
-    /* Auth guard (cookie-based). If in viewer mode, allow unauthenticated. */
-    async function guardAuth(allowGuest=false){
+    /* Auth guard (cookie-based) — skipped in public mode */
+    async function guardAuth(){
       try{
         const me = await api.me();
         if (me.status !== 'ok' || !me.user?.email) {
-          if (allowGuest) return false; // not logged in, but okay for viewer
-          window.location.replace('/index.html');
+          window.location.replace('/index.html'); 
           return false;
         }
+        userEmail = me.user.email;
+        localStorage.setItem('userEmail', userEmail);
         return true;
       } catch {
-        if (allowGuest) return false;
         window.location.replace('/index.html');
         return false;
       }
@@ -450,7 +435,12 @@
       messagesEl.appendChild(row);
     }
 
-    function clearMessages(){ messagesEl.innerHTML=''; }
+    function clearMessages(){
+      messagesEl.innerHTML='';
+      if (isPublic && publicBanner && !messagesEl.contains(publicBanner)) {
+        messagesEl.appendChild(publicBanner);
+      }
+    }
     function scrollToBottom(){ messagesEl.scrollTop = messagesEl.scrollHeight; }
     function now(){ return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
 
@@ -460,7 +450,7 @@
       shareOverlay.classList.add('open');
       shareOverlay.setAttribute('aria-hidden','false');
       shareLinkInput.value = '';
-      shareLinkInput.placeholder = `Creating secure link…`;
+      shareLinkInput.placeholder = `${location.origin}/chat.html?c=${convId}`;
       setTimeout(()=>createShareBtn.focus(), 10);
     }
     function closeShareModal(){
@@ -472,30 +462,36 @@
     shareOverlay.addEventListener('click', (e)=>{ if(e.target === shareOverlay) closeShareModal(); });
     document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape' && shareOverlay.classList.contains('open')) closeShareModal(); });
 
+    // Create a public share link (prefer backend token URL)
     createShareBtn.addEventListener('click', async ()=>{
       const id = pendingShareConvId ?? currentConvId;
       if(!id) return;
-      createShareBtn.disabled = true;
+
       try{
-        const r = await api.share(id); // { token }
-        const url = `${location.origin}/chat.html?token=${encodeURIComponent(r.token)}`;
-        shareLinkInput.value = url;
-        shareLinkInput.select();
-        await navigator.clipboard.writeText(url);
+        const r = await api.createShare(userEmail, id);
+        if (r && r.status === 'ok' && r.url) {
+          shareLinkInput.value = r.url; // e.g., https://yourapp.com/chat.html?t=TOKEN
+        } else {
+          shareLinkInput.value = `${location.origin}/chat.html?c=${id}`; // fallback (requires auth)
+        }
+      }catch{
+        shareLinkInput.value = `${location.origin}/chat.html?c=${id}`;
+      }
+
+      shareLinkInput.select();
+      try{
+        await navigator.clipboard.writeText(shareLinkInput.value);
         createShareBtn.textContent = 'Copied!';
         showToast('Link copied to clipboard');
         setTimeout(()=>{ createShareBtn.textContent = 'Create link'; }, 1200);
-      }catch(err){
-        console.error(err);
-        showToast('Could not create share link');
-      }finally{
-        createShareBtn.disabled = false;
+      }catch{
+        showToast('Copy failed. Select and copy manually.');
       }
     });
 
     /* Conversations UI */
     async function loadConversations(selectId=null){
-      const list=await api.listConvs(); // [{id,title,archived}]
+      const list=await api.listConvs(userEmail);
       convListEl.innerHTML='';
       list
         .filter(c => !c.archived)
@@ -509,7 +505,6 @@
           const bArchive=el('button',{},'Archive');
           const bDelete=el('button',{},'Delete');
 
-          // SHARE — open modal
           bShare.addEventListener('click',e=>{
             e.stopPropagation();
             menu.classList.remove('open');
@@ -522,7 +517,7 @@
             row.replaceChild(input,title); input.focus();
             const commit=async ()=>{
               const t=(input.value||'New chat').trim();
-              await api.updateConv(c.id,{title:t}); await loadConversations(c.id);
+              await api.renameConv(userEmail,c.id,t); await loadConversations(c.id);
             };
             input.addEventListener('keydown',ke=>{ if(ke.key==='Enter') commit(); if(ke.key==='Escape') loadConversations(c.id); });
             input.addEventListener('blur',commit);
@@ -531,7 +526,7 @@
           bArchive.addEventListener('click', async e=>{
             e.stopPropagation(); menu.classList.remove('open');
             try{
-              await api.updateConv(c.id,{ archived:true });
+              await api.archiveConv(userEmail, c.id, true);
               if(currentConvId===c.id){ currentConvId=null; clearMessages(); }
               await loadConversations();
             }catch(err){
@@ -541,15 +536,15 @@
 
           bDelete.addEventListener('click',async e=>{
             e.stopPropagation(); menu.classList.remove('open');
-            if(confirm('Delete this chat?')){
-              await api.deleteConv(c.id);
-              if(currentConvId===c.id){ currentConvId=null; clearMessages(); }
-              await loadConversations();
+            if(confirm('Delete this chat?')){ 
+              await api.deleteConv(userEmail,c.id); 
+              if(currentConvId===c.id){ currentConvId=null; clearMessages(); } 
+              await loadConversations(); 
             }
           });
 
-          menu.appendChild(bShare);
-          menu.appendChild(bRename);
+          menu.appendChild(bShare); 
+          menu.appendChild(bRename); 
           menu.appendChild(bArchive);
           menu.appendChild(bDelete);
 
@@ -580,21 +575,41 @@
 
     async function showConversation(id){
       clearMessages();
-      const r=await api.getConvMsgs(id);
+      const r=await api.getConvMsgs(userEmail,id);
       (r.messages||[]).forEach(m=> renderMessage(m.role==='user'?'user':'assistant', m.content));
       scrollToBottom();
     }
 
-    /* Shared read-only viewer */
-    async function showSharedConversation(token){
+    /* Public view: fetch and render read-only snapshot (no auth) */
+    async function loadPublicConversation(token){
+      // mark UI as public/read-only
+      document.body.classList.add('public');
+      publicBanner.style.display = 'block';
+
+      // hide some sidebar actions visually
+      document.querySelectorAll('.conv-menu-btn,.new-chat,.logout').forEach(el=>{ el.style.display='none'; });
+
       clearMessages();
-      try {
-        const r = await api.shareRead(token); // {title, messages}
+      try{
+        const r = await api.getPublicConv(token);
+        // Expected: { title, messages:[{role,content}], ... }
+        if (r && r.title) {
+          // show single active item with title
+          convListEl.innerHTML='';
+          const row=el('div',{class:'conv active'});
+          const title=el('div',{class:'conv-title'}, r.title);
+          row.appendChild(title);
+          convListEl.appendChild(row);
+        }
         (r.messages||[]).forEach(m=> renderMessage(m.role==='user'?'user':'assistant', m.content));
-        scrollToBottom();
-      } catch {
-        renderMessage('assistant','The shared chat link is invalid or expired.');
+      }catch(e){
+        renderMessage('assistant','This public link is invalid or expired.');
       }
+      // disable composer controls but keep layout
+      Array.from(composerEl.querySelectorAll('button,textarea,input,select')).forEach(el=>{
+        el.disabled = true;
+      });
+      scrollToBottom();
     }
 
     /* Auto-resize + Enter to send */
@@ -613,7 +628,8 @@
     /* Submit text */
     composerEl.addEventListener('submit', async (e)=>{
       e.preventDefault();
-      if(viewerMode) return;
+      if (isPublic) return; // read-only guard
+
       const text=(promptEl.value||'').trim();
       if(!text) return;
 
@@ -621,17 +637,16 @@
 
       sendBtn.disabled=true; photoBtn.disabled=true; promptEl.disabled=true; statusEl.textContent='Thinking…';
       try{
-        const payload={ message:text, gptType:gptTypeEl.value||'math' };
+        const payload={ message:text, gptType:gptTypeEl.value||'math', userId:userEmail };
         const isNew = !currentConvId;
         if(currentConvId) payload.conversationId=currentConvId;
 
         const res=await api.chat(payload);
 
-        // If a new conversation was created, capture id and auto-name it
         if(isNew && res.conversationId){
           currentConvId = res.conversationId;
           const autoTitle = makeTitleFrom(text);
-          try { await api.updateConv(currentConvId, { title: autoTitle }); } catch {}
+          try { await api.renameConv(userEmail, currentConvId, autoTitle); } catch {}
           await loadConversations(currentConvId);
         } else {
           await loadConversations(currentConvId||undefined);
@@ -640,8 +655,7 @@
         renderMessage('assistant', res.response||'');
         scrollToBottom();
       }catch(err){
-        renderMessage('assistant', (err && err.message) ? err.message : 'Sorry, something went wrong. Please try again.');
-        scrollToBottom();
+        renderMessage('assistant','Sorry, something went wrong. Please try again.'); scrollToBottom();
       }finally{
         promptEl.value=''; autoresize();
         sendBtn.disabled=false; photoBtn.disabled=false; promptEl.disabled=false; promptEl.focus(); statusEl.textContent='';
@@ -649,13 +663,13 @@
     });
 
     /* Photo Solve */
-    document.getElementById('photoBtn').addEventListener('click',()=> !viewerMode && photoFile.click());
+    document.getElementById('photoBtn').addEventListener('click',()=>{ if(!isPublic) photoFile.click(); });
     photoFile.addEventListener('change', async ()=>{
-      if(viewerMode) return;
+      if(isPublic) return;
       const file = photoFile.files && photoFile.files[0];
       if(!file) return;
       const okTypes=['image/png','image/jpeg','image/jpg','image/webp'];
-      if(!okTypes.includes((file.type||'').toLowerCase())){ alert('Please choose a PNG, JPG, or WEBP image.'); photoFile.value=''; return; }
+      if(!okTypes.includes(file.type)){ alert('Please choose a PNG, JPG, or WEBP image.'); photoFile.value=''; return; }
       if(file.size>6*1024*1024){ alert('Image is larger than 6MB.'); photoFile.value=''; return; }
 
       const note = prompt('Optional: add a short note (what you tried). Leave blank if not needed.') || '';
@@ -668,6 +682,7 @@
       try{
         const fd=new FormData();
         fd.append('image', file);
+        fd.append('userId', userEmail);
         fd.append('gptType', gptTypeEl.value||'math');
         if(note) fd.append('attempt', note);
         if(currentConvId) fd.append('conversationId', currentConvId);
@@ -679,7 +694,7 @@
         if(wasNew && res.conversationId){
           currentConvId = res.conversationId;
           const autoTitle = makeTitleFrom(note || 'Photo', 'Photo:');
-          try { await api.updateConv(currentConvId, { title: autoTitle }); } catch {}
+          try { await api.renameConv(userEmail, currentConvId, autoTitle); } catch {}
           await loadConversations(currentConvId);
         } else {
           await loadConversations(currentConvId||undefined);
@@ -688,8 +703,7 @@
         renderMessage('assistant', res.response||'No response text returned.');
         scrollToBottom();
       }catch(e){
-        renderMessage('assistant', (e && e.message) ? e.message : 'Photo solve failed. Please try another image.');
-        scrollToBottom();
+        renderMessage('assistant','Photo solve failed. Please try another image.'); scrollToBottom();
       }finally{
         URL.revokeObjectURL(objUrl); photoFile.value='';
         sendBtn.disabled=false; photoBtn.disabled=false; promptEl.disabled=false; promptEl.focus(); statusEl.textContent='';
@@ -698,37 +712,26 @@
 
     /* New chat & logout */
     newChatBtn.addEventListener('click', async ()=>{
-      if(viewerMode) return;
-      const c=await api.createConv('New chat');
+      if(isPublic) return;
+      const c=await api.createConv(userEmail,'New chat');
       currentConvId=c.id; await loadConversations(currentConvId); clearMessages(); promptEl.focus();
     });
 
     logoutBtn.addEventListener('click', async ()=>{
+      if(isPublic) return;
       try { await api.logout(); } catch {}
+      localStorage.removeItem('userEmail');
       window.location.replace('/index.html');
     });
 
     /* Init */
     (async function init(){
-      const p=new URLSearchParams(location.search);
-      const token=p.get('token');
-      const fromUrl=p.get('c');
-
-      viewerMode = !!token;
-      viewerToken = token || null;
-
-      if (viewerMode) {
-        // viewer style toggles
-        document.body.classList.add('viewer');
-        // disable composer controls
-        [sendBtn, photoBtn, promptEl].forEach(el => { el.disabled = true; });
-        viewerBanner.style.display = 'block';
-        await showSharedConversation(token);
-        updatePlaceholder(); autoresize();
-        return; // no auth required
+      if (isPublic) {
+        await loadPublicConversation(publicToken);
+        return;
       }
-
-      const ok=await guardAuth(false); if(!ok) return;
+      const ok=await guardAuth(); if(!ok) return;
+      const fromUrl=urlParams.get('c');
       await loadConversations(fromUrl?Number(fromUrl):null);
       if(fromUrl){ currentConvId=Number(fromUrl); await showConversation(currentConvId); }
       updatePlaceholder(); 
