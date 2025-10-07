@@ -43,9 +43,7 @@ if (!OPENAI_API_KEY) console.warn("[WARN] OPENAI_API_KEY not set");
 const OPENAI_DEFAULT_MODEL = OPENAI_MODEL || "gpt-4o-mini";
 
 // ---------- CORS / JSON / Cookies ----------
-if (FRONTEND_ORIGIN) {
-  app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
-}
+if (FRONTEND_ORIGIN) app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 
@@ -107,7 +105,7 @@ async function ensureSchema() {
       created_at    timestamptz not null default now()
     );
 
-    -- NEW: monthly usage counters for Free plan limits
+    -- Monthly usage counters for Free plan limits
     create table if not exists usage_counters (
       user_id       bigint not null references users(id) on delete cascade,
       period_ym     text   not null,               -- e.g. '2025-10'
@@ -192,7 +190,6 @@ async function openaiChat(messages) {
 
 // ---------- Usage/limits helpers ----------
 const FREE_MATH_LIMIT = 10;
-
 function currentPeriodYM(d = new Date()) {
   const y = d.getUTCFullYear();
   const m = String(d.getUTCMonth() + 1).padStart(2, "0");
@@ -221,6 +218,16 @@ async function remainingFreeMath(user) {
   const row = await getUsageRow(user.id, ym);
   const used = row.math_used || 0;
   return { limit: FREE_MATH_LIMIT, used, remaining: Math.max(0, FREE_MATH_LIMIT - used), periodEnd: periodEndUTC() };
+}
+async function requireMathAllowance(user) {
+  if ((user.plan || "FREE").toUpperCase() !== "FREE") {
+    return { allowed: true, remaining: Infinity, limit: null, periodEnd: null };
+  }
+  const usage = await remainingFreeMath(user);
+  if (usage.remaining <= 0) {
+    return { allowed: false, remaining: 0, limit: usage.limit, periodEnd: usage.periodEnd };
+  }
+  return { allowed: true, remaining: usage.remaining, limit: usage.limit, periodEnd: usage.periodEnd };
 }
 
 // ---------- Health / Config ----------
@@ -274,9 +281,7 @@ app.get("/api/me", async (req, res) => {
   if (!s?.email) return res.status(401).json({ status:"unauthenticated" });
   const u = await getUserByEmail(s.email);
   if (!u) return res.status(401).json({ status:"unauthenticated" });
-
-  // include usage snapshot for convenience
-  const usage = await remainingFreeMath(u);
+  const usage = await remainingFreeMath(u); // snapshot for UI
   res.json({ status:"ok", user:{ email: u.email, plan: u.plan }, usage });
 });
 
@@ -416,23 +421,6 @@ app.get("/api/share/:token", async (req, res) => {
   res.json({ title: s.rows[0].title, messages: msgs.rows });
 });
 
-// ---------- Limit gate (Free plan math only) ----------
-async function requireMathAllowance(user) {
-  if ((user.plan || "FREE").toUpperCase() !== "FREE") {
-    return { allowed: true, remaining: Infinity, limit: null, periodEnd: null };
-  }
-  const usage = await remainingFreeMath(user);
-  if (usage.remaining <= 0) {
-    return {
-      allowed: false,
-      remaining: 0,
-      limit: usage.limit,
-      periodEnd: usage.periodEnd
-    };
-  }
-  return { allowed: true, remaining: usage.remaining, limit: usage.limit, periodEnd: usage.periodEnd };
-}
-
 // ---------- Chat ----------
 app.post("/api/chat", async (req, res) => {
   try {
@@ -440,7 +428,6 @@ app.post("/api/chat", async (req, res) => {
     const { message, gptType, conversationId } = req.body || {};
     if (!message) return res.status(400).json({ error:"message required" });
 
-    // Enforce Free plan math limit
     const isMath = (gptType || "math") === "math";
     if (isMath) {
       const gate = await requireMathAllowance(u);
@@ -482,7 +469,6 @@ app.post("/api/chat", async (req, res) => {
 
     await pool.query(`insert into messages(conversation_id, role, content) values($1,$2,$3)`, [convId, "assistant", answer]);
 
-    // Count toward Free math usage only after a successful completion
     if (isMath && (u.plan || "FREE").toUpperCase() === "FREE") {
       await incrementMathUsage(u.id, currentPeriodYM(), 1);
     }
