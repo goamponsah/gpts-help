@@ -1,6 +1,8 @@
 // server.js (ESM)
-// package.json: { "type": "module" }
+// package.json => { "type": "module" }
 // npm i express cookie-parser cors jsonwebtoken multer pg
+// ENV: DATABASE_URL, JWT_SECRET, OPENAI_API_KEY, PAYSTACK_PUBLIC_KEY, PAYSTACK_SECRET_KEY
+// Optional: PLAN_CODE_PLUS_MONTHLY, PLAN_CODE_PRO_ANNUAL, OPENAI_MODEL, FRONTEND_ORIGIN
 
 import express from "express";
 import cookieParser from "cookie-parser";
@@ -15,126 +17,149 @@ import pg from "pg";
 
 const { Pool } = pg;
 
-/* -------------------------- Paths / App -------------------------- */
+// ---------- Resolve __dirname ----------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+// ---------- App ----------
 const app = express();
 
-/* -------------------------- ENV -------------------------- */
+// ---------- ENV ----------
 const {
   DATABASE_URL,
-  JWT_SECRET,
-  OPENAI_API_KEY,
-  OPENAI_MODEL,
-  FRONTEND_ORIGIN,
   PAYSTACK_PUBLIC_KEY,
   PAYSTACK_SECRET_KEY,
   PLAN_CODE_PLUS_MONTHLY,
   PLAN_CODE_PRO_ANNUAL,
-  PAYSTACK_CURRENCY,
+  OPENAI_API_KEY,
+  OPENAI_MODEL,
+  FRONTEND_ORIGIN,
+  JWT_SECRET,
+  PAYSTACK_CURRENCY, // optional (default GHS)
 } = process.env;
 
 const OPENAI_DEFAULT_MODEL = OPENAI_MODEL || "gpt-4o-mini";
 const CURRENCY = PAYSTACK_CURRENCY || "GHS";
 
-if (!DATABASE_URL) console.error("[ERROR] DATABASE_URL not set");
-if (!OPENAI_API_KEY) console.warn("[WARN] OPENAI_API_KEY not set");
-if (!JWT_SECRET) console.warn("[WARN] JWT_SECRET not set; set a stable value");
-
-/* -------------------------- Middleware -------------------------- */
+// ---------- CORS / JSON / Cookies ----------
 if (FRONTEND_ORIGIN) {
   app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
 }
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
+
+// ---------- Static ----------
 app.use(express.static(path.join(__dirname, "public")));
+
+// ---------- Uploads ----------
 const upload = multer({ storage: multer.memoryStorage() });
 
-/* -------------------------- DB + Schema -------------------------- */
+// ---------- DB ----------
 const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: { rejectUnauthorized: false },
 });
 
+// Boot-time schema ensure & migration
 async function ensureSchema() {
-  // base tables
+  // Base tables (idempotent)
   await pool.query(`
-    create table if not exists users (
-      id          bigserial primary key,
-      email       text not null unique,
-      pass_salt   text,
-      pass_hash   text,
-      plan        text not null default 'FREE',
-      created_at  timestamptz not null default now(),
-      updated_at  timestamptz not null default now()
+    CREATE TABLE IF NOT EXISTS users (
+      id         bigserial PRIMARY KEY,
+      email      text NOT NULL UNIQUE,
+      pass_salt  text,
+      pass_hash  text,
+      plan       text NOT NULL DEFAULT 'FREE',
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
     );
 
-    create table if not exists conversations (
-      id          bigserial primary key,
-      user_id     bigint not null references users(id) on delete cascade,
-      title       text not null,
-      archived    boolean not null default false,
-      created_at  timestamptz not null default now(),
-      updated_at  timestamptz not null default now()
+    CREATE TABLE IF NOT EXISTS conversations (
+      id         bigserial PRIMARY KEY,
+      user_id    bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title      text NOT NULL,
+      archived   boolean NOT NULL DEFAULT false,
+      created_at timestamptz NOT NULL DEFAULT now(),
+      updated_at timestamptz NOT NULL DEFAULT now()
     );
-    create index if not exists conversations_user_idx on conversations(user_id, created_at desc);
+    CREATE INDEX IF NOT EXISTS conversations_user_idx
+      ON conversations(user_id, created_at DESC);
 
-    create table if not exists messages (
-      id              bigserial primary key,
-      conversation_id bigint not null references conversations(id) on delete cascade,
-      role            text not null, -- 'user' | 'assistant'
-      content         text not null,
-      created_at      timestamptz not null default now()
+    CREATE TABLE IF NOT EXISTS messages (
+      id              bigserial PRIMARY KEY,
+      conversation_id bigint NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      role            text NOT NULL,  -- 'user' | 'assistant'
+      content         text NOT NULL,
+      created_at      timestamptz NOT NULL DEFAULT now()
     );
-    create index if not exists messages_conv_idx on messages(conversation_id, id);
+    CREATE INDEX IF NOT EXISTS messages_conv_idx
+      ON messages(conversation_id, id);
 
-    create table if not exists share_links (
-      id              bigserial primary key,
-      conversation_id bigint not null references conversations(id) on delete cascade,
-      token           text not null unique,
-      created_at      timestamptz not null default now(),
-      revoked         boolean not null default false
-    );
-
-    create table if not exists paystack_receipts (
-      id          bigserial primary key,
-      email       text,
-      reference   text not null unique,
-      plan_code   text,
-      status      text,
-      raw         jsonb,
-      created_at  timestamptz not null default now()
+    CREATE TABLE IF NOT EXISTS share_links (
+      id              bigserial PRIMARY KEY,
+      conversation_id bigint NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+      token           text NOT NULL UNIQUE,
+      created_at      timestamptz NOT NULL DEFAULT now(),
+      revoked         boolean NOT NULL DEFAULT false
     );
 
-    -- Monthly usage counters for free plan limits
-    create table if not exists usage_counters (
-      user_id      bigint not null references users(id) on delete cascade,
-      period       text   not null,  -- 'YYYY-MM'
-      math_asks    int    not null default 0,
-      photo_solves int    not null default 0,
-      primary key (user_id, period)
+    CREATE TABLE IF NOT EXISTS paystack_receipts (
+      id         bigserial PRIMARY KEY,
+      email      text,
+      reference  text NOT NULL UNIQUE,
+      plan_code  text,
+      status     text,
+      raw        jsonb,
+      created_at timestamptz NOT NULL DEFAULT now()
     );
   `);
 
-  // Auto-heal: ensure 'period' column exists even if an older table was created
+  // 🔧 Drop legacy column conversations.user_email if it exists
   await pool.query(`
-    do $$
-    begin
-      if not exists (
-        select 1 from information_schema.columns
-        where table_name='usage_counters' and column_name='period'
-      ) then
-        alter table usage_counters
-          add column period text not null default to_char(now(),'YYYY-MM');
-      end if;
-    end $$;
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'conversations' AND column_name = 'user_email'
+      ) THEN
+        ALTER TABLE conversations DROP COLUMN user_email;
+      END IF;
+    END $$;
   `);
+
+  // 🔒 Ensure constraints & columns are correct
+  await pool.query(`
+    ALTER TABLE conversations
+      ADD COLUMN IF NOT EXISTS user_id bigint,
+      ADD COLUMN IF NOT EXISTS title text NOT NULL DEFAULT 'New chat',
+      ADD COLUMN IF NOT EXISTS archived boolean NOT NULL DEFAULT false,
+      ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now(),
+      ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
+
+    ALTER TABLE conversations
+      ALTER COLUMN user_id SET NOT NULL;
+
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM information_schema.table_constraints
+        WHERE table_name = 'conversations'
+          AND constraint_type = 'FOREIGN KEY'
+      ) THEN
+        ALTER TABLE conversations
+          ADD CONSTRAINT conversations_user_fk
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
+      END IF;
+    END $$;
+  `);
+
+  console.log("[DB] ensureSchema complete");
 }
 await ensureSchema();
 
-/* -------------------------- JWT Session -------------------------- */
+// ---------- JWT ----------
 const SJWT = JWT_SECRET || crypto.randomBytes(48).toString("hex");
-
 function cookieOptions() {
   const cross = Boolean(FRONTEND_ORIGIN);
   return {
@@ -161,8 +186,16 @@ function getSession(req) {
     return null;
   }
 }
+function needEmail(req, res) {
+  const s = getSession(req);
+  if (!s?.email) {
+    res.status(401).json({ status: "unauthenticated" });
+    return null;
+  }
+  return s.email;
+}
 
-/* -------------------------- Password helpers -------------------------- */
+// ---------- Password helpers ----------
 const scrypt = util.promisify(crypto.scrypt);
 async function hashPassword(pw) {
   const salt = crypto.randomBytes(16).toString("hex");
@@ -177,89 +210,62 @@ async function verifyPassword(pw, salt, hash) {
   return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
-/* -------------------------- DB helpers -------------------------- */
+// ---------- DB helpers ----------
 async function upsertUser(email, plan = "FREE") {
   const r = await pool.query(
-    `insert into users(email, plan) values($1,$2)
-     on conflict(email) do update set email=excluded.email
-     returning *`,
+    `INSERT INTO users(email, plan)
+     VALUES ($1,$2)
+     ON CONFLICT(email) DO UPDATE SET email = EXCLUDED.email
+     RETURNING id, email, plan`,
     [email, plan]
   );
   return r.rows[0];
 }
 async function getUserByEmail(email) {
-  const r = await pool.query(`select * from users where email=$1`, [email]);
+  const r = await pool.query(`SELECT * FROM users WHERE email=$1`, [email]);
   return r.rows[0] || null;
 }
-
-function mapPlanCodeToLabel(planCode) {
-  if (!planCode) return "ONE_TIME";
-  if (planCode === PLAN_CODE_PLUS_MONTHLY) return "PLUS";
-  if (planCode === PLAN_CODE_PRO_ANNUAL) return "PRO";
+async function setUserPassword(email, pass) {
+  const { salt, hash } = await hashPassword(pass);
+  await pool.query(
+    `UPDATE users SET pass_salt=$2, pass_hash=$3, updated_at=now() WHERE email=$1`,
+    [email, salt, hash]
+  );
+}
+function planFromCode(code) {
+  if (!code) return "ONE_TIME";
+  if (code === PLAN_CODE_PLUS_MONTHLY) return "PLUS";
+  if (code === PLAN_CODE_PRO_ANNUAL) return "PRO";
   return "ONE_TIME";
 }
 
-/* -------------------------- Usage limits -------------------------- */
-const FREE_MONTHLY_LIMIT = 10; // combined text + photo for FREE plan
-const periodNow = () =>
-  new Date().toISOString().slice(0, 7); // 'YYYY-MM'
-
-async function getUsageRow(userId, p = periodNow()) {
+// FREE plan usage check (10 prompts / 30 days)
+const FREE_LIMIT = 10;
+async function currentFreeUsage(userId) {
   const r = await pool.query(
-    `select * from usage_counters where user_id=$1 and period=$2`,
-    [userId, p]
+    `
+    SELECT COUNT(*)::int AS n
+    FROM messages m
+    JOIN conversations c ON c.id = m.conversation_id
+    WHERE c.user_id = $1
+      AND m.role = 'user'
+      AND m.created_at >= now() - interval '30 days'
+    `,
+    [userId]
   );
-  if (r.rowCount) return r.rows[0];
-  const ins = await pool.query(
-    `insert into usage_counters(user_id, period) values($1,$2)
-     on conflict (user_id, period) do nothing
-     returning *`,
-    [userId, p]
-  );
-  if (ins.rowCount) return ins.rows[0];
-  const again = await pool.query(
-    `select * from usage_counters where user_id=$1 and period=$2`,
-    [userId, p]
-  );
-  return again.rows[0];
+  return r.rows[0]?.n ?? 0;
 }
-
-async function assertFreeCanAsk(user, kind /* 'text'|'photo' */) {
-  if ((user.plan || "FREE") !== "FREE") return; // unlimited for paid tiers
-  const row = await getUsageRow(user.id);
-  const used = (row?.math_asks || 0) + (row?.photo_solves || 0);
-  if (used >= FREE_MONTHLY_LIMIT) {
-    const msg =
-      "Free plan limit reached (10 asks per month). Upgrade to continue.";
-    const err = new Error(msg);
-    err.status = 402;
-    throw err;
+function requireOpenAI(res) {
+  if (!OPENAI_API_KEY) {
+    res
+      .status(500)
+      .json({ error: "Server missing OPENAI_API_KEY. Contact support." });
+    return false;
   }
+  return true;
 }
 
-async function commitUsage(user, kind /* 'text'|'photo' */) {
-  if ((user.plan || "FREE") !== "FREE") return;
-  const p = periodNow();
-  if (kind === "photo") {
-    await pool.query(
-      `insert into usage_counters(user_id, period, math_asks, photo_solves)
-       values($1,$2,0,1)
-       on conflict (user_id, period)
-       do update set photo_solves = usage_counters.photo_solves + 1`,
-      [user.id, p]
-    );
-  } else {
-    await pool.query(
-      `insert into usage_counters(user_id, period, math_asks, photo_solves)
-       values($1,$2,1,0)
-       on conflict (user_id, period)
-       do update set math_asks = usage_counters.math_asks + 1`,
-      [user.id, p]
-    );
-  }
-}
-
-/* -------------------------- OpenAI helpers -------------------------- */
+// ---------- OpenAI ----------
 async function openaiChat(messages) {
   const r = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -281,26 +287,8 @@ async function openaiChat(messages) {
   return data?.choices?.[0]?.message?.content || "";
 }
 
-/* -------------------------- Utilities -------------------------- */
-function needUser(req, res) {
-  const s = getSession(req);
-  if (!s?.email) {
-    res.status(401).json({ status: "unauthenticated" });
-    return null;
-  }
-  return s.email;
-}
-
-/* -------------------------- Health / Config -------------------------- */
+// ---------- Health / Config ----------
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
-app.get("/api/diag", async (_req, res) => {
-  try {
-    const db = await pool.query("select 1 as ok");
-    res.json({ ok: true, db: db.rows[0].ok === 1, model: OPENAI_DEFAULT_MODEL });
-  } catch (e) {
-    res.status(500).json({ ok: false, error: e.message });
-  }
-});
 app.get("/api/public-config", (_req, res) => {
   res.json({
     paystackPublicKey: PAYSTACK_PUBLIC_KEY || null,
@@ -310,30 +298,22 @@ app.get("/api/public-config", (_req, res) => {
   });
 });
 
-/* -------------------------- Auth -------------------------- */
+// ---------- Auth ----------
 app.post("/api/signup-free", async (req, res) => {
   try {
     const { email, password } = req.body || {};
-    if (!email || !/^\S+@\S+\.\S+$/.test(email))
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
       return res
         .status(400)
         .json({ status: "error", message: "Valid email required" });
-
-    const u = await upsertUser(email, "FREE");
-    if (password && password.length >= 8) {
-      const { salt, hash } = await hashPassword(password);
-      await pool.query(
-        `update users set pass_salt=$2, pass_hash=$3, updated_at=now() where id=$1`,
-        [u.id, salt, hash]
-      );
     }
+    const u = await upsertUser(email, "FREE");
+    if (password && password.length >= 8) await setUserPassword(email, password);
     setSessionCookie(res, { email: u.email, plan: u.plan });
     res.json({ status: "success", user: { email: u.email } });
   } catch (e) {
     console.error("signup-free", e);
-    res
-      .status(500)
-      .json({ status: "error", message: "Could not create user account" });
+    res.status(500).json({ status: "error", message: "Could not create user" });
   }
 });
 
@@ -344,7 +324,6 @@ app.post("/api/login", async (req, res) => {
       return res
         .status(400)
         .json({ status: "error", message: "Email and password required" });
-
     const u = await getUserByEmail(email);
     if (!u)
       return res
@@ -355,12 +334,8 @@ app.post("/api/login", async (req, res) => {
       if (password.length < 8)
         return res
           .status(400)
-          .json({ status: "error", message: "Password too short." });
-      const { salt, hash } = await hashPassword(password);
-      await pool.query(
-        `update users set pass_salt=$2, pass_hash=$3, updated_at=now() where id=$1`,
-        [u.id, salt, hash]
-      );
+          .json({ status: "error", message: "Password must be at least 8 characters." });
+      await setUserPassword(email, password);
     } else {
       const ok = await verifyPassword(password, u.pass_salt, u.pass_hash);
       if (!ok)
@@ -368,6 +343,7 @@ app.post("/api/login", async (req, res) => {
           .status(401)
           .json({ status: "error", message: "Invalid email or password." });
     }
+
     setSessionCookie(res, { email: u.email, plan: u.plan || "FREE" });
     res.json({ status: "ok", user: { email: u.email } });
   } catch (e) {
@@ -389,7 +365,7 @@ app.post("/api/logout", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-/* -------------------------- Paystack -------------------------- */
+// ---------- Paystack ----------
 app.post("/api/paystack/verify", async (req, res) => {
   try {
     const { reference } = req.body || {};
@@ -405,9 +381,9 @@ app.post("/api/paystack/verify", async (req, res) => {
     const data = await psRes.json();
 
     await pool.query(
-      `insert into paystack_receipts(email, reference, plan_code, status, raw)
-       values($1,$2,$3,$4,$5)
-       on conflict(reference) do nothing`,
+      `INSERT INTO paystack_receipts(email, reference, plan_code, status, raw)
+       VALUES($1,$2,$3,$4,$5)
+       ON CONFLICT(reference) DO NOTHING`,
       [
         data?.data?.customer?.email || null,
         reference,
@@ -420,13 +396,13 @@ app.post("/api/paystack/verify", async (req, res) => {
     if (data?.status && data?.data?.status === "success") {
       const customerEmail = data.data?.customer?.email || null;
       const planCode = data.data?.plan?.plan_code || null;
-      const label = mapPlanCodeToLabel(planCode);
+      const label = planFromCode(planCode);
       if (customerEmail) {
-        const u = await upsertUser(customerEmail);
+        await upsertUser(customerEmail);
         if (label !== "ONE_TIME") {
           await pool.query(
-            `update users set plan=$2, updated_at=now() where id=$1`,
-            [u.id, label]
+            `UPDATE users SET plan=$2, updated_at=now() WHERE email=$1`,
+            [customerEmail, label]
           );
         }
         setSessionCookie(res, {
@@ -441,7 +417,6 @@ app.post("/api/paystack/verify", async (req, res) => {
         reference,
       });
     }
-
     res.json({ status: "pending", data });
   } catch (e) {
     console.error("paystack verify", e);
@@ -449,9 +424,9 @@ app.post("/api/paystack/verify", async (req, res) => {
   }
 });
 
-/* -------------------------- Conversations -------------------------- */
+// ---------- Auth guard ----------
 async function requireUser(req, res) {
-  const email = needUser(req, res);
+  const email = needEmail(req, res);
   if (!email) return null;
   const u = await getUserByEmail(email);
   if (!u) {
@@ -461,105 +436,105 @@ async function requireUser(req, res) {
   return u;
 }
 
-// list
+// ---------- Conversations ----------
 app.get("/api/conversations", async (req, res) => {
   const u = await requireUser(req, res);
   if (!u) return;
   const r = await pool.query(
-    `select id, title, archived from conversations
-     where user_id=$1 order by created_at desc`,
+    `SELECT id, title, archived
+     FROM conversations
+     WHERE user_id=$1
+     ORDER BY created_at DESC`,
     [u.id]
   );
   res.json(r.rows);
 });
 
-// create
 app.post("/api/conversations", async (req, res) => {
   const u = await requireUser(req, res);
   if (!u) return;
   const title = (req.body?.title || "New chat").trim();
   const r = await pool.query(
-    `insert into conversations(user_id, title) values($1,$2) returning id, title`,
+    `INSERT INTO conversations(user_id, title) VALUES($1,$2) RETURNING id, title`,
     [u.id, title]
   );
   res.json(r.rows[0]);
 });
 
-// rename/archive
 app.patch("/api/conversations/:id", async (req, res) => {
   const u = await requireUser(req, res);
   if (!u) return;
   const id = Number(req.params.id);
   const { title, archived } = req.body || {};
-  const updates = [];
-  const vals = [id, u.id];
-  let idx = 2;
+  const fields = [];
+  const values = [];
+  let idx = 1;
+
   if (typeof title === "string") {
-    updates.push(`title=$${++idx}`);
-    vals.push(title.trim() || "Untitled");
+    fields.push(`title=$${++idx}`);
+    values.push(title.trim() || "Untitled");
   }
   if (typeof archived === "boolean") {
-    updates.push(`archived=$${++idx}`);
-    vals.push(!!archived);
+    fields.push(`archived=$${++idx}`);
+    values.push(!!archived);
   }
-  if (!updates.length) return res.json({ ok: true });
+  if (!fields.length) return res.json({ ok: true });
+
   await pool.query(
-    `update conversations set ${updates.join(", ")}, updated_at=now()
-     where id=$1 and user_id=$2`,
-    vals
+    `UPDATE conversations SET ${fields.join(", ")}, updated_at=now()
+     WHERE id=$1 AND user_id=$${++idx}`,
+    [id, ...values, u.id]
   );
   res.json({ ok: true });
 });
 
-// delete
 app.delete("/api/conversations/:id", async (req, res) => {
   const u = await requireUser(req, res);
   if (!u) return;
   const id = Number(req.params.id);
-  await pool.query(`delete from conversations where id=$1 and user_id=$2`, [
+  await pool.query(`DELETE FROM conversations WHERE id=$1 AND user_id=$2`, [
     id,
     u.id,
   ]);
   res.json({ ok: true });
 });
 
-// get messages
 app.get("/api/conversations/:id", async (req, res) => {
   const u = await requireUser(req, res);
   if (!u) return;
   const id = Number(req.params.id);
   const conv = await pool.query(
-    `select id, title from conversations where id=$1 and user_id=$2`,
+    `SELECT id, title FROM conversations WHERE id=$1 AND user_id=$2`,
     [id, u.id]
   );
   if (!conv.rowCount) return res.status(404).json({ error: "not found" });
   const msgs = await pool.query(
-    `select role, content, created_at from messages where conversation_id=$1 order by id`,
+    `SELECT role, content, created_at FROM messages WHERE conversation_id=$1 ORDER BY id`,
     [id]
   );
   res.json({ id, title: conv.rows[0].title, messages: msgs.rows });
 });
 
-/* -------------------------- Share Links -------------------------- */
+// ---------- Share Links ----------
 app.post("/api/conversations/:id/share", async (req, res) => {
   const u = await requireUser(req, res);
   if (!u) return;
   const id = Number(req.params.id);
   const own = await pool.query(
-    `select id from conversations where id=$1 and user_id=$2`,
+    `SELECT id FROM conversations WHERE id=$1 AND user_id=$2`,
     [id, u.id]
   );
   if (!own.rowCount) return res.status(404).json({ error: "not found" });
 
   const existing = await pool.query(
-    `select token from share_links where conversation_id=$1 and revoked=false order by id desc limit 1`,
+    `SELECT token FROM share_links WHERE conversation_id=$1 AND revoked=false ORDER BY id DESC LIMIT 1`,
     [id]
   );
   if (existing.rowCount) return res.json({ token: existing.rows[0].token });
 
   const token = crypto.randomBytes(20).toString("hex");
   await pool.query(
-    `insert into share_links(conversation_id, token) values($1,$2)`,
+    `INSERT INTO share_links(conversation_id, token) VALUES($1,$2)`,
     [id, token]
   );
   res.json({ token });
@@ -568,57 +543,66 @@ app.post("/api/conversations/:id/share", async (req, res) => {
 app.get("/api/share/:token", async (req, res) => {
   const { token } = req.params;
   const s = await pool.query(
-    `select c.id, c.title
-       from share_links sl
-       join conversations c on c.id = sl.conversation_id
-      where sl.token=$1 and sl.revoked=false`,
+    `SELECT c.id, c.title
+       FROM share_links sl
+       JOIN conversations c ON c.id = sl.conversation_id
+      WHERE sl.token=$1 AND sl.revoked=false`,
     [token]
   );
   if (!s.rowCount) return res.status(404).json({ error: "invalid_or_revoked" });
   const convId = s.rows[0].id;
   const msgs = await pool.query(
-    `select role, content, created_at from messages where conversation_id=$1 order by id`,
+    `SELECT role, content, created_at FROM messages WHERE conversation_id=$1 ORDER BY id`,
     [convId]
   );
   res.json({ title: s.rows[0].title, messages: msgs.rows });
 });
 
-/* -------------------------- Chat -------------------------- */
+// ---------- Chat ----------
 app.post("/api/chat", async (req, res) => {
   try {
     const u = await requireUser(req, res);
     if (!u) return;
 
-    // enforce free limit before any cost
-    await assertFreeCanAsk(u, "text");
+    if (!requireOpenAI(res)) return;
 
     const { message, gptType, conversationId } = req.body || {};
     if (!message) return res.status(400).json({ error: "message required" });
 
+    // FREE plan limit
+    if ((u.plan || "FREE") === "FREE") {
+      const used = await currentFreeUsage(u.id);
+      if (used >= FREE_LIMIT) {
+        return res.status(402).json({
+          error:
+            "Free plan limit reached. You’ve used 10 prompts in the last 30 days. Upgrade to continue.",
+        });
+      }
+    }
+
     let convId = conversationId ? Number(conversationId) : null;
     if (convId) {
       const own = await pool.query(
-        `select id from conversations where id=$1 and user_id=$2`,
+        `SELECT id FROM conversations WHERE id=$1 AND user_id=$2`,
         [convId, u.id]
       );
       if (!own.rowCount) convId = null;
     }
     if (!convId) {
       const r = await pool.query(
-        `insert into conversations(user_id, title) values($1,$2) returning id`,
-        [u.id, (message.slice(0, 40) || "New chat")]
+        `INSERT INTO conversations(user_id, title) VALUES($1,$2) RETURNING id`,
+        [u.id, message.slice(0, 40) || "New chat"]
       );
       convId = r.rows[0].id;
     }
 
     const hist = await pool.query(
-      `select role, content from messages where conversation_id=$1 order by id`,
+      `SELECT role, content FROM messages WHERE conversation_id=$1 ORDER BY id`,
       [convId]
     );
-
     const system =
       gptType === "math"
-        ? "You are Math GPT. Solve math problems step-by-step with clear reasoning and show workings. Be accurate and concise."
+        ? "You are Math GPT. Solve math problems step-by-step with clear reasoning, and show workings. Be accurate and concise."
         : "You are a helpful writing assistant. Be clear, structured, and helpful.";
 
     const msgs = [
@@ -628,51 +612,57 @@ app.post("/api/chat", async (req, res) => {
     ];
 
     await pool.query(
-      `insert into messages(conversation_id, role, content) values($1,$2,$3)`,
+      `INSERT INTO messages(conversation_id, role, content) VALUES($1,$2,$3)`,
       [convId, "user", message]
     );
 
     const answer = await openaiChat(msgs);
 
     await pool.query(
-      `insert into messages(conversation_id, role, content) values($1,$2,$3)`,
+      `INSERT INTO messages(conversation_id, role, content) VALUES($1,$2,$3)`,
       [convId, "assistant", answer]
     );
-
-    // record usage only after successful completion
-    await commitUsage(u, "text");
 
     res.json({ response: answer, conversationId: convId });
   } catch (e) {
     console.error("chat", e);
-    const status = e.status || 500;
-    res.status(status).json({ error: e.message || "Chat failed" });
+    res.status(500).json({ error: "Chat failed" });
   }
 });
 
-/* -------------------------- Photo Solve -------------------------- */
+// ---------- Photo Solve ----------
 app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
   try {
     const u = await requireUser(req, res);
     if (!u) return;
 
-    // enforce free limit before any cost
-    await assertFreeCanAsk(u, "photo");
+    if (!requireOpenAI(res)) return;
 
     const { gptType, conversationId, attempt } = req.body || {};
     if (!req.file) return res.status(400).json({ error: "image required" });
 
+    // FREE plan limit (photo counts as a prompt)
+    if ((u.plan || "FREE") === "FREE") {
+      const used = await currentFreeUsage(u.id);
+      if (used >= FREE_LIMIT) {
+        return res.status(402).json({
+          error:
+            "Free plan limit reached. You’ve used 10 prompts in the last 30 days. Upgrade to continue.",
+        });
+      }
+    }
+
     let convId = conversationId ? Number(conversationId) : null;
     if (convId) {
       const own = await pool.query(
-        `select id from conversations where id=$1 and user_id=$2`,
+        `SELECT id FROM conversations WHERE id=$1 AND user_id=$2`,
         [convId, u.id]
       );
       if (!own.rowCount) convId = null;
     }
     if (!convId) {
       const r = await pool.query(
-        `insert into conversations(user_id, title) values($1,$2) returning id`,
+        `INSERT INTO conversations(user_id, title) VALUES($1,$2) RETURNING id`,
         [u.id, "Photo solve"]
       );
       convId = r.rows[0].id;
@@ -688,7 +678,7 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
         : "You are a helpful assistant. Describe and analyze the content of the image, then answer the user's request.";
 
     await pool.query(
-      `insert into messages(conversation_id, role, content) values($1,$2,$3)`,
+      `INSERT INTO messages(conversation_id, role, content) VALUES($1,$2,$3)`,
       [convId, "user", attempt ? `(Photo) ${attempt}` : "(Photo uploaded)"]
     );
 
@@ -726,23 +716,23 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
     const answer = data?.choices?.[0]?.message?.content || "No result";
 
     await pool.query(
-      `insert into messages(conversation_id, role, content) values($1,$2,$3)`,
+      `INSERT INTO messages(conversation_id, role, content) VALUES($1,$2,$3)`,
       [convId, "assistant", answer]
     );
-
-    // record usage after success
-    await commitUsage(u, "photo");
-
     res.json({ response: answer, conversationId: convId });
   } catch (e) {
     console.error("photo-solve", e);
-    const status = e.status || 500;
-    res.status(status).json({ error: e.message || "Photo solve failed" });
+    res.status(500).json({ error: "Photo solve failed" });
   }
 });
 
-/* -------------------------- Start -------------------------- */
+// ---------- Start ----------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`GPTs Help server running on :${PORT}`);
+  if (!OPENAI_API_KEY) console.warn("[WARN] OPENAI_API_KEY is not set.");
+  if (!JWT_SECRET)
+    console.warn(
+      "[WARN] JWT_SECRET not set. Using a random secret; sessions will reset on deploy."
+    );
 });
