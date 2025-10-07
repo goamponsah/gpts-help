@@ -12,17 +12,16 @@
       --muted:#9aa3b2;
       --text:#e7eaf1;
       --brand:#5865f2;
-      --user:#1c2333;     /* user bubble */
-      --assistant:#13141a;/* assistant bubble */
+      --user:#1c2333;
+      --assistant:#13141a;
       --border:#232634;
       --vh:100vh;
-      --composer-h:88px;  /* updated via JS to match real height */
+      --composer-h:88px;
     }
     *{box-sizing:border-box}
     html,body{height:100%;margin:0}
     body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,sans-serif;}
 
-    /* Layout */
     .app{height:calc(var(--vh));display:grid;grid-template-columns:var(--sidebar-w) 1fr;}
     @media (max-width:900px){ .app{ grid-template-columns:1fr } .sidebar{ display:none } }
 
@@ -31,6 +30,7 @@
     .side-top{padding:12px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;justify-content:space-between}
     .logo{font-weight:700;letter-spacing:.2px}
     .new-chat{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px 10px;cursor:pointer;font-size:13px}
+
     .side-list{overflow-y:auto;padding:10px 8px 10px 12px;min-height:0}
     .conv{position:relative;display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;border:1px solid transparent;font-size:14px;margin-bottom:6px;white-space:nowrap;overflow:visible;cursor:pointer}
     .conv:hover{background:#151824;border-color:#1b1f2b}
@@ -42,62 +42,41 @@
     .menu.open{display:block}
     .menu button{display:block;width:100%;text-align:left;background:transparent;color:var(--text);border:0;padding:10px 12px;cursor:pointer;font-size:14px}
     .menu button:hover{background:#1a1d2a}
-    .side-bottom{position:sticky;bottom:0;padding:10px;border-top:1px solid var(--border);background:#0f1117}
+
+    /* Bottom user card + sign out */
+    .side-bottom{position:sticky;bottom:0;padding:10px;border-top:1px solid var(--border);background:#0f1117;display:grid;gap:8px}
+    .usercard{display:grid;grid-template-columns:auto 1fr;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--border);border-radius:12px;background:#10131b}
+    .avatar{width:34px;height:34px;border-radius:50%;background:#1a2031;display:grid;place-items:center;color:#c8cee0;font-weight:700;font-size:12px;border:1px solid #22283a}
+    .u-name{font-size:14px;font-weight:600;line-height:1.15}
+    .u-plan{font-size:12px;color:var(--muted)}
     .logout{width:100%;background:transparent;border:1px solid var(--border);color:var(--text);padding:9px 10px;border-radius:10px;cursor:pointer;font-size:13px}
     .logout:hover{background:#151824}
 
-    /* Main area */
-    .main{
-      display:grid;
-      grid-template-rows:auto 1fr; /* composer is fixed, not in the grid */
-      min-height:0;
-      height:100%;
-    }
+    /* Main */
+    .main{display:grid;grid-template-rows:auto 1fr;min-height:0;height:100%;}
     .readOnlyBanner{display:none;padding:10px 14px;border-bottom:1px solid var(--border);background:#10121a;color:#cbd2e1;font-size:14px}
     .readOnlyBanner.show{display:block}
 
-    /* Messages scroll; bottom padding = composer height so last line isn't hidden */
-    .messages{
-      overflow-y:auto;
-      padding:20px 18px calc(20px + var(--composer-h));
-      min-height:0;
-      scroll-behavior:smooth;
-      background:radial-gradient(1200px 400px at 50% -200px, rgba(88,101,242,.08), transparent 60%);
-    }
+    .messages{overflow-y:auto;padding:20px 18px calc(20px + var(--composer-h));min-height:0;scroll-behavior:smooth;background:radial-gradient(1200px 400px at 50% -200px, rgba(88,101,242,.08), transparent 60%);}
 
-    /* Chat bubbles */
     .msg{max-width:900px;margin:0 auto 12px auto;display:flex}
-    .bubble{max-width:68ch;padding:12px 14px;border:1px solid var(--border);border-radius:12px;line-height:1.55;font-size:15px;white-space:normal;background:var(--assistant)}
+    .bubble{max-width:68ch;padding:12px 14px;border:1px solid var(--border);border-radius:12px;line-height:1.55;font-size:15px;background:var(--assistant)}
     .meta{display:block;color:var(--muted);margin-bottom:6px;font-size:12px}
     .msg.assistant{justify-content:flex-start}
     .msg.assistant .bubble{background:var(--assistant);border-top-left-radius:8px;border-top-right-radius:12px}
     .msg.user{justify-content:flex-end}
     .msg.user .bubble{background:var(--user);border-top-left-radius:12px;border-top-right-radius:8px}
-    .msg.user .thumb{margin-left:auto}
     .thumb{display:block;max-width:240px;height:auto;border-radius:8px;margin-top:8px;border:1px solid var(--border)}
 
-    /* Markdown defaults */
     .bubble p{margin:.4rem 0}
     .bubble h1,.bubble h2,.bubble h3{margin:.6rem 0 .4rem}
     .bubble ul,.bubble ol{padding-left:1.2rem;margin:.4rem 0}
     .bubble code{background:#0b0d12;padding:2px 6px;border-radius:6px;border:1px solid var(--border)}
     .bubble pre{background:#0b0d12;padding:10px;border-radius:10px;border:1px solid var(--border);overflow:auto}
 
-    /* Composer — fixed to bottom like ChatGPT */
-    .composer{
-      position:fixed;
-      left:var(--sidebar-w);
-      right:0;
-      bottom:0;
-      z-index:30;
-      border-top:1px solid var(--border);
-      background:linear-gradient(#0e0f13,#0f1117);
-      padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));
-    }
-    @media (max-width:900px){
-      .composer{ left:0; }
-    }
-
+    /* Composer fixed bottom */
+    .composer{position:fixed;left:var(--sidebar-w);right:0;bottom:0;z-index:30;border-top:1px solid var(--border);background:linear-gradient(#0e0f13,#0f1117);padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));}
+    @media (max-width:900px){ .composer{ left:0; } }
     .row{max-width:900px;margin:0 auto;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
     .input{display:flex;align-items:flex-end;gap:8px;background:#0f1117;border:1px solid var(--border);border-radius:9999px;padding:6px 10px;min-height:42px}
     .ta-wrap{flex:1;display:flex;flex-direction:column}
@@ -109,7 +88,6 @@
     .icon-btn.primary{background:var(--brand);color:#fff;border-color:transparent}
     .icon-btn:disabled{opacity:.6;cursor:not-allowed}
 
-    /* Share modal */
     .overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000}
     .overlay.open{display:flex}
     .modal{width:min(560px,92vw);background:#0f1117;border:1px solid var(--border);border-radius:16px;padding:18px;box-shadow:0 18px 40px rgba(0,0,0,.45)}
@@ -125,18 +103,8 @@
     .toast.show{display:block}
   </style>
 
-  <!-- Markdown renderer + sanitizer -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
-
-  <!-- MathJax for LaTeX (inline $...$, display $$...$$) -->
-  <script>
-    window.MathJax = {
-      tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] },
-      svg: { fontCache: 'global' }
-    };
-  </script>
-  <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
 </head>
 <body>
   <div class="app">
@@ -147,7 +115,16 @@
         <button class="new-chat" id="newChatBtn">+ New Chat</button>
       </div>
       <div class="side-list" id="convList"></div>
+
+      <!-- Bottom: user card + sign out -->
       <div class="side-bottom">
+        <div class="usercard" id="userCard" title="Account">
+          <div class="avatar" id="userAvatar">--</div>
+          <div>
+            <div class="u-name" id="userName">User</div>
+            <div class="u-plan" id="userPlan">Free</div>
+          </div>
+        </div>
         <button class="logout" id="logoutBtn">Sign out</button>
       </div>
     </aside>
@@ -159,7 +136,7 @@
     </main>
   </div>
 
-  <!-- Fixed Composer (bottom) -->
+  <!-- Fixed Composer -->
   <form class="composer" id="composer">
     <div class="row">
       <div class="input">
@@ -204,7 +181,7 @@
     function setVh(){ const vh = window.innerHeight * 0.01; document.documentElement.style.setProperty('--vh', `${vh*100}px`); }
     setVh(); window.addEventListener('resize', setVh);
 
-    /* API (cookie-based session) */
+    /* API */
     const api = {
       listConvs: ()=>fetch('/api/conversations',{credentials:'include'}).then(r=>r.json()),
       createConv:(title)=>fetch('/api/conversations',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({title})}).then(r=>r.json()),
@@ -234,7 +211,13 @@
     const logoutBtn = document.getElementById('logoutBtn');
     const roBanner = document.getElementById('roBanner');
 
-    /* Share modal */
+    /* user card elements */
+    const userCard   = document.getElementById('userCard');
+    const userAvatar = document.getElementById('userAvatar');
+    const userNameEl = document.getElementById('userName');
+    const userPlanEl = document.getElementById('userPlan');
+
+    /* Share modal elements */
     const shareOverlay = document.getElementById('shareOverlay');
     const shareLinkInput = document.getElementById('shareLinkInput');
     const createShareBtn = document.getElementById('createShareBtn');
@@ -245,7 +228,7 @@
     let pendingShareConvId = null;
     let readOnly = false;
 
-    /* Dynamic placeholder tied to selected assistant */
+    /* Placeholder updates */
     function updatePlaceholder() {
       const name = gptTypeEl.options[gptTypeEl.selectedIndex]?.text || "Assistant";
       promptEl.placeholder = `Message ${name}…`;
@@ -255,7 +238,7 @@
     gptTypeEl.addEventListener('change', updatePlaceholder);
     updatePlaceholder();
 
-    /* Maintain bottom padding equal to the real composer height */
+    /* Keep bottom padding equal to composer height */
     function updateComposerPad(){
       const visible = getComputedStyle(composerEl).display !== 'none';
       const h = visible ? (composerEl.offsetHeight || 0) : 0;
@@ -263,7 +246,7 @@
     }
     window.addEventListener('resize', updateComposerPad);
 
-    /* Helpers */
+    /* Utilities */
     function el(tag, attrs={}, ...children){
       const e=document.createElement(tag);
       Object.entries(attrs).forEach(([k,v])=>{
@@ -276,46 +259,8 @@
     }
     function showToast(msg='Link copied to clipboard'){ toastEl.textContent=msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'),1500); }
     function makeTitleFrom(text, prefix=""){ const t0=(text||"").replace(/\s+/g," ").trim(); if(!t0) return prefix?`${prefix}`:"New chat"; let t=t0.replace(/^#{1,6}\s*/gm,"").replace(/\*\*(.*?)\*\*/g,"$1").replace(/\*(.*?)\*/g,"$1").replace(/`{1,3}([\s\S]*?)`{1,3}/g,"$1").replace(/\[(.*?)\]\((.*?)\)/g,"$1").replace(/!\[(.*?)\]\((.*?)\)/g,"$1"); t=t.split(/[\n\.!?]/)[0].trim()||t0; t=t.charAt(0).toUpperCase()+t.slice(1); const MAX=50; if(t.length>MAX) t=t.slice(0,MAX-1).trim()+"…"; return prefix?`${prefix} ${t}`:t; }
-
-    // After rendering assistant content, typeset LaTeX if MathJax is present
-    async function typesetMath(container){
-      if (window.MathJax && MathJax.typesetPromise) {
-        try { await MathJax.typesetPromise([container]); } catch {}
-      }
-    }
-
-    function renderMessage(role, text, when=''){
-      const row=document.createElement('div');
-      row.className=`msg ${role}`;
-      const bubble=document.createElement('div');
-      bubble.className='bubble';
-      if(when){ const small=document.createElement('small'); small.className='meta'; small.textContent=when; bubble.appendChild(small); }
-      if(role==='assistant'){
-        const html=DOMPurify.sanitize(marked.parse(text||'',{breaks:true}));
-        const wrapper=document.createElement('div');
-        wrapper.innerHTML=html;
-        bubble.appendChild(wrapper);
-        // Queue math typesetting
-        setTimeout(()=>typesetMath(wrapper), 0);
-      }else{
-        bubble.appendChild(document.createTextNode(text||''));
-      }
-      row.appendChild(bubble);
-      messagesEl.appendChild(row);
-    }
-
-    function renderImageMessage(caption,url){
-      const row=document.createElement('div');
-      row.className='msg user';
-      const bubble=document.createElement('div'); bubble.className='bubble';
-      const small=document.createElement('small'); small.className='meta'; small.textContent='';
-      bubble.appendChild(small);
-      bubble.appendChild(document.createTextNode(caption||'📷 Photo uploaded'));
-      if(url){ const img=document.createElement('img'); img.className='thumb'; img.src=url; img.alt='uploaded image'; bubble.appendChild(img);}
-      row.appendChild(bubble);
-      messagesEl.appendChild(row);
-    }
-
+    function renderMessage(role, text, when=''){ const row=document.createElement('div'); row.className=`msg ${role}`; const bubble=document.createElement('div'); bubble.className='bubble'; if(when){ const small=document.createElement('small'); small.className='meta'; small.textContent=when; bubble.appendChild(small); } if(role==='assistant'){ const html=DOMPurify.sanitize(marked.parse(text||'',{breaks:true})); const wrapper=document.createElement('div'); wrapper.innerHTML=html; bubble.appendChild(wrapper); } else { bubble.appendChild(document.createTextNode(text||'')); } row.appendChild(bubble); messagesEl.appendChild(row); }
+    function renderImageMessage(caption,url){ const row=document.createElement('div'); row.className='msg user'; const bubble=document.createElement('div'); bubble.className='bubble'; const small=document.createElement('small'); small.className='meta'; small.textContent=''; bubble.appendChild(small); bubble.appendChild(document.createTextNode(caption||'📷 Photo uploaded')); if(url){ const img=document.createElement('img'); img.className='thumb'; img.src=url; img.alt='uploaded image'; bubble.appendChild(img);} row.appendChild(bubble); messagesEl.appendChild(row); }
     function clearMessages(){ messagesEl.innerHTML=''; }
     function scrollToBottom(){ messagesEl.scrollTop = messagesEl.scrollHeight; }
     function now(){ return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
@@ -341,7 +286,7 @@
       }catch{ showToast('Copy failed. Select and copy manually.'); }
     });
 
-    /* Conversations UI (authed mode) */
+    /* Conversations UI */
     async function loadConversations(selectId=null){
       const list = await api.listConvs();
       convListEl.innerHTML='';
@@ -389,7 +334,7 @@
     function autoresize(){
       promptEl.style.height='auto';
       promptEl.style.height=Math.min(120,promptEl.scrollHeight)+'px';
-      updateComposerPad(); /* keep padding in sync with growing textarea */
+      updateComposerPad();
     }
     promptEl.addEventListener('input', autoresize);
     promptEl.addEventListener('keydown', (e)=>{ if(e.key==='Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); if(!sendBtn.disabled) composerEl.requestSubmit(); } });
@@ -404,17 +349,13 @@
         const payload={ message:text, gptType:gptTypeEl.value||'math' };
         if(currentConvId) payload.conversationId=currentConvId;
         const res=await api.chat(payload);
-        if(res.error){
-          renderMessage('assistant', `⚠️ ${res.error}`); scrollToBottom();
-        }else{
-          if(!currentConvId && res.conversationId){
-            currentConvId=res.conversationId;
-            const autoTitle=makeTitleFrom(text);
-            try{ await api.renameConv(currentConvId, autoTitle); }catch{}
-            await loadConversations(currentConvId);
-          }
-          renderMessage('assistant', res.response||''); scrollToBottom();
+        if(!currentConvId && res.conversationId){
+          currentConvId=res.conversationId;
+          const autoTitle=makeTitleFrom(text);
+          try{ await api.renameConv(currentConvId, autoTitle); }catch{}
+          await loadConversations(currentConvId);
         }
+        renderMessage('assistant', res.response||''); scrollToBottom();
       }catch(err){
         renderMessage('assistant','Sorry, something went wrong. Please try again.'); scrollToBottom();
       }finally{
@@ -445,17 +386,13 @@
         const wasNew=!currentConvId;
         const res=await api.photoSolve(fd);
 
-        if(res.error){
-          renderMessage('assistant', `⚠️ ${res.error}`); scrollToBottom();
-        }else{
-          if(wasNew && res.conversationId){
-            currentConvId=res.conversationId;
-            const autoTitle=makeTitleFrom(note||'Photo','Photo:');
-            try{ await api.renameConv(currentConvId, autoTitle); }catch{}
-            await loadConversations(currentConvId);
-          }
-          renderMessage('assistant', res.response||'No response text returned.'); scrollToBottom();
+        if(wasNew && res.conversationId){
+          currentConvId=res.conversationId;
+          const autoTitle=makeTitleFrom(note||'Photo','Photo:');
+          try{ await api.renameConv(currentConvId, autoTitle); }catch{}
+          await loadConversations(currentConvId);
         }
+        renderMessage('assistant', res.response||'No response text returned.'); scrollToBottom();
       }catch{
         renderMessage('assistant','Photo solve failed. Please try another image.'); scrollToBottom();
       }finally{
@@ -468,13 +405,13 @@
     newChatBtn.addEventListener('click', async ()=>{ if(readOnly) return; const c=await api.createConv('New chat'); currentConvId=c.id; await loadConversations(currentConvId); clearMessages(); promptEl.focus(); });
     logoutBtn.addEventListener('click', async ()=>{ if(readOnly) { location.href='/index.html'; return; } try{ await api.logout(); }catch{} location.replace('/index.html'); });
 
-    /* Read-only mode for shared links */
+    /* Read-only shared links */
     async function enterReadOnlyView(token){
       readOnly = true;
       document.querySelector('.sidebar').style.display='none';
       composerEl.style.display='none';
       roBanner.classList.add('show');
-      updateComposerPad();  // remove bottom padding when composer hidden
+      updateComposerPad();
       clearMessages();
       try{
         const data = await api.getShared(token);
@@ -485,13 +422,37 @@
       }catch{ renderMessage('assistant','Could not load shared conversation.'); }
     }
 
-    /* Auth guard */
+    /* Format user name + initials from email */
+    function nameFromEmail(email){
+      const local = (email||'').split('@')[0];
+      const pretty = local.replace(/[._-]+/g,' ').trim().split(' ').map(s=>s ? s[0].toUpperCase()+s.slice(1) : '').join(' ');
+      return pretty || email || 'You';
+    }
+    function initialsFrom(emailOrName){
+      const s = (emailOrName||'').trim();
+      const pick = s.includes('@') ? nameFromEmail(s) : s;
+      const parts = pick.split(' ').filter(Boolean);
+      const first = (parts[0]||' ')[0] || 'U';
+      const second = (parts[1]||' ')[0] || (parts[0]||' ')[1] || '';
+      return (first + (second||'')).toUpperCase();
+    }
+
+    /* Auth guard + populate user card */
     async function guardAuth(){
       try{
         const me = await api.me();
         if (me.status !== 'ok' || !me.user?.email) { location.replace('/index.html'); return false; }
+        const email = me.user.email;
+        const plan  = (me.user.plan||'FREE').toLowerCase();
+        const displayName = nameFromEmail(email);
+        userNameEl.textContent = displayName;
+        userPlanEl.textContent = plan.charAt(0).toUpperCase()+plan.slice(1);
+        userAvatar.textContent = initialsFrom(displayName);
+        userCard.title = `${displayName} • ${userPlanEl.textContent}`;
         return true;
-      }catch{ location.replace('/index.html'); return false; }
+      }catch{
+        location.replace('/index.html'); return false;
+      }
     }
 
     /* Init */
@@ -506,7 +467,7 @@
       if(fromUrl){ currentConvId=Number(fromUrl); await showConversation(currentConvId); }
       updatePlaceholder();
       autoresize();
-      updateComposerPad();  // ensure bottom padding matches real composer height
+      updateComposerPad();
       promptEl.focus();
     })();
   </script>
