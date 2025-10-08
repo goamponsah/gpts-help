@@ -12,17 +12,16 @@
       --muted:#9aa3b2;
       --text:#e7eaf1;
       --brand:#5865f2;
-      --user:#1c2333;     /* user bubble */
-      --assistant:#13141a;/* assistant bubble */
+      --user:#1c2333;
+      --assistant:#13141a;
       --border:#232634;
       --vh:100vh;
-      --composer-h:88px;  /* updated via JS */
+      --composer-h:88px;
     }
     *{box-sizing:border-box}
     html,body{height:100%;margin:0}
     body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,sans-serif;}
 
-    /* Layout */
     .app{height:calc(var(--vh));display:grid;grid-template-columns:var(--sidebar-w) 1fr;}
     @media (max-width:900px){ .app{ grid-template-columns:1fr } .sidebar{ display:none } }
 
@@ -32,6 +31,7 @@
     .logo{font-weight:700;letter-spacing:.2px}
     .new-chat{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px 10px;cursor:pointer;font-size:13px}
     .side-list{overflow-y:auto;padding:10px 8px 10px 12px;min-height:0}
+
     .conv{position:relative;display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;border:1px solid transparent;font-size:14px;margin-bottom:6px;white-space:nowrap;overflow:visible;cursor:pointer}
     .conv:hover{background:#151824;border-color:#1b1f2b}
     .conv.active{background:#171b28;border-color:#2a3352}
@@ -43,37 +43,25 @@
     .menu button{display:block;width:100%;text-align:left;background:transparent;color:var(--text);border:0;padding:10px 12px;cursor:pointer;font-size:14px}
     .menu button:hover{background:#1a1d2a}
 
-    /* Bottom user card (like ChatGPT) */
-    .side-bottom{padding:10px;border-top:1px solid var(--border);background:#0f1117}
-    .user-card{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid var(--border);border-radius:16px;cursor:pointer;background:#10131c}
-    .avatar{width:36px;height:36px;border-radius:9999px;background:#1a2236;color:#cfd6ea;display:flex;align-items:center;justify-content:center;font-weight:700}
-    .uc-main{flex:1;min-width:0}
-    .uc-name{font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    .uc-plan{color:#aeb6c9;font-size:12px;margin-top:2px}
-    .chev{color:#9aa3b2}
-    .uc-menu{display:none;position:absolute;left:12px;right:12px;bottom:74px;background:#0f1117;border:1px solid var(--border);border-radius:14px;box-shadow:0 18px 36px rgba(0,0,0,.45);overflow:hidden;z-index:20}
-    .uc-menu.open{display:block}
-    .uc-item{display:flex;gap:10px;align-items:center;padding:10px 12px;border-bottom:1px solid #171a24;color:#e7eaf1;background:#0f1117;cursor:pointer;font-size:14px}
-    .uc-item:hover{background:#151927}
-    .uc-item:last-child{border-bottom:0}
-    .uc-danger{color:#ffb3b3}
+    /* Bottom user card */
+    .user-card{padding:10px;border-top:1px solid var(--border);background:#0f1117}
+    .user-btn{width:100%;display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;background:#12141c;border:1px solid var(--border);border-radius:16px;padding:10px 12px;cursor:pointer}
+    .avatar{width:36px;height:36px;border-radius:9999px;background:#1a1d27;color:#cdd3e3;display:flex;align-items:center;justify-content:center;font-weight:700}
+    .name{font-weight:700}
+    .plan{color:var(--muted);font-size:12px;margin-top:2px}
+    .caret{color:#9aa3b2}
+    .user-menu{margin-top:8px;background:#0f1117;border:1px solid var(--border);border-radius:12px;overflow:hidden;display:none}
+    .user-menu.open{display:block}
+    .user-menu button,.user-menu a{display:block;width:100%;text-align:left;background:transparent;color:var(--text);border:0;padding:10px 12px;cursor:pointer;font-size:14px;text-decoration:none}
+    .user-menu button:hover,.user-menu a:hover{background:#151824}
 
     /* Main area */
-    .main{
-      display:grid;
-      grid-template-rows:auto 1fr;
-      min-height:0;height:100%;
-    }
+    .main{display:grid;grid-template-rows:auto 1fr;min-height:0;height:100%;}
     .readOnlyBanner{display:none;padding:10px 14px;border-bottom:1px solid var(--border);background:#10121a;color:#cbd2e1;font-size:14px}
     .readOnlyBanner.show{display:block}
 
-    /* Messages scroll */
-    .messages{
-      overflow-y:auto;
-      padding:20px 18px calc(20px + var(--composer-h));
-      min-height:0;scroll-behavior:smooth;
-      background:radial-gradient(1200px 400px at 50% -200px, rgba(88,101,242,.08), transparent 60%);
-    }
+    .messages{overflow-y:auto;padding:20px 18px calc(20px + var(--composer-h));min-height:0;scroll-behavior:smooth;background:radial-gradient(1200px 400px at 50% -200px, rgba(88,101,242,.08), transparent 60%);}
+
     .msg{max-width:900px;margin:0 auto 12px auto;display:flex}
     .bubble{max-width:68ch;padding:12px 14px;border:1px solid var(--border);border-radius:12px;line-height:1.55;font-size:15px;white-space:normal;background:var(--assistant)}
     .meta{display:block;color:var(--muted);margin-bottom:6px;font-size:12px}
@@ -81,6 +69,7 @@
     .msg.assistant .bubble{background:var(--assistant);border-top-left-radius:8px;border-top-right-radius:12px}
     .msg.user{justify-content:flex-end}
     .msg.user .bubble{background:var(--user);border-top-left-radius:12px;border-top-right-radius:8px}
+    .thumb{display:block;max-width:240px;height:auto;border-radius:8px;margin-top:8px;border:1px solid var(--border)}
 
     .bubble p{margin:.4rem 0}
     .bubble h1,.bubble h2,.bubble h3{margin:.6rem 0 .4rem}
@@ -88,14 +77,9 @@
     .bubble code{background:#0b0d12;padding:2px 6px;border-radius:6px;border:1px solid var(--border)}
     .bubble pre{background:#0b0d12;padding:10px;border-radius:10px;border:1px solid var(--border);overflow:auto}
 
-    /* Composer — fixed to bottom */
-    .composer{
-      position:fixed;left:var(--sidebar-w);right:0;bottom:0;z-index:30;
-      border-top:1px solid var(--border);
-      background:linear-gradient(#0e0f13,#0f1117);
-      padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));
-    }
-    @media (max-width:900px){ .composer{ left:0 } }
+    /* Composer fixed bottom */
+    .composer{position:fixed;left:var(--sidebar-w);right:0;bottom:0;z-index:30;border-top:1px solid var(--border);background:linear-gradient(#0e0f13,#0f1117);padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));}
+    @media (max-width:900px){ .composer{ left:0; } }
     .row{max-width:900px;margin:0 auto;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
     .input{display:flex;align-items:flex-end;gap:8px;background:#0f1117;border:1px solid var(--border);border-radius:9999px;padding:6px 10px;min-height:42px}
     .ta-wrap{flex:1;display:flex;flex-direction:column}
@@ -107,13 +91,30 @@
     .icon-btn.primary{background:var(--brand);color:#fff;border-color:transparent}
     .icon-btn:disabled{opacity:.6;cursor:not-allowed}
 
-    /* Overlay toast */
+    .overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000}
+    .overlay.open{display:flex}
+    .modal{width:min(560px,92vw);background:#0f1117;border:1px solid var(--border);border-radius:16px;padding:18px;box-shadow:0 18px 40px rgba(0,0,0,.45)}
+    .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+    .modal-title{font-weight:600}
+    .modal-sub{color:var(--muted);font-size:13px;margin-bottom:12px}
+    .modal-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;background:#0f1117}
+    .modal input[type="text"]{width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:9999px;background:#0e0f13;color:var(--text);font-size:14px}
+    .btn{border:1px solid var(--border);background:#141722;color:var(--text);border-radius:9999px;padding:10px 14px;cursor:pointer;font-size:14px}
+    .btn.primary{background:var(--brand);color:#fff;border-color:transparent}
+    .modal-close{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:20px;line-height:1}
     .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);padding:10px 14px;font-size:13px;background:#141722;color:#e7eaf1;border:1px solid var(--border);border-radius:9999px;display:none;z-index:1100}
     .toast.show{display:block}
+    a.upgrade{color:#b9c1ff}
   </style>
 
+  <!-- Markdown + sanitizer -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+  <!-- MathJax for LaTeX -->
+  <script>
+    window.MathJax = { tex: { inlineMath: [['$', '$'], ['\\(', '\\)']] }, svg: { fontCache: 'global' } };
+  </script>
+  <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
 </head>
 <body>
   <div class="app">
@@ -123,25 +124,24 @@
         <div class="logo">GPTs Help</div>
         <button class="new-chat" id="newChatBtn">+ New Chat</button>
       </div>
-
       <div class="side-list" id="convList"></div>
 
-      <!-- Bottom user card -->
-      <div class="side-bottom">
-        <div class="user-card" id="userCard">
-          <div class="avatar" id="userAvatar">U</div>
-          <div class="uc-main">
-            <div class="uc-name" id="userCardName">User</div>
-            <div class="uc-plan" id="userCardPlan">Free</div>
+      <!-- Bottom user card (no separate Sign out button elsewhere) -->
+      <div class="user-card">
+        <button class="user-btn" id="userBtn" aria-expanded="false">
+          <div class="avatar" id="userAvatar">?</div>
+          <div>
+            <div class="name" id="userName">User</div>
+            <div class="plan" id="userPlan">Free</div>
           </div>
-          <div class="chev">▾</div>
-        </div>
-        <div class="uc-menu" id="userMenu">
-          <div class="uc-item" id="ucEmail" style="opacity:.85"></div>
-          <div class="uc-item" id="ucUpgrade">⚡ Upgrade plan</div>
-          <div class="uc-item" id="ucSettings">⚙️ Settings</div>
-          <div class="uc-item" id="ucHelp">❓ Help</div>
-          <div class="uc-item uc-danger" id="ucLogout">⎋ Log out</div>
+          <div class="caret">▾</div>
+        </button>
+        <div class="user-menu" id="userMenu" role="menu" aria-hidden="true">
+          <a class="upgrade" href="/index.html#pricing" role="menuitem">Upgrade plan</a>
+          <button role="menuitem" id="personalizeBtn">Personalization</button>
+          <button role="menuitem" id="settingsBtn">Settings</button>
+          <a href="https://help.openai.com" target="_blank" rel="noopener" role="menuitem">Help</a>
+          <button role="menuitem" id="logoutBtn">Log out</button>
         </div>
       </div>
     </aside>
@@ -177,14 +177,28 @@
     </div>
   </form>
 
-  <div class="toast" id="toast">Link copied</div>
+  <!-- Share Modal -->
+  <div class="overlay" id="shareOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+      <div class="modal-header">
+        <div class="modal-title" id="shareTitle">Share public link to chat</div>
+        <button class="modal-close" id="shareCloseBtn" aria-label="Close">×</button>
+      </div>
+      <div class="modal-sub">Your name, custom instructions, and any messages you add after sharing stay private.</div>
+      <div class="modal-row">
+        <input type="text" id="shareLinkInput" placeholder="https://yourapp.com/share/…" readonly />
+        <button class="btn primary" id="createShareBtn">Create link</button>
+      </div>
+    </div>
+  </div>
+  <div class="toast" id="toast">Link copied to clipboard</div>
 
   <script>
     /* mobile 100vh fix */
     function setVh(){ const vh = window.innerHeight * 0.01; document.documentElement.style.setProperty('--vh', `${vh*100}px`); }
     setVh(); window.addEventListener('resize', setVh);
 
-    /* API */
+    /* API (cookie-based session) */
     const api = {
       listConvs: ()=>fetch('/api/conversations',{credentials:'include'}).then(r=>r.json()),
       createConv:(title)=>fetch('/api/conversations',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({title})}).then(r=>r.json()),
@@ -195,6 +209,8 @@
       chat:(payload)=>fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(payload)}).then(r=>r.json()),
       me:()=>fetch('/api/me',{credentials:'include'}).then(r=>r.json()),
       photoSolve:(fd)=>fetch('/api/photo-solve',{method:'POST',credentials:'include',body:fd}).then(r=>r.json()),
+      shareCreate:(id)=>fetch(`/api/conversations/${id}/share`,{method:'POST',credentials:'include'}).then(r=>r.json()),
+      getShared:(token)=>fetch(`/api/share/${encodeURIComponent(token)}`).then(r=>r.json()),
       logout:()=>fetch('/api/logout',{method:'POST',credentials:'include'})
     };
 
@@ -209,28 +225,48 @@
     const gptTypeEl = document.getElementById('gptType');
     const statusEl = document.getElementById('status');
     const newChatBtn = document.getElementById('newChatBtn');
-    const roBanner = document.getElementById('roBanner');
 
-    /* User card elements */
-    const userCard = document.getElementById('userCard');
+    /* Bottom user card */
+    const userBtn = document.getElementById('userBtn');
     const userMenu = document.getElementById('userMenu');
-    const ucEmail = document.getElementById('ucEmail');
-    const userCardName = document.getElementById('userCardName');
-    const userCardPlan = document.getElementById('userCardPlan');
     const userAvatar = document.getElementById('userAvatar');
-    const ucUpgrade = document.getElementById('ucUpgrade');
-    const ucSettings = document.getElementById('ucSettings');
-    const ucHelp = document.getElementById('ucHelp');
-    const ucLogout = document.getElementById('ucLogout');
+    const userName = document.getElementById('userName');
+    const userPlan = document.getElementById('userPlan');
+    const logoutBtn = document.getElementById('logoutBtn');
+
+    /* Share modal elements */
+    const shareOverlay = document.getElementById('shareOverlay');
+    const shareLinkInput = document.getElementById('shareLinkInput');
+    const createShareBtn = document.getElementById('createShareBtn');
+    const shareCloseBtn = document.getElementById('shareCloseBtn');
+    const toastEl = document.getElementById('toast');
 
     let currentConvId = null;
+    let pendingShareConvId = null;
     let readOnly = false;
-    let meCache = null;
 
-    function toast(s){ const t=document.getElementById('toast'); t.textContent=s; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),1200); }
+    function initialsFrom(email){
+      const n = (email||'').trim();
+      return n ? n[0].toUpperCase() : '?';
+    }
+    function nameFromEmail(email){
+      const local = (email||'').split('@')[0] || 'User';
+      return local.replace(/[^a-z0-9]+/gi,' ');
+    }
+    async function refreshUser(){
+      try{
+        const me = await api.me();
+        if(me?.status==='ok' && me.user){
+          const { email, plan } = me.user;
+          userAvatar.textContent = initialsFrom(email);
+          userName.textContent = nameFromEmail(email);
+          userPlan.textContent = (plan||'FREE').charAt(0)+ (plan||'FREE').slice(1).toLowerCase();
+        }
+      }catch{}
+    }
 
-    /* Placeholder tied to selected assistant */
-    function updatePlaceholder(){
+    /* Dynamic placeholder tied to selected assistant */
+    function updatePlaceholder() {
       const name = gptTypeEl.options[gptTypeEl.selectedIndex]?.text || "Assistant";
       promptEl.placeholder = `Message ${name}…`;
       promptEl.setAttribute('aria-label', `Message ${name}`);
@@ -239,7 +275,6 @@
     gptTypeEl.addEventListener('change', updatePlaceholder);
     updatePlaceholder();
 
-    /* Bottom padding equals composer height */
     function updateComposerPad(){
       const visible = getComputedStyle(composerEl).display !== 'none';
       const h = visible ? (composerEl.offsetHeight || 0) : 0;
@@ -247,7 +282,6 @@
     }
     window.addEventListener('resize', updateComposerPad);
 
-    /* Helpers */
     function el(tag, attrs={}, ...children){
       const e=document.createElement(tag);
       Object.entries(attrs).forEach(([k,v])=>{
@@ -258,11 +292,62 @@
       children.forEach(c=> typeof c==='string' ? e.appendChild(document.createTextNode(c)) : c && e.appendChild(c));
       return e;
     }
+    function showToast(msg='Link copied to clipboard'){ toastEl.textContent=msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'),1500); }
     function makeTitleFrom(text, prefix=""){ const t0=(text||"").replace(/\s+/g," ").trim(); if(!t0) return prefix?`${prefix}`:"New chat"; let t=t0.replace(/^#{1,6}\s*/gm,"").replace(/\*\*(.*?)\*\*/g,"$1").replace(/\*(.*?)\*/g,"$1").replace(/`{1,3}([\s\S]*?)`{1,3}/g,"$1").replace(/\[(.*?)\]\((.*?)\)/g,"$1").replace(/!\[(.*?)\]\((.*?)\)/g,"$1"); t=t.split(/[\n\.!?]/)[0].trim()||t0; t=t.charAt(0).toUpperCase()+t.slice(1); const MAX=50; if(t.length>MAX) t=t.slice(0,MAX-1).trim()+"…"; return prefix?`${prefix} ${t}`:t; }
-    function renderMessage(role, text, when=''){ const row=document.createElement('div'); row.className=`msg ${role}`; const bubble=document.createElement('div'); bubble.className='bubble'; if(when){ const small=document.createElement('small'); small.className='meta'; small.textContent=when; bubble.appendChild(small); } if(role==='assistant'){ const html=DOMPurify.sanitize(marked.parse(text||'',{breaks:true})); const wrapper=document.createElement('div'); wrapper.innerHTML=html; bubble.appendChild(wrapper); } else { bubble.appendChild(document.createTextNode(text||'')); } row.appendChild(bubble); messagesEl.appendChild(row); }
+
+    function renderAssistantHTML(text){
+      const html=DOMPurify.sanitize(marked.parse(text||'',{breaks:true}));
+      const wrapper=document.createElement('div');
+      wrapper.innerHTML=html;
+      // trigger MathJax
+      if(window.MathJax && window.MathJax.typesetPromise){
+        window.MathJax.typesetPromise([wrapper]).catch(()=>{});
+      }
+      return wrapper;
+    }
+
+    function renderMessage(role, text, when=''){
+      const row=document.createElement('div'); row.className=`msg ${role}`;
+      const bubble=document.createElement('div'); bubble.className='bubble';
+      if(when){ const small=document.createElement('small'); small.className='meta'; small.textContent=when; bubble.appendChild(small); }
+      if(role==='assistant'){ bubble.appendChild(renderAssistantHTML(text||'')); }
+      else { bubble.appendChild(document.createTextNode(text||'')); }
+      row.appendChild(bubble); messagesEl.appendChild(row);
+    }
+    function renderImageMessage(caption,url){
+      const row=document.createElement('div'); row.className='msg user';
+      const bubble=document.createElement('div'); bubble.className='bubble';
+      bubble.appendChild(document.createTextNode(caption||'📷 Photo uploaded'));
+      if(url){ const img=document.createElement('img'); img.className='thumb'; img.src=url; img.alt='uploaded image'; bubble.appendChild(img); }
+      row.appendChild(bubble); messagesEl.appendChild(row);
+    }
     function clearMessages(){ messagesEl.innerHTML=''; }
     function scrollToBottom(){ messagesEl.scrollTop = messagesEl.scrollHeight; }
     function now(){ return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
+
+    /* Share modal */
+    const shareOverlay = document.getElementById('shareOverlay');
+    const shareLinkInput = document.getElementById('shareLinkInput');
+    const createShareBtn = document.getElementById('createShareBtn');
+    const shareCloseBtn = document.getElementById('shareCloseBtn');
+    function openShareModal(convId){ pendingShareConvId=convId; shareOverlay.classList.add('open'); shareOverlay.setAttribute('aria-hidden','false'); shareLinkInput.value=''; shareLinkInput.placeholder='Generating…'; }
+    function closeShareModal(){ shareOverlay.classList.remove('open'); shareOverlay.setAttribute('aria-hidden','true'); pendingShareConvId=null; }
+    shareCloseBtn.addEventListener('click', closeShareModal);
+    shareOverlay.addEventListener('click', (e)=>{ if(e.target===shareOverlay) closeShareModal(); });
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && shareOverlay.classList.contains('open')) closeShareModal(); });
+
+    createShareBtn.addEventListener('click', async ()=>{
+      const id = pendingShareConvId ?? currentConvId; if(!id) return;
+      try{
+        const r = await api.shareCreate(id);
+        if(!r?.token){ showToast('Could not create link'); return; }
+        const url = `${location.origin}/chat.html?share=${encodeURIComponent(r.token)}`;
+        shareLinkInput.value = url; shareLinkInput.select();
+        await navigator.clipboard.writeText(url);
+        createShareBtn.textContent='Copied!'; showToast('Link copied to clipboard');
+        setTimeout(()=>createShareBtn.textContent='Create link',1200);
+      }catch{ showToast('Copy failed. Select and copy manually.'); }
+    });
 
     /* Conversations UI */
     async function loadConversations(selectId=null){
@@ -273,12 +358,13 @@
         const title=el('div',{class:'conv-title'},c.title);
         const menuBtn=el('button',{class:'conv-menu-btn',title:'Options','aria-label':'Conversation options'},'⋯');
         const menu=el('div',{class:'menu'});
+        const bShare=el('button',{},'Share');
         const bRename=el('button',{},'Rename');
         const bArchive=el('button',{},'Archive');
         const bDelete=el('button',{},'Delete');
 
-        bRename.addEventListener('click',async (e)=>{
-          e.stopPropagation(); menu.classList.remove('open');
+        bShare.addEventListener('click',(e)=>{ e.stopPropagation(); menu.classList.remove('open'); openShareModal(c.id); });
+        bRename.addEventListener('click',async (e)=>{ e.stopPropagation(); menu.classList.remove('open');
           const input=el('input',{value:c.title,style:'width:100%; background:#12131a; color:#e7eaf1; border:1px solid #232634; border-radius:6px; padding:6px 8px;'});
           row.replaceChild(input,title); input.focus();
           const commit=async ()=>{ const t=(input.value||'New chat').trim(); await api.renameConv(c.id,t); await loadConversations(c.id); };
@@ -288,7 +374,7 @@
         bArchive.addEventListener('click', async (e)=>{ e.stopPropagation(); menu.classList.remove('open'); await api.archiveConv(c.id,true); if(currentConvId===c.id){ currentConvId=null; clearMessages(); } await loadConversations(); });
         bDelete.addEventListener('click', async (e)=>{ e.stopPropagation(); menu.classList.remove('open'); if(confirm('Delete this chat?')){ await api.deleteConv(c.id); if(currentConvId===c.id){ currentConvId=null; clearMessages(); } await loadConversations(); } });
 
-        menu.appendChild(bRename); menu.appendChild(bArchive); menu.appendChild(bDelete);
+        menu.appendChild(bShare); menu.appendChild(bRename); menu.appendChild(bArchive); menu.appendChild(bDelete);
         menuBtn.addEventListener('click',e=>{ e.stopPropagation(); document.querySelectorAll('.menu.open').forEach(m=>{ if(m!==menu)m.classList.remove('open'); }); menu.classList.toggle('open'); });
         row.addEventListener('click',async ()=>{ currentConvId=c.id; document.querySelectorAll('.conv').forEach(n=>n.classList.remove('active')); row.classList.add('active'); await showConversation(c.id); });
 
@@ -325,17 +411,19 @@
         const payload={ message:text, gptType:gptTypeEl.value||'math' };
         if(currentConvId) payload.conversationId=currentConvId;
         const res=await api.chat(payload);
-        if(res.error){ renderMessage('assistant','Sorry, something went wrong. Please try again.'); }
-        else{
+
+        if(res?.error==='limit_reached'){
+          renderMessage('assistant', `You’ve reached the Free plan limit. <a class="upgrade" href="/index.html#pricing">Upgrade</a> to continue.`);
+          scrollToBottom();
+        } else {
           if(!currentConvId && res.conversationId){
             currentConvId=res.conversationId;
             const autoTitle=makeTitleFrom(text);
             try{ await api.renameConv(currentConvId, autoTitle); }catch{}
             await loadConversations(currentConvId);
           }
-          renderMessage('assistant', res.response||'');
+          renderMessage('assistant', res.response || (res.message || '')); scrollToBottom();
         }
-        scrollToBottom();
       }catch(err){
         renderMessage('assistant','Sorry, something went wrong. Please try again.'); scrollToBottom();
       }finally{
@@ -345,7 +433,7 @@
     });
 
     /* Photo Solve */
-    photoBtn.addEventListener('click',()=> !readOnly && photoFile.click());
+    document.getElementById('photoBtn').addEventListener('click',()=> !readOnly && photoFile.click());
     photoFile.addEventListener('change', async ()=>{
       if(readOnly) return;
       const file = photoFile.files && photoFile.files[0]; if(!file) return;
@@ -353,7 +441,8 @@
       if(!okTypes.includes(file.type)){ alert('Please choose a PNG, JPG, or WEBP image.'); photoFile.value=''; return; }
       if(file.size>6*1024*1024){ alert('Image is larger than 6MB.'); photoFile.value=''; return; }
       const note = prompt('Optional: add a short note. Leave blank if not needed.') || '';
-      renderMessage('user', note ? `📷 (with note) ${note}` : '📷 Photo uploaded', now()); scrollToBottom();
+      const objUrl=URL.createObjectURL(file);
+      renderImageMessage(note ? `📷 (with note) ${note}` : '📷 Photo uploaded', objUrl); scrollToBottom();
       sendBtn.disabled=true; photoBtn.disabled=true; promptEl.disabled=true; statusEl.textContent='Solving…';
       try{
         const fd=new FormData();
@@ -362,20 +451,24 @@
         if(note) fd.append('attempt', note);
         if(currentConvId) fd.append('conversationId', currentConvId);
 
-        const wasNew=!currentConvId;
         const res=await api.photoSolve(fd);
 
-        if(wasNew && res.conversationId){
-          currentConvId=res.conversationId;
-          const autoTitle=makeTitleFrom(note||'Photo','Photo:');
-          try{ await api.renameConv(currentConvId, autoTitle); }catch{}
-          await loadConversations(currentConvId);
+        if(res?.error==='limit_reached'){
+          renderMessage('assistant', `You’ve reached the Free plan limit. <a class="upgrade" href="/index.html#pricing">Upgrade</a> to continue.`);
+        } else {
+          if(!currentConvId && res.conversationId){
+            currentConvId=res.conversationId;
+            const autoTitle=makeTitleFrom(note||'Photo','Photo:');
+            try{ await api.renameConv(currentConvId, autoTitle); }catch{}
+            await loadConversations(currentConvId);
+          }
+          renderMessage('assistant', res.response||'No response text returned.');
         }
-        renderMessage('assistant', res.response||'No response text returned.'); scrollToBottom();
+        scrollToBottom();
       }catch{
-        renderMessage('assistant','Photo solve failed. Please try another image.'); scrollToBottom();
+        renderMessage('assistant','Photo solve failed. Please try another image.');
       }finally{
-        photoFile.value='';
+        URL.revokeObjectURL(objUrl); photoFile.value='';
         sendBtn.disabled=false; photoBtn.disabled=false; promptEl.disabled=false; promptEl.focus(); statusEl.textContent='';
       }
     });
@@ -383,16 +476,26 @@
     /* New chat */
     newChatBtn.addEventListener('click', async ()=>{ if(readOnly) return; const c=await api.createConv('New chat'); currentConvId=c.id; await loadConversations(currentConvId); clearMessages(); promptEl.focus(); });
 
-    /* Read-only shared view */
+    /* Bottom user card menu */
+    userBtn.addEventListener('click', ()=>{
+      const open = userMenu.classList.toggle('open');
+      userBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+    document.addEventListener('click', (e)=>{ if(!e.target.closest('.user-card')){ userMenu.classList.remove('open'); userBtn.setAttribute('aria-expanded','false'); } });
+    document.getElementById('personalizeBtn').addEventListener('click', ()=> alert('Personalization coming soon.'));
+    document.getElementById('settingsBtn').addEventListener('click', ()=> alert('Settings coming soon.'));
+    logoutBtn.addEventListener('click', async ()=>{ try{ await api.logout(); }catch{} location.replace('/index.html'); });
+
+    /* Read-only share mode */
     async function enterReadOnlyView(token){
       readOnly = true;
       document.querySelector('.sidebar').style.display='none';
       composerEl.style.display='none';
-      roBanner.classList.add('show');
+      document.getElementById('roBanner').classList.add('show');
       updateComposerPad();
       clearMessages();
       try{
-        const data = await fetch(`/api/share/${encodeURIComponent(token)}`).then(r=>r.json());
+        const data = await api.getShared(token);
         if(!data?.messages){ renderMessage('assistant', 'This shared link is invalid or has been revoked.'); return; }
         document.title = (data.title || 'Shared chat') + ' — GPTs Help';
         (data.messages||[]).forEach(m=> renderMessage(m.role==='user'?'user':'assistant', m.content));
@@ -400,54 +503,32 @@
       }catch{ renderMessage('assistant','Could not load shared conversation.'); }
     }
 
-    /* User card rendering */
-    function renderUserCard(user){
-      meCache = user;
-      const name = (localStorage.getItem('profileName') || user.email.split('@')[0]) || user.email;
-      userCardName.textContent = name;
-      const planLabel = (user.plan || 'FREE').toString().toUpperCase();
-      userCardPlan.textContent = planLabel.charAt(0) + planLabel.slice(1).toLowerCase(); // Free/Plus/Pro
-      ucEmail.textContent = user.email;
-      userAvatar.textContent = name.charAt(0).toUpperCase();
-    }
-    async function refreshMeAndUI(){
-      try{
-        const me = await api.me();
-        if(me.status==='ok' && me.user){ renderUserCard(me.user); }
-        else { location.replace('/index.html'); }
-      }catch{ location.replace('/index.html'); }
-    }
-
-    // User card menu interactions
-    userCard.addEventListener('click', (e)=>{
-      e.stopPropagation();
-      userMenu.classList.toggle('open');
-    });
-    document.addEventListener('click', ()=> userMenu.classList.remove('open') );
-    ucUpgrade.addEventListener('click', ()=>{ window.open('/index.html#pricing','_self'); });
-    ucSettings.addEventListener('click', ()=> toast('Settings coming soon') );
-    ucHelp.addEventListener('click', ()=> window.open('mailto:support@gptshelp.online?subject=Help','_blank') );
-    ucLogout.addEventListener('click', async ()=>{ try{ await api.logout(); }catch{} location.replace('/index.html'); });
-
-    // Keep plan fresh after returning from Paystack
-    document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') refreshMeAndUI(); });
-    setInterval(refreshMeAndUI, 60000);
-
     /* Auth guard + init */
+    async function guardAuth(){
+      try{
+        const me=await api.me();
+        if(me.status!=='ok' || !me.user?.email){ location.replace('/index.html'); return false; }
+        return true;
+      }catch{ location.replace('/index.html'); return false; }
+    }
+
     (async function init(){
       const p=new URLSearchParams(location.search);
       const shareToken=p.get('share');
       if(shareToken){ await enterReadOnlyView(shareToken); return; }
 
-      await refreshMeAndUI();
+      const ok=await guardAuth(); if(!ok) return;
+      await refreshUser();
+
+      // poll /api/me briefly to catch plan changes right after Paystack verify
+      let polls=0; const iv=setInterval(async ()=>{ polls++; await refreshUser(); if(polls>=4) clearInterval(iv); }, 15000);
+
       const fromUrl = p.get('c');
       await loadConversations(fromUrl?Number(fromUrl):null);
       if(fromUrl){ currentConvId=Number(fromUrl); await showConversation(currentConvId); }
-      updatePlaceholder();
-      autoresize();
-      updateComposerPad();
-      promptEl.focus();
+      updatePlaceholder(); autoresize(); updateComposerPad(); promptEl.focus();
     })();
   </script>
 </body>
 </html>
+```0
