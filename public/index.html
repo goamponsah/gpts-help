@@ -20,19 +20,25 @@
     *{box-sizing:border-box}
     body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--text);background:var(--bg)}
     a{color:var(--brand);text-decoration:none}
+
     header{background:#fff;border-bottom:1px solid #eee}
     .nav{max-width:1200px;margin:0 auto;padding:1rem 2rem;display:flex;align-items:center;justify-content:space-between}
     .brand{font-weight:800;letter-spacing:.2px}
     .nav-right{display:flex;gap:.5rem;align-items:center}
     .btn-nav{border:1px solid var(--border);background:#fff;color:var(--brand);padding:.55rem .9rem;border-radius:10px;cursor:pointer;font-weight:600}
     .btn-nav.primary{background:var(--brand);color:#fff;border-color:transparent}
+
     .hero{background:linear-gradient(135deg,var(--brand),#9c6fff);color:#fff;text-align:center;padding:5rem 2rem}
     .hero h1{font-size:clamp(2rem,4vw,3rem);margin-bottom:1rem}
     .hero p{font-size:1.1rem;max-width:720px;margin:0 auto 0;opacity:.98}
+
     .container{max-width:1200px;margin:0 auto;padding:2rem}
     h2{margin:.5rem 0}
+
     .features{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1.5rem;margin-top:2rem}
     .card{background:#fff;border:1px solid #eee;border-radius:12px;padding:1.5rem;box-shadow:0 4px 10px rgba(0,0,0,.05)}
+
+    /* Home demo */
     .demo{margin-top:2rem;display:grid;grid-template-columns:1.2fr 1fr;gap:1.5rem}
     @media(max-width:960px){.demo{grid-template-columns:1fr}}
     .demo-left,.demo-right{background:#fff;border:1px solid #eee;border-radius:14px;padding:1.25rem;box-shadow:var(--shadow)}
@@ -43,11 +49,13 @@
     .demo-actions{display:flex;gap:.6rem;justify-content:center;margin-top:.75rem}
     .btn{padding:.85rem 1.2rem;font-weight:700;border:none;border-radius:10px;cursor:pointer}
     .btn-primary{background:var(--accent);color:#000}
-    .btn-secondary{background:#fff;color:var(--brand);border:1px solid var(--border)}
+    .btn-secondary{background:#fff;color:#6f42c1;border:1px solid var(--border)}
     .preview{margin-top:1rem;display:flex;gap:1rem;flex-wrap:wrap;justify-content:center}
     .preview img{max-width:220px;border-radius:10px;border:1px solid #eee}
     .result{background:#0f1117;color:#e7eaf1;border-radius:12px;padding:1rem;border:1px solid #222;margin-top:1rem;min-height:120px;white-space:pre-wrap}
+
     footer{text-align:center;padding:2rem;color:var(--muted);margin-top:3rem;border-top:1px solid #eee}
+
     .overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);z-index:1000}
     .overlay.open{display:flex}
     .modal{width:min(520px,92vw);background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;box-shadow:var(--shadow)}
@@ -72,7 +80,7 @@
   <p>Upload a math problem and get a step-by-step solution. Try it free — then unlock unlimited photo solves.</p>
 </section>
 
-<!-- Try Photo Solve -->
+<!-- Try Photo Solve (2 free demos) -->
 <section class="container">
   <h2>Try Photo Solve</h2>
   <div class="demo">
@@ -133,7 +141,27 @@
   </div>
 </div>
 
+<!-- Paystack -->
+<script src="https://js.paystack.co/v2/inline.js"></script>
+
 <script>
+/* --- Utility / State --- */
+function goToChat(){location.assign("/chat.html");}
+document.getElementById("year").textContent=new Date().getFullYear();
+
+let PAYSTACK_PUBLIC_KEY=null;
+const PLAN_CODE_PLUS_MONTHLY="PLN_t8tii7sryvwsxxf"; // your real code
+const PLAN_CODE_PRO_ANNUAL ="PLN_3gkd3qo1pv8rylt"; // (unused here; defaulting to Plus Monthly)
+
+async function loadConfig(){
+  try{
+    const cfg=await fetch("/api/public-config").then(r=>r.json());
+    PAYSTACK_PUBLIC_KEY=cfg.paystackPublicKey||null;
+  }catch{}
+}
+loadConfig();
+
+/* --- Demo Solve (2 free solves for guests) --- */
 const drop = document.getElementById("drop");
 const pickBtn = document.getElementById("pickBtn");
 const fileInput = document.getElementById("fileInput");
@@ -142,27 +170,20 @@ const solveBtn = document.getElementById("solveBtn");
 const clearBtn = document.getElementById("clearBtn");
 const demoActions = document.getElementById("demoActions");
 const resultEl = document.getElementById("result");
-const upgradeOverlay = document.getElementById("upgradeOverlay");
-const upgradeClose = document.getElementById("upgradeClose");
-const signupNowBtn = document.getElementById("signupNowBtn");
-const goProBtn = document.getElementById("goProBtn");
 
-let selectedFile = null;
-function openUpgrade(){upgradeOverlay.classList.add("open");}
-function closeUpgrade(){upgradeOverlay.classList.remove("open");}
-upgradeClose.onclick=closeUpgrade;
-signupNowBtn.onclick=()=>location.href="/index.html#signup";
-goProBtn.onclick=()=>location.href="#pricing";
+let selectedFile=null;
 
 ['dragenter','dragover'].forEach(evt=>drop.addEventListener(evt,e=>{e.preventDefault();drop.classList.add('drag');}));
 ['dragleave','drop'].forEach(evt=>drop.addEventListener(evt,e=>{e.preventDefault();drop.classList.remove('drag');}));
 drop.addEventListener('drop',e=>{const f=e.dataTransfer.files?.[0];if(f)handlePickedFile(f);});
 pickBtn.addEventListener('click',()=>fileInput.click());
 fileInput.addEventListener('change',()=>{const f=fileInput.files?.[0];if(f)handlePickedFile(f);});
+
 function handlePickedFile(file){
   if(!['image/png','image/jpeg','image/jpg','image/webp'].includes(file.type)){alert('Choose a valid image.');return;}
   if(file.size>6*1024*1024){alert('Max size 6MB');return;}
-  selectedFile=file;preview.innerHTML='';const url=URL.createObjectURL(file);
+  selectedFile=file;preview.innerHTML='';
+  const url=URL.createObjectURL(file);
   const img=new Image();img.onload=()=>URL.revokeObjectURL(url);img.src=url;preview.appendChild(img);
   demoActions.style.display='flex';resultEl.textContent='Ready. Click “Solve Now”.';
 }
@@ -176,15 +197,94 @@ async function solveFromHome(file){
     const endpoint=(me?.status==='ok'&&me.user?.email)?'/api/photo-solve':'/api/photo-solve-demo';
     const r=await fetch(endpoint,{method:'POST',credentials:'include',body:fd});
     const j=await r.json();
-    if(r.status===403||j.error==='demo_limit_reached'){openUpgrade();resultEl.textContent='Free demo limit reached. Please sign up.';return;}
+    if(r.status===403||j.error==='demo_limit_reached'){
+      openUpgrade();resultEl.textContent='Free demo limit reached. Please sign up or upgrade.';return;
+    }
     resultEl.textContent=j.response||'No response.';
-  }catch{resultEl.textContent='Error. Try again.';}
-  finally{solveBtn.disabled=false;}
+  }catch{
+    resultEl.textContent='Error. Try again.';
+  }finally{
+    solveBtn.disabled=false;
+  }
 }
 solveBtn.onclick=()=>{if(!selectedFile){alert('Pick an image first.');return;}solveFromHome(selectedFile);}
-clearBtn.onclick=()=>{selectedFile=null;preview.innerHTML='';demoActions.style.display='none';resultEl.textContent='Upload a math question to see the step-by-step solution here.';}
-document.getElementById("year").textContent=new Date().getFullYear();
-function goToChat(){location.assign("/chat.html");}
+clearBtn.onclick=()=>{selectedFile=null;preview.innerHTML='';demoActions.style.display='none';resultEl.textContent='Upload a math question to see the step-by-step solution here.';};
+
+/* --- Upgrade Modal + Paystack Checkout --- */
+const upgradeOverlay=document.getElementById("upgradeOverlay");
+const upgradeClose=document.getElementById("upgradeClose");
+const signupNowBtn=document.getElementById("signupNowBtn");
+const goProBtn=document.getElementById("goProBtn");
+
+function openUpgrade(){upgradeOverlay.classList.add("open");}
+function closeUpgrade(){upgradeOverlay.classList.remove("open");}
+
+upgradeClose.onclick=closeUpgrade;
+signupNowBtn.onclick=()=>{ closeUpgrade(); location.href="/index.html#signup"; };
+
+/* Start Paystack checkout.
+   If user is logged in, we use their email from /api/me.
+   If not, we prompt for email and proceed — server verifies and signs them in. */
+async function startSubscription(planCode, label){
+  if(!PAYSTACK_PUBLIC_KEY){ alert("Payment key not loaded yet. Please try again."); return; }
+
+  let email=null;
+  try{
+    const me=await fetch('/api/me',{credentials:'include'}).then(r=>r.json());
+    if(me?.status==='ok' && me.user?.email){ email=me.user.email; }
+  }catch{}
+
+  if(!email){
+    const e=prompt("Enter your email to upgrade:");
+    if(!e || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)){ alert("Please enter a valid email."); return; }
+    email=e.trim();
+  }
+
+  const popup=new PaystackPop();
+  popup.newTransaction({
+    key: PAYSTACK_PUBLIC_KEY,
+    email,
+    currency: "GHS",
+    plan: planCode,
+    reference: "gptshelp_"+Date.now()+"_"+Math.random().toString(36).slice(2,8),
+    callback: (response)=>{
+      fetch("/api/paystack/verify",{
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        credentials:"include",
+        body: JSON.stringify({ reference: response.reference })
+      }).then(r=>r.json()).then(r=>{
+        if(r.status==="success"||r.status==="ok"){
+          closeUpgrade();
+          alert(label+" subscription activated!");
+          // Optionally reveal Open Chat button instantly
+          const openChatBtn=document.getElementById("openChatBtn");
+          if(openChatBtn) openChatBtn.style.display="inline-block";
+        }else{
+          alert("Verification failed. Ref: "+response.reference);
+        }
+      }).catch(()=>alert("Verification request failed."));
+    },
+    onCancel: ()=>alert("Payment cancelled.")
+  });
+}
+
+goProBtn.onclick=()=> startSubscription(PLAN_CODE_PLUS_MONTHLY, "Plus Monthly");
+
+/* Buttons in header (simple placeholders you already use) */
+const loginBtn=document.getElementById("loginBtn");
+const signupBtn=document.getElementById("signupBtn");
+loginBtn.onclick=()=>location.href="/index.html#login";
+signupBtn.onclick=()=>location.href="/index.html#signup";
+
+/* Show Open Chat when already signed in */
+(async function reflectAuth(){
+  try{
+    const me=await fetch('/api/me',{credentials:'include'}).then(r=>r.json());
+    const openChatBtn=document.getElementById("openChatBtn");
+    if(me?.status==='ok' && me.user?.email){ openChatBtn.style.display="inline-block"; }
+  }catch{}
+})();
 </script>
 </body>
 </html>
