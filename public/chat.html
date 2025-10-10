@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -45,15 +44,13 @@
     .menu button{display:block;width:100%;text-align:left;background:transparent;color:var(--text);border:0;padding:10px 12px;cursor:pointer;font-size:14px}
     .menu button:hover{background:#1a1d2a}
 
-    /* Bottom: user card + sign out */
+    /* Bottom: user card */
     .side-bottom{position:sticky;bottom:0;padding:10px;border-top:1px solid var(--border);background:#0f1117;display:grid;gap:8px}
     .usercard{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--border);border-radius:12px;background:#10131b;cursor:pointer}
     .avatar{width:34px;height:34px;border-radius:50%;background:#1a2031;display:grid;place-items:center;color:#c8cee0;font-weight:700;font-size:12px;border:1px solid #22283a}
     .u-name{font-size:14px;font-weight:600;line-height:1.15}
     .u-plan{font-size:12px;color:var(--muted)}
     .carat{color:#aab1c7}
-    .logout{width:100%;background:transparent;border:1px solid var(--border);color:var(--text);padding:9px 10px;border-radius:10px;cursor:pointer;font-size:13px}
-    .logout:hover{background:#151824}
 
     /* User dropdown (like ChatGPT) */
     .user-menu{
@@ -158,7 +155,7 @@
         <div class="um-item" id="umLogout"><span class="um-icon">↩️</span><span class="um-text">Log out</span></div>
       </div>
 
-      <!-- Bottom: user card + sign out button -->
+      <!-- Bottom: user card (no standalone Sign out button) -->
       <div class="side-bottom">
         <div class="usercard" id="userCard" title="Account (click for menu)" tabindex="0" aria-haspopup="menu" aria-expanded="false" aria-controls="userMenu">
           <div class="avatar" id="userAvatar">--</div>
@@ -168,7 +165,6 @@
           </div>
           <div class="carat">▾</div>
         </div>
-        <button class="logout" id="logoutBtn">Sign out</button>
       </div>
     </aside>
 
@@ -251,7 +247,6 @@
     const gptTypeEl = document.getElementById('gptType');
     const statusEl = document.getElementById('status');
     const newChatBtn = document.getElementById('newChatBtn');
-    const logoutBtn = document.getElementById('logoutBtn');
     const roBanner = document.getElementById('roBanner');
 
     /* user card/menu elements */
@@ -454,9 +449,8 @@
       }
     });
 
-    /* New chat & logout */
+    /* New chat (logout handled via user menu now) */
     newChatBtn.addEventListener('click', async ()=>{ if(readOnly) return; const c=await api.createConv('New chat'); currentConvId=c.id; await loadConversations(currentConvId); clearMessages(); promptEl.focus(); });
-    logoutBtn.addEventListener('click', async ()=>{ if(readOnly) { location.href='/index.html'; return; } try{ await api.logout(); }catch{} location.replace('/index.html'); });
 
     /* User menu behavior */
     function toggleUserMenu(force){
