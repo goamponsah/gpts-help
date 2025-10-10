@@ -117,8 +117,8 @@
     .modal-title{font-weight:600}
     .modal-sub{color:var(--muted);font-size:13px;margin-bottom:12px}
     .modal-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;background:#0f1117}
-    .modal input[type="text"]{width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:9999px;background:#0e0f13;color:var(--text);font-size:14px}
-    .btn{border:1px solid var(--border);background:#141722;color:var(--text);border-radius:9999px;padding:10px 14px;cursor:pointer;font-size:14px}
+    .modal input[type="text"]{width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:9999px;background:#0e0f13;color:#e7eaf1;font-size:14px}
+    .btn{border:1px solid var(--border);background:#141722;color:#e7eaf1;border-radius:9999px;padding:10px 14px;cursor:pointer;font-size:14px}
     .btn.primary{background:var(--brand);color:#fff;border-color:transparent}
     .modal-close{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:20px;line-height:1}
     .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);padding:10px 14px;font-size:13px;background:#141722;color:#e7eaf1;border:1px solid var(--border);border-radius:9999px;display:none;z-index:1100}
@@ -156,7 +156,7 @@
         <div class="um-item" id="umLogout"><span class="um-icon">↩️</span><span class="um-text">Log out</span></div>
       </div>
 
-      <!-- Bottom: user card (no standalone Sign out button) -->
+      <!-- Bottom: user card -->
       <div class="side-bottom">
         <div class="usercard" id="userCard" title="Account (click for menu)" tabindex="0" aria-haspopup="menu" aria-expanded="false" aria-controls="userMenu">
           <div class="avatar" id="userAvatar">--</div>
@@ -184,8 +184,8 @@
           <div class="meta-row">
             <label for="gptType">Assistant</label>
             <select id="gptType">
+              <!-- Math GPT only -->
               <option value="math">Math GPT</option>
-              <option value="content">ContentGPT</option>
             </select>
             <span id="status" style="margin-left:auto;"></span>
           </div>
@@ -278,15 +278,14 @@
     let readOnly = false;
 
     /* Conversation title cache to support auto-titling on first message */
-    const convTitleCache = {};        // id -> title (from sidebar list)
-    const pendingAutoTitle = new Set();// ids created via "+ New Chat" that still need a real title
+    const convTitleCache = {};         // id -> title (from sidebar list)
+    const pendingAutoTitle = new Set(); // ids created via "+ New Chat" that still need a real title
 
-    /* Placeholder updates */
+    /* Placeholder (always Math) */
     function updatePlaceholder() {
-      const name = gptTypeEl.options[gptTypeEl.selectedIndex]?.text || "Assistant";
-      promptEl.placeholder = `Message ${name}…`;
-      promptEl.setAttribute('aria-label', `Message ${name}`);
-      promptEl.setAttribute('title', `Message ${name}`);
+      promptEl.placeholder = `Message Math GPT…`;
+      promptEl.setAttribute('aria-label', `Message Math GPT`);
+      promptEl.setAttribute('title', `Message Math GPT`);
     }
     gptTypeEl.addEventListener('change', updatePlaceholder);
     updatePlaceholder();
@@ -436,20 +435,18 @@
       return t === 'new chat' || t === 'untitled' || t === '';
     }
 
-    /* Submit text */
+    /* Submit text (Math only) */
     composerEl.addEventListener('submit', async (e)=>{
       e.preventDefault(); if(readOnly) return;
       const text=(promptEl.value||'').trim(); if(!text) return;
       renderMessage('user', text, now()); scrollToBottom();
       sendBtn.disabled=true; photoBtn.disabled=true; promptEl.disabled=true; statusEl.textContent='Thinking…';
       try{
-        const payload={ message:text, gptType:gptTypeEl.value||'math' };
+        const payload={ message:text, gptType:'math' };
         if(currentConvId) payload.conversationId=currentConvId;
 
-        const willAutoTitle = shouldAutoTitleFor(currentConvId);
         const res=await api.chat(payload);
 
-        // if it was a brand new conv, set id & cache
         if(!currentConvId && res.conversationId){
           currentConvId=res.conversationId;
           convTitleCache[currentConvId] = 'New chat';
@@ -457,7 +454,6 @@
           await loadConversations(currentConvId);
         }
 
-        // auto title if needed
         if (shouldAutoTitleFor(currentConvId) && text){
           const autoTitle=makeTitleFrom(text);
           try{
@@ -477,7 +473,7 @@
       }
     });
 
-    /* Photo Solve */
+    /* Photo Solve (Math only) */
     photoBtn.addEventListener('click',()=> !readOnly && photoFile.click());
     photoFile.addEventListener('change', async ()=>{
       if(readOnly) return;
@@ -492,13 +488,11 @@
       try{
         const fd=new FormData();
         fd.append('image', file);
-        fd.append('gptType', gptTypeEl.value||'math');
+        fd.append('gptType', 'math');
         if(note) fd.append('attempt', note);
         if(currentConvId) fd.append('conversationId', currentConvId);
 
-        const willAutoTitle = shouldAutoTitleFor(currentConvId);
         const wasNew = !currentConvId;
-
         const res=await api.photoSolve(fd);
 
         if(wasNew && res.conversationId){
@@ -599,7 +593,6 @@
         const displayName = nameFromEmail(email);
         const initials = initialsFrom(displayName);
 
-        // Update user card/menu (plan shown here)
         document.getElementById('userName').textContent = displayName;
         document.getElementById('userPlan').textContent = planLabel;
         document.getElementById('userAvatar').textContent  = initials;
@@ -634,3 +627,4 @@
   </script>
 </body>
 </html>
+```0
