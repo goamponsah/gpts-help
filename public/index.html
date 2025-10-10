@@ -40,7 +40,7 @@
 
     /* Features */
     .features{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1.5rem;margin-top:2rem}
-    .card{background:#fff;border:1px solid #eee;border-radius:12px;padding:1.5rem;box-shadow:0 4px 10px rgba(0,0,0,.05)}
+    .card{background:#fff;border:1px solid #eee;border-radius:12px;padding:1.5rem;box-shadow:0 4px 10px rgba(0,0,0,0.05)}
 
     /* Pricing */
     .plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.5rem;margin-top:2rem}
@@ -96,22 +96,22 @@
 
   <!-- Hero -->
   <section class="hero">
-    <h1>Master Math & Create Content with AI</h1>
-    <p>Step-by-step math tutoring and a professional content suite — start free, upgrade anytime.</p>
+    <h1>Master Math with AI</h1>
+    <p>Get step-by-step tutoring, clear proofs, and worked examples. Start free, upgrade anytime.</p>
   </section>
 
   <!-- Features -->
   <section class="container">
     <h2>Why Choose GPTs Help?</h2>
     <div class="features">
-      <div class="card"><h3>Step-by-Step Math</h3><p>Clear explanations with proofs, hints, and multiple methods.</p></div>
-      <div class="card"><h3>Exam-Ready Practice</h3><p>Adaptive practice sets with instant feedback.</p></div>
-      <div class="card"><h3>Content Suite</h3><p>Generate polished blog posts, essays, and scripts in minutes.</p></div>
-      <div class="card"><h3>Secure & Fast</h3><p>Trusted Paystack payments. Your data stays private.</p></div>
+      <div class="card"><h3>Step-by-Step Solutions</h3><p>Clear reasoning with intermediate steps and explanations.</p></div>
+      <div class="card"><h3>Exam-Ready Practice</h3><p>Adaptive practice sets with instant feedback and hints.</p></div>
+      <div class="card"><h3>Worked Examples Library</h3><p>Hundreds of curated examples across algebra, calculus, and more.</p></div>
+      <div class="card"><h3>Secure & Fast</h3><p>Trusted Paystack payments. Your study data stays private.</p></div>
     </div>
   </section>
 
-  <!-- Pricing (email input REMOVED as requested) -->
+  <!-- Pricing -->
   <section class="container" id="pricing">
     <h2>Choose Your Plan</h2>
 
@@ -121,9 +121,9 @@
         <h3>Free Plan</h3>
         <div class="price">₵0 / mo</div>
         <ul>
-          <li>Up to 10 math problems / month</li>
-          <li>Basic AI explanations</li>
-          <li>Limited content exports</li>
+          <li>Up to 10 math questions / month</li>
+          <li>Basic step-by-step explanations</li>
+          <li>Access to selected worked examples</li>
         </ul>
         <button class="btn btn-secondary" id="startFreeBtn">Start free</button>
       </div>
@@ -135,8 +135,8 @@
         <div class="price">₵99 / mo</div>
         <ul>
           <li>Unlimited math problem solving</li>
-          <li>Advanced explanations & proofs</li>
-          <li>Full content suite</li>
+          <li>Advanced reasoning & proofs</li>
+          <li>Full worked-examples library</li>
         </ul>
         <button class="btn btn-primary" data-plan="PLUS_MONTHLY" id="plusMonthlyBtn">Subscribe Monthly</button>
       </div>
@@ -148,7 +148,7 @@
         <ul>
           <li>Everything in Plus</li>
           <li>Annual discount (save 34%)</li>
-          <li>Team collaboration tools</li>
+          <li>Priority support</li>
         </ul>
         <button class="btn btn-primary" data-plan="PRO_ANNUAL" id="proAnnualBtn">Subscribe Annually</button>
       </div>
@@ -160,7 +160,7 @@
     <h2>What Our Users Say</h2>
     <div class="testimonials">
       <div class="testimonial">“I finally understood calculus limits—your hints + step-by-step solved it!”<br><strong>— Ama A., Student</strong></div>
-      <div class="testimonial">“We cut blog production time by 70%. The content suite is a lifesaver.”<br><strong>— Michael T., Creator</strong></div>
+      <div class="testimonial">“The worked examples and proofs made exam prep way faster.”<br><strong>— Daniel K., Engineering</strong></div>
     </div>
   </section>
 
@@ -478,15 +478,10 @@
 
     // If login completes from modal & there is a pending plan, continue to checkout
     (function wireLoginResume(){
-      const originalHandle = loginSubmit.onclick;
-      loginSubmit.onclick = null; // we re-bind using event listener above already
-      // We'll just observe the pendingPlan inside handleLoginSubmit by overriding location.replace temporarily if needed.
-      // Simpler approach: listen to login form success via small hook:
       const oldHandleLoginSubmit = handleLoginSubmit;
       window.handleLoginSubmit = async function(){
         const before = pendingPlan && {...pendingPlan};
         await oldHandleLoginSubmit();
-        // If we got redirected, code below won't run. If still here and we now have a session, resume plan.
         if(before){
           const me = await apiMe();
           if(me?.status==="ok" && me.user?.email){
@@ -495,10 +490,8 @@
           }
         }
       };
-      // reattach click to our wrapped function
       loginSubmit.removeEventListener('click', oldHandleLoginSubmit);
       loginSubmit.addEventListener('click', window.handleLoginSubmit);
-      loginPassword.removeEventListener('keydown', ()=>{});
       loginPassword.addEventListener('keydown',(e)=>{ if(e.key==='Enter') window.handleLoginSubmit(); });
     })();
 
