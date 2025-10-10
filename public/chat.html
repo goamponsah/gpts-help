@@ -48,8 +48,27 @@
     .side-bottom{position:sticky;bottom:0;padding:10px;border-top:1px solid var(--border);background:#0f1117;display:grid;gap:8px}
     .usercard{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--border);border-radius:12px;background:#10131b;cursor:pointer}
     .avatar{width:34px;height:34px;border-radius:50%;background:#1a2031;display:grid;place-items:center;color:#c8cee0;font-weight:700;font-size:12px;border:1px solid #22283a}
-    .u-name{font-size:14px;font-weight:600;line-height:1.15}
-    .u-plan{font-size:12px;color:var(--muted)}
+    /* Name & Plan neatly separated like ChatGPT */
+    .u-name{
+      display:block;
+      font-size:14px;
+      font-weight:600;
+      line-height:1.2;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:170px; /* keeps it tidy beside the chevron */
+    }
+    .u-plan{
+      display:block;
+      margin-top:2px;     /* subtle separation from the name */
+      font-size:12px;
+      color:var(--muted);
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      max-width:170px;
+    }
     .carat{color:#aab1c7}
 
     /* User dropdown */
@@ -419,6 +438,8 @@
     promptEl.addEventListener('keydown', (e)=>{ if(e.key==='Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); if(!sendBtn.disabled) composerEl.requestSubmit(); } });
 
     /* Auto-title helpers */
+    const convTitleCache = window.convTitleCache || {};
+    const pendingAutoTitle = window.pendingAutoTitle || new Set();
     function shouldAutoTitleFor(convId){
       if (!convId) return true;
       if (pendingAutoTitle.has(convId)) return true;
@@ -542,8 +563,8 @@
     async function enterReadOnlyView(token){
       readOnly = true;
       document.querySelector('.sidebar').style.display='none';
-      composerEl.style.display='none';
-      roBanner.classList.add('show');
+      document.getElementById('composer').style.display='none';
+      document.getElementById('roBanner').classList.add('show');
       updateComposerPad();
       clearMessages();
       try{
@@ -608,10 +629,11 @@
       await loadConversations(fromUrl?Number(fromUrl):null);
       if(fromUrl){ currentConvId=Number(fromUrl); await showConversation(currentConvId); }
       updatePlaceholder();
-      autoresize();
+      (function autoresizeInit(){ const e = document.getElementById('prompt'); e.style.height='auto'; e.style.height=Math.min(120,e.scrollHeight)+'px'; })();
       updateComposerPad();
-      promptEl.focus();
+      document.getElementById('prompt').focus();
     })();
   </script>
 </body>
 </html>
+```0
