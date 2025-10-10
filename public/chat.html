@@ -56,7 +56,7 @@
     .user-menu{
       position:absolute;
       left:10px;
-      bottom:64px;   /* sits just above the card */
+      bottom:64px;
       width:calc(var(--sidebar-w) - 20px);
       background:var(--menu-bg);
       border:1px solid var(--border);
@@ -125,6 +125,7 @@
     .toast.show{display:block}
   </style>
 
+  <!-- Markdown renderer + sanitizer -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 </head>
@@ -276,6 +277,10 @@
     let pendingShareConvId = null;
     let readOnly = false;
 
+    /* Conversation title cache to support auto-titling on first message */
+    const convTitleCache = {};        // id -> title (from sidebar list)
+    const pendingAutoTitle = new Set();// ids created via "+ New Chat" that still need a real title
+
     /* Placeholder updates */
     function updatePlaceholder() {
       const name = gptTypeEl.options[gptTypeEl.selectedIndex]?.text || "Assistant";
@@ -306,15 +311,48 @@
       return e;
     }
     function showToast(msg='Link copied to clipboard'){ toastEl.textContent=msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'),1500); }
-    function makeTitleFrom(text, prefix=""){ const t0=(text||"").replace(/\s+/g," ").trim(); if(!t0) return prefix?`${prefix}`:"New chat"; let t=t0.replace(/^#{1,6}\s*/gm,"").replace(/\*\*(.*?)\*\*/g,"$1").replace(/\*(.*?)\*/g,"$1").replace(/`{1,3}([\s\S]*?)`{1,3}/g,"$1").replace(/\[(.*?)\]\((.*?)\)/g,"$1").replace(/!\[(.*?)\]\((.*?)\)/g,"$1"); t=t.split(/[\n\.!?]/)[0].trim()||t0; t=t.charAt(0).toUpperCase()+t.slice(1); const MAX=50; if(t.length>MAX) t=t.slice(0,MAX-1).trim()+"…"; return prefix?`${prefix} ${t}`:t; }
-    function renderMessage(role, text, when=''){ const row=document.createElement('div'); row.className=`msg ${role}`; const bubble=document.createElement('div'); bubble.className='bubble'; if(when){ const small=document.createElement('small'); small.className='meta'; small.textContent=when; bubble.appendChild(small); } if(role==='assistant'){ const html=DOMPurify.sanitize(marked.parse(text||'',{breaks:true})); const wrapper=document.createElement('div'); wrapper.innerHTML=html; bubble.appendChild(wrapper); } else { bubble.appendChild(document.createTextNode(text||'')); } row.appendChild(bubble); messagesEl.appendChild(row); }
-    function renderImageMessage(caption,url){ const row=document.createElement('div'); row.className='msg user'; const bubble=document.createElement('div'); bubble.className='bubble'; const small=document.createElement('small'); small.className='meta'; small.textContent=''; bubble.appendChild(small); bubble.appendChild(document.createTextNode(caption||'📷 Photo uploaded')); if(url){ const img=document.createElement('img'); img.className='thumb'; img.src=url; img.alt='uploaded image'; bubble.appendChild(img);} row.appendChild(bubble); messagesEl.appendChild(row); }
+    function makeTitleFrom(text, prefix=""){
+      const t0=(text||"").replace(/\s+/g," ").trim();
+      if(!t0) return prefix?`${prefix}`:"New chat";
+      let t=t0
+        .replace(/^#{1,6}\s*/gm,"")
+        .replace(/\*\*(.*?)\*\*/g,"$1")
+        .replace(/\*(.*?)\*/g,"$1")
+        .replace(/`{1,3}([\s\S]*?)`{1,3}/g,"$1")
+        .replace(/\[(.*?)\]\((.*?)\)/g,"$1")
+        .replace(/!\[(.*?)\]\((.*?)\)/g,"$1");
+      t=t.split(/[\n\.!?]/)[0].trim()||t0;
+      t=t.charAt(0).toUpperCase()+t.slice(1);
+      const MAX=50; if(t.length>MAX) t=t.slice(0,MAX-1).trim()+"…";
+      return prefix?`${prefix} ${t}`:t;
+    }
+    function renderMessage(role, text, when=''){
+      const row=document.createElement('div'); row.className=`msg ${role}`;
+      const bubble=document.createElement('div'); bubble.className='bubble';
+      if(when){ const small=document.createElement('small'); small.className='meta'; small.textContent=when; bubble.appendChild(small); }
+      if(role==='assistant'){
+        const html=DOMPurify.sanitize(marked.parse(text||'',{breaks:true}));
+        const wrapper=document.createElement('div'); wrapper.innerHTML=html; bubble.appendChild(wrapper);
+      } else { bubble.appendChild(document.createTextNode(text||'')); }
+      row.appendChild(bubble); messagesEl.appendChild(row);
+    }
+    function renderImageMessage(caption,url){
+      const row=document.createElement('div'); row.className='msg user';
+      const bubble=document.createElement('div'); bubble.className='bubble';
+      const small=document.createElement('small'); small.className='meta'; small.textContent='';
+      bubble.appendChild(small); bubble.appendChild(document.createTextNode(caption||'📷 Photo uploaded'));
+      if(url){ const img=document.createElement('img'); img.className='thumb'; img.src=url; img.alt='uploaded image'; bubble.appendChild(img); }
+      row.appendChild(bubble); messagesEl.appendChild(row);
+    }
     function clearMessages(){ messagesEl.innerHTML=''; }
     function scrollToBottom(){ messagesEl.scrollTop = messagesEl.scrollHeight; }
     function now(){ return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
 
     /* Share modal */
-    function openShareModal(convId){ pendingShareConvId=convId; shareOverlay.classList.add('open'); shareOverlay.setAttribute('aria-hidden','false'); shareLinkInput.value=''; shareLinkInput.placeholder='Generating…'; setTimeout(()=>createShareBtn.focus(),10); }
+    function openShareModal(convId){
+      pendingShareConvId=convId; shareOverlay.classList.add('open'); shareOverlay.setAttribute('aria-hidden','false');
+      shareLinkInput.value=''; shareLinkInput.placeholder='Generating…'; setTimeout(()=>createShareBtn.focus(),10);
+    }
     function closeShareModal(){ shareOverlay.classList.remove('open'); shareOverlay.setAttribute('aria-hidden','true'); pendingShareConvId=null; }
     shareCloseBtn.addEventListener('click', closeShareModal);
     shareOverlay.addEventListener('click', (e)=>{ if(e.target===shareOverlay) closeShareModal(); });
@@ -338,6 +376,9 @@
     async function loadConversations(selectId=null){
       const list = await api.listConvs();
       convListEl.innerHTML='';
+      // refresh cache
+      list.forEach(c=>{ convTitleCache[c.id] = c.title; });
+
       list.filter(c=>!c.archived).forEach(c=>{
         const row=el('div',{class:`conv ${c.id===selectId?'active':''}`});
         const title=el('div',{class:'conv-title'},c.title);
@@ -353,7 +394,7 @@
           e.stopPropagation(); menu.classList.remove('open');
           const input=el('input',{value:c.title,style:'width:100%; background:#12131a; color:#e7eaf1; border:1px solid #232634; border-radius:6px; padding:6px 8px;'});
           row.replaceChild(input,title); input.focus();
-          const commit=async ()=>{ const t=(input.value||'New chat').trim(); await api.renameConv(c.id,t); await loadConversations(c.id); };
+          const commit=async ()=>{ const t=(input.value||'New chat').trim(); await api.renameConv(c.id,t); convTitleCache[c.id]=t; pendingAutoTitle.delete(c.id); await loadConversations(c.id); };
           input.addEventListener('keydown',ke=>{ if(ke.key==='Enter') commit(); if(ke.key==='Escape') loadConversations(c.id); });
           input.addEventListener('blur',commit);
         });
@@ -387,6 +428,14 @@
     promptEl.addEventListener('input', autoresize);
     promptEl.addEventListener('keydown', (e)=>{ if(e.key==='Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); if(!sendBtn.disabled) composerEl.requestSubmit(); } });
 
+    /* Decide if this conversation needs auto-title */
+    function shouldAutoTitleFor(convId){
+      if (!convId) return true; // new (no id yet)
+      if (pendingAutoTitle.has(convId)) return true;
+      const t = (convTitleCache[convId]||'').trim().toLowerCase();
+      return t === 'new chat' || t === 'untitled' || t === '';
+    }
+
     /* Submit text */
     composerEl.addEventListener('submit', async (e)=>{
       e.preventDefault(); if(readOnly) return;
@@ -396,13 +445,29 @@
       try{
         const payload={ message:text, gptType:gptTypeEl.value||'math' };
         if(currentConvId) payload.conversationId=currentConvId;
+
+        const willAutoTitle = shouldAutoTitleFor(currentConvId);
         const res=await api.chat(payload);
+
+        // if it was a brand new conv, set id & cache
         if(!currentConvId && res.conversationId){
           currentConvId=res.conversationId;
-          const autoTitle=makeTitleFrom(text);
-          try{ await api.renameConv(currentConvId, autoTitle); }catch{}
+          convTitleCache[currentConvId] = 'New chat';
+          pendingAutoTitle.add(currentConvId);
           await loadConversations(currentConvId);
         }
+
+        // auto title if needed
+        if (shouldAutoTitleFor(currentConvId) && text){
+          const autoTitle=makeTitleFrom(text);
+          try{
+            await api.renameConv(currentConvId, autoTitle);
+            convTitleCache[currentConvId] = autoTitle;
+            pendingAutoTitle.delete(currentConvId);
+            await loadConversations(currentConvId);
+          }catch{}
+        }
+
         renderMessage('assistant', res.response||''); scrollToBottom();
       }catch(err){
         renderMessage('assistant','Sorry, something went wrong. Please try again.'); scrollToBottom();
@@ -431,15 +496,28 @@
         if(note) fd.append('attempt', note);
         if(currentConvId) fd.append('conversationId', currentConvId);
 
-        const wasNew=!currentConvId;
+        const willAutoTitle = shouldAutoTitleFor(currentConvId);
+        const wasNew = !currentConvId;
+
         const res=await api.photoSolve(fd);
 
         if(wasNew && res.conversationId){
           currentConvId=res.conversationId;
-          const autoTitle=makeTitleFrom(note||'Photo','Photo:');
-          try{ await api.renameConv(currentConvId, autoTitle); }catch{}
+          convTitleCache[currentConvId] = 'New chat';
+          pendingAutoTitle.add(currentConvId);
           await loadConversations(currentConvId);
         }
+
+        if (shouldAutoTitleFor(currentConvId)){
+          const autoTitle=makeTitleFrom(note||'Photo','Photo:');
+          try{
+            await api.renameConv(currentConvId, autoTitle);
+            convTitleCache[currentConvId] = autoTitle;
+            pendingAutoTitle.delete(currentConvId);
+            await loadConversations(currentConvId);
+          }catch{}
+        }
+
         renderMessage('assistant', res.response||'No response text returned.'); scrollToBottom();
       }catch{
         renderMessage('assistant','Photo solve failed. Please try another image.'); scrollToBottom();
@@ -449,8 +527,17 @@
       }
     });
 
-    /* New chat (logout handled via user menu now) */
-    newChatBtn.addEventListener('click', async ()=>{ if(readOnly) return; const c=await api.createConv('New chat'); currentConvId=c.id; await loadConversations(currentConvId); clearMessages(); promptEl.focus(); });
+    /* New chat */
+    newChatBtn.addEventListener('click', async ()=>{
+      if(readOnly) return;
+      const c=await api.createConv('New chat');
+      currentConvId=c.id;
+      convTitleCache[currentConvId]='New chat';
+      pendingAutoTitle.add(currentConvId);
+      await loadConversations(currentConvId);
+      clearMessages();
+      promptEl.focus();
+    });
 
     /* User menu behavior */
     function toggleUserMenu(force){
@@ -512,14 +599,15 @@
         const displayName = nameFromEmail(email);
         const initials = initialsFrom(displayName);
 
-        userNameEl.textContent = displayName;
-        userPlanEl.textContent = planLabel;
-        userAvatar.textContent  = initials;
+        // Update user card/menu (plan shown here)
+        document.getElementById('userName').textContent = displayName;
+        document.getElementById('userPlan').textContent = planLabel;
+        document.getElementById('userAvatar').textContent  = initials;
 
-        umName.textContent   = displayName;
-        umEmail.textContent  = email;
-        umAvatar.textContent = initials;
-        umPlanBadge.textContent = planLabel;
+        document.getElementById('umName').textContent   = displayName;
+        document.getElementById('umEmail').textContent  = email;
+        document.getElementById('umAvatar').textContent = initials;
+        document.getElementById('umPlanBadge').textContent = planLabel;
 
         userCard.title = `${displayName} • ${planLabel}`;
         return true;
