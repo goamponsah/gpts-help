@@ -118,7 +118,7 @@
     .modal input[type="text"]{width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:9999px;background:#0e0f13;color:#e7eaf1;font-size:14px}
     .btn{border:1px solid var(--border);background:#141722;color:#e7eaf1;border-radius:9999px;padding:10px 14px;cursor:pointer;font-size:14px}
     .btn.primary{background:var(--brand);color:#fff;border-color:transparent}
-    .modal-close{border:0;background:transparent;color:var(--muted);cursor:pointer;font-size:20px;line-height:1}
+    .modal-close{border:0;background:transparent;color:#9aa3b2;cursor:pointer;font-size:20px;line-height:1}
     .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);padding:10px 14px;font-size:13px;background:#141722;color:#e7eaf1;border:1px solid var(--border);border-radius:9999px;display:none;z-index:1100}
     .toast.show{display:block}
   </style>
@@ -210,9 +210,11 @@
   <div class="toast" id="toast">Link copied to clipboard</div>
 
   <script>
+    /* mobile 100vh fix */
     function setVh(){ const vh = window.innerHeight * 0.01; document.documentElement.style.setProperty('--vh', `${vh*100}px`); }
     setVh(); window.addEventListener('resize', setVh);
 
+    /* API */
     const api = {
       listConvs: ()=>fetch('/api/conversations',{credentials:'include'}).then(r=>r.json()),
       createConv:(title)=>fetch('/api/conversations',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({title})}).then(r=>r.json()),
@@ -228,6 +230,7 @@
       logout:()=>fetch('/api/logout',{method:'POST',credentials:'include'})
     };
 
+    /* Elements */
     const messagesEl = document.getElementById('messages');
     const convListEl = document.getElementById('convList');
     const promptEl = document.getElementById('prompt');
@@ -240,6 +243,7 @@
     const newChatBtn = document.getElementById('newChatBtn');
     const roBanner = document.getElementById('roBanner');
 
+    /* user card/menu elements */
     const userCard   = document.getElementById('userCard');
     const userAvatar = document.getElementById('userAvatar');
     const userNameEl = document.getElementById('userName');
@@ -252,6 +256,7 @@
     const umUpgrade  = document.getElementById('umUpgrade');
     const umLogout   = document.getElementById('umLogout');
 
+    /* Share modal elements */
     const shareOverlay = document.getElementById('shareOverlay');
     const shareLinkInput = document.getElementById('shareLinkInput');
     const createShareBtn = document.getElementById('createShareBtn');
@@ -262,9 +267,11 @@
     let pendingShareConvId = null;
     let readOnly = false;
 
+    /* Title helpers for convs (unchanged) */
     const convTitleCache = {};
     const pendingAutoTitle = new Set();
 
+    /* Placeholder */
     function updatePlaceholder() {
       promptEl.placeholder = `Message Math GPT…`;
       promptEl.setAttribute('aria-label', `Message Math GPT`);
@@ -273,6 +280,7 @@
     gptTypeEl.addEventListener('change', updatePlaceholder);
     updatePlaceholder();
 
+    /* Composer pad */
     function updateComposerPad(){
       const visible = getComputedStyle(composerEl).display !== 'none';
       const h = visible ? (composerEl.offsetHeight || 0) : 0;
@@ -280,6 +288,7 @@
     }
     window.addEventListener('resize', updateComposerPad);
 
+    /* Utils */
     function el(tag, attrs={}, ...children){
       const e=document.createElement(tag);
       Object.entries(attrs).forEach(([k,v])=>{
@@ -322,10 +331,8 @@
     function scrollToBottom(){ messagesEl.scrollTop = messagesEl.scrollHeight; }
     function now(){ return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
 
-    function openShareModal(convId){
-      pendingShareConvId=convId; shareOverlay.classList.add('open'); shareOverlay.setAttribute('aria-hidden','false');
-      shareLinkInput.value=''; shareLinkInput.placeholder='Generating…'; setTimeout(()=>createShareBtn.focus(),10);
-    }
+    /* Share modal */
+    function openShareModal(convId){ pendingShareConvId=convId; shareOverlay.classList.add('open'); shareOverlay.setAttribute('aria-hidden','false'); shareLinkInput.value=''; shareLinkInput.placeholder='Generating…'; setTimeout(()=>createShareBtn.focus(),10); }
     function closeShareModal(){ shareOverlay.classList.remove('open'); shareOverlay.setAttribute('aria-hidden','true'); pendingShareConvId=null; }
     shareCloseBtn.addEventListener('click', closeShareModal);
     shareOverlay.addEventListener('click', (e)=>{ if(e.target===shareOverlay) closeShareModal(); });
@@ -345,6 +352,7 @@
       }catch{ showToast('Copy failed. Select and copy manually.'); }
     });
 
+    /* Conv list */
     async function loadConversations(selectId=null){
       const list = await api.listConvs();
       convListEl.innerHTML='';
@@ -389,6 +397,7 @@
       scrollToBottom();
     }
 
+    /* Auto-resize + Enter to send */
     function autoresize(){
       promptEl.style.height='auto';
       promptEl.style.height=Math.min(120,promptEl.scrollHeight)+'px';
@@ -397,6 +406,7 @@
     promptEl.addEventListener('input', autoresize);
     promptEl.addEventListener('keydown', (e)=>{ if(e.key==='Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); if(!sendBtn.disabled) composerEl.requestSubmit(); } });
 
+    /* Submit text */
     function shouldAutoTitleFor(convId){
       if (!convId) return true;
       if (pendingAutoTitle.has(convId)) return true;
@@ -404,7 +414,7 @@
       return t === 'new chat' || t === 'untitled' || t === '';
     }
 
-    composerEl.addEventListener('submit', async (e)=>{
+    document.getElementById('composer').addEventListener('submit', async (e)=>{
       e.preventDefault(); if(readOnly) return;
       const text=(promptEl.value||'').trim(); if(!text) return;
       renderMessage('user', text, now()); scrollToBottom();
@@ -441,6 +451,7 @@
       }
     });
 
+    /* Photo Solve */
     photoBtn.addEventListener('click',()=> !readOnly && photoFile.click());
     photoFile.addEventListener('change', async ()=>{
       if(readOnly) return;
@@ -488,6 +499,7 @@
       }
     });
 
+    /* New chat */
     newChatBtn.addEventListener('click', async ()=>{
       if(readOnly) return;
       const c=await api.createConv('New chat');
@@ -499,6 +511,7 @@
       promptEl.focus();
     });
 
+    /* User menu behaviour */
     function toggleUserMenu(force){
       const open = force ?? !userMenu.classList.contains('open');
       userMenu.classList.toggle('open', open);
@@ -512,11 +525,12 @@
     umUpgrade.addEventListener('click', ()=>{ location.href='/index.html#pricing'; });
     umLogout.addEventListener('click', async ()=>{ try{ await api.logout(); }catch{} location.replace('/index.html'); });
 
+    /* Read-only shared links */
     async function enterReadOnlyView(token){
       readOnly = true;
       document.querySelector('.sidebar').style.display='none';
-      document.getElementById('composer').style.display='none';
-      document.getElementById('roBanner').classList.add('show');
+      composerEl.style.display='none';
+      roBanner.classList.add('show');
       updateComposerPad();
       clearMessages();
       try{
@@ -528,6 +542,7 @@
       }catch{ renderMessage('assistant','Could not load shared conversation.'); }
     }
 
+    /* Name/initials helpers */
     function nameFromEmail(email){
       const local = (email||'').split('@')[0];
       const pretty = local.replace(/[._-]+/g,' ').trim().split(' ').map(s=>s ? s[0].toUpperCase()+s.slice(1) : '').join(' ');
@@ -542,57 +557,73 @@
       const val = (a + b).toUpperCase();
       return val || 'U';
     }
+    function planLabelize(plan){
+      const p=(plan||'FREE').toString().toUpperCase();
+      return p[0]+p.slice(1).toLowerCase();
+    }
+    function setUserUI(email, plan){
+      const displayName = email ? nameFromEmail(email) : 'User';
+      const initials = initialsFrom(email || displayName);
+      const label = planLabelize(plan||'FREE');
 
+      userNameEl.textContent = displayName;
+      userPlanEl.textContent = label;
+      userAvatar.textContent  = initials;
+
+      umName.textContent   = displayName;
+      umEmail.textContent  = email || '';
+      umAvatar.textContent = initials;
+      umPlanBadge.textContent = label;
+
+      userCard.title = `${displayName} • ${label}`;
+    }
+
+    /* Auth + live plan refresh */
     async function guardAuth(){
       try{
-        const me = await api.me(); // may or may not have email immediately
-        if (me.status !== 'ok' && me.status !== 'unauthenticated') {
-          // unexpected; still try fallbacks
-        }
-        // Robust fallbacks so avatar/name never show "--" or "User" unless truly unknown
-        const email = (me?.user?.email) || localStorage.getItem('userEmail') || '';
-        const plan  = (me?.user?.plan) || 'FREE';
-
-        const displayName = email ? nameFromEmail(email) : 'User';
-        const initials = initialsFrom(email || displayName);
-        const planLabel = plan.charAt(0).toUpperCase()+plan.slice(1).toLowerCase();
-
-        userNameEl.textContent = displayName;
-        userPlanEl.textContent = planLabel;
-        userAvatar.textContent  = initials;
-
-        umName.textContent   = displayName;
-        umEmail.textContent  = email || '';
-        umAvatar.textContent = initials;
-        umPlanBadge.textContent = planLabel;
-
-        // If not authenticated at all, send to index
-        if (!(me?.user?.email) && !email) { location.replace('/index.html'); return false; }
-
-        userCard.title = `${displayName} • ${planLabel}`;
-        return true;
-      }catch{
-        // Final fallback: try localStorage email before redirecting
-        const email = localStorage.getItem('userEmail');
-        if (email){
-          const displayName = nameFromEmail(email);
-          const initials = initialsFrom(email);
-          userNameEl.textContent = displayName;
-          userPlanEl.textContent = 'Free';
-          userAvatar.textContent  = initials;
-          umName.textContent = displayName; umEmail.textContent=email; umAvatar.textContent=initials; umPlanBadge.textContent='Free';
+        const me = await api.me();
+        if (me.status !== 'ok' || !me.user?.email){
+          const emailLS = localStorage.getItem('userEmail');
+          if (!emailLS) { location.replace('/index.html'); return false; }
+          setUserUI(emailLS, 'FREE');
           return true;
         }
-        location.replace('/index.html'); return false;
+        setUserUI(me.user.email, me.user.plan || 'FREE');
+        return true;
+      }catch{
+        const emailLS = localStorage.getItem('userEmail');
+        if (!emailLS) { location.replace('/index.html'); return false; }
+        setUserUI(emailLS, 'FREE');
+        return true;
       }
     }
 
+    async function refreshPlan(){
+      try{
+        const me = await api.me();
+        if (me?.user?.email){
+          // Only update if the label actually changed
+          const newLabel = planLabelize(me.user.plan||'FREE');
+          if (userPlanEl.textContent !== newLabel){
+            setUserUI(me.user.email, me.user.plan||'FREE');
+          }
+        }
+      }catch{/* ignore transient errors */}
+    }
+
+    /* Init */
     (async function init(){
       const p=new URLSearchParams(location.search);
       const shareToken=p.get('share');
       if(shareToken){ await enterReadOnlyView(shareToken); return; }
 
       const ok=await guardAuth(); if(!ok) return;
+
+      // Keep the plan fresh after upgrades
+      document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refreshPlan(); });
+      window.addEventListener('focus', refreshPlan);
+      setInterval(refreshPlan, 15000); // lightweight heartbeat
+
       const fromUrl = p.get('c');
       await loadConversations(fromUrl?Number(fromUrl):null);
       if(fromUrl){ currentConvId=Number(fromUrl); await showConversation(currentConvId); }
