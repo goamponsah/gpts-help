@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>GPTs Help – Learn Smarter with AI</title>
+  <title>GPTs Help – Master Math with AI</title>
   <style>
     :root {
       --brand:#6f42c1;   /* Purple */
@@ -16,12 +16,13 @@
       --shadow:0 16px 36px rgba(0,0,0,.08);
       --error:#dc3545;
       --ok:#198754;
+      --ink:#0f1117;
     }
     *{box-sizing:border-box}
     body{margin:0;font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;color:var(--text);background:var(--bg)}
     a{color:var(--brand);text-decoration:none}
 
-    /* Header (single Login / Sign up area like ChatGPT) */
+    /* Header */
     header{background:#fff;border-bottom:1px solid #eee}
     .nav{max-width:1200px;margin:0 auto;padding:1rem 2rem;display:flex;align-items:center;justify-content:space-between}
     .brand{font-weight:800;letter-spacing:.2px}
@@ -32,15 +33,37 @@
     /* Hero */
     .hero{background:linear-gradient(135deg, var(--brand), #9c6fff);color:#fff;text-align:center;padding:5rem 2rem}
     .hero h1{font-size:clamp(2rem,4vw,3rem);margin-bottom:1rem}
-    .hero p{font-size:1.1rem;max-width:720px;margin:0 auto 0;opacity:.98}
+    .hero p{font-size:1.1rem;max-width:820px;margin:0 auto 1.25rem;opacity:.98}
+    .hero-cta{display:flex;gap:.6rem;justify-content:center;flex-wrap:wrap}
+    .btn{padding:.85rem 1.2rem;font-weight:700;border:none;border-radius:10px;cursor:pointer}
+    .btn-primary{background:var(--accent);color:#000}
+    .btn-secondary{background:#fff;color:var(--brand);border:1px solid var(--border)}
 
     /* Sections */
     .container{max-width:1200px;margin:0 auto;padding:2rem}
     h2{margin:.5rem 0}
 
+    /* “See it solve a photo” */
+    .demo{display:grid;grid-template-columns:1.2fr 1fr;gap:1.5rem;margin-top:1.5rem}
+    .demo-card{background:#fff;border:1px solid #eee;border-radius:14px;padding:16px;box-shadow:0 6px 16px rgba(0,0,0,.06)}
+    .demo-input{display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;margin-top:.5rem}
+    .pill{display:inline-flex;gap:.4rem;align-items:center;background:#f1ecff;color:#3c2a75;border:1px solid #e3dcff;padding:.35rem .6rem;border-radius:999px;font-size:.85rem;font-weight:600}
+    .upload-btn{border:1px dashed #c9b7ff;background:#faf8ff;color:#3c2a75;font-weight:700;border-radius:10px;padding:.7rem 1rem;cursor:pointer}
+    .demo-hint{color:var(--muted);font-size:.9rem;margin-top:.4rem}
+    .preview{background:#0e0f13;color:#e7eaf1;border:1px solid #232634;border-radius:12px;padding:14px;min-height:160px;white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+    .preview .ok{color:#8ff0b3}
+    .preview .dim{color:#8b93ad}
+    .thumb{display:inline-block;max-width:260px;border-radius:10px;border:1px solid #ddd}
+
     /* Features */
     .features{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1.5rem;margin-top:2rem}
     .card{background:#fff;border:1px solid #eee;border-radius:12px;padding:1.5rem;box-shadow:0 4px 10px rgba(0,0,0,0.05)}
+    .check{color:#198754;font-weight:800;margin-right:.3rem}
+
+    /* Social proof bar */
+    .proof{display:flex;flex-wrap:wrap;gap:.8rem;align-items:center;margin-top:1rem;color:#2f3640}
+    .badge{display:inline-flex;gap:.4rem;align-items:center;background:#fff;border:1px solid #eee;border-radius:999px;padding:.35rem .7rem;font-size:.85rem}
+    .star{color:#f8b400}
 
     /* Pricing */
     .plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.5rem;margin-top:2rem}
@@ -49,10 +72,9 @@
     .price{font-size:2rem;color:var(--brand);margin:.5rem 0 1rem}
     .plan ul{list-style:none;padding:0;margin:1rem 0;color:var(--muted);text-align:left}
     .plan li{margin:.35rem 0}
-    .badge{position:absolute;top:12px;right:12px;background:var(--brand);color:#fff;font-size:.75rem;padding:.25rem .5rem;border-radius:999px}
-    .btn{padding:.85rem 1.2rem;font-weight:700;border:none;border-radius:10px;cursor:pointer}
-    .btn-primary{background:var(--accent);color:#000}
-    .btn-secondary{background:#fff;color:var(--brand);border:1px solid var(--border)}
+    .plan .key{color:#212433;font-weight:700}
+    .plan .limit{color:#9a7cff;font-weight:700}
+    .badge-right{position:absolute;top:12px;right:12px;background:var(--brand);color:#fff;font-size:.75rem;padding:.25rem .5rem;border-radius:999px}
 
     /* Testimonials */
     .testimonials{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.5rem;margin-top:2rem}
@@ -82,7 +104,7 @@
   </style>
 </head>
 <body>
-  <!-- Header (single spot for auth buttons) -->
+  <!-- Header -->
   <header>
     <div class="nav">
       <div class="brand">GPTs Help</div>
@@ -97,17 +119,55 @@
   <!-- Hero -->
   <section class="hero">
     <h1>Master Math with AI</h1>
-    <p>Get step-by-step tutoring, clear proofs, and worked examples. Start free, upgrade anytime.</p>
+    <p>Take a photo of any math problem and get clear, step-by-step solutions with reasoning and worked steps.</p>
+    <div class="hero-cta">
+      <button class="btn btn-primary" id="heroTryPhoto">📷 Try Photo Solve</button>
+      <button class="btn btn-secondary" id="heroSignup">Create free account</button>
+    </div>
+    <div class="proof">
+      <span class="badge"><span class="star">★</span> Loved by students</span>
+      <span class="badge">Algebra • Calculus • Trig • Probability</span>
+      <span class="badge">Fast & Private</span>
+    </div>
+  </section>
+
+  <!-- See it solve a photo -->
+  <section class="container">
+    <h2>See it solve a photo</h2>
+    <div class="demo">
+      <div class="demo-card">
+        <div class="pill">Photo → Steps</div>
+        <div class="demo-input">
+          <button class="upload-btn" id="demoUploadBtn">Upload a math photo</button>
+          <input type="file" id="demoFile" accept="image/png,image/jpeg,image/jpg,image/webp" hidden />
+          <span class="demo-hint">Try a clear photo of an equation or word problem (≤ 6 MB).</span>
+        </div>
+        <div style="margin-top:12px;">
+          <img id="demoThumb" class="thumb" alt="" style="display:none"/>
+        </div>
+      </div>
+
+      <div class="demo-card">
+        <div class="pill">Solution Preview</div>
+        <div id="demoPreview" class="preview">
+          <span class="dim">No image yet.</span> Upload a photo to see step-by-step reasoning here.
+        </div>
+        <div style="margin-top:10px; display:flex; gap:.6rem; flex-wrap:wrap;">
+          <button class="btn btn-primary" id="goUnlimitedBtn">Unlock unlimited Photo Solve</button>
+          <a href="/chat.html" class="btn btn-secondary" id="openFullChatBtn">Open full chat</a>
+        </div>
+      </div>
+    </div>
   </section>
 
   <!-- Features -->
   <section class="container">
     <h2>Why Choose GPTs Help?</h2>
     <div class="features">
-      <div class="card"><h3>Step-by-Step Solutions</h3><p>Clear reasoning with intermediate steps and explanations.</p></div>
-      <div class="card"><h3>Exam-Ready Practice</h3><p>Adaptive practice sets with instant feedback and hints.</p></div>
-      <div class="card"><h3>Worked Examples Library</h3><p>Hundreds of curated examples across algebra, calculus, and more.</p></div>
-      <div class="card"><h3>Secure & Fast</h3><p>Trusted Paystack payments. Your study data stays private.</p></div>
+      <div class="card"><h3>Step-by-Step Solutions</h3><p><span class="check">✓</span>Explain every step, not just the final answer.</p></div>
+      <div class="card"><h3>Multiple Methods</h3><p><span class="check">✓</span>Get alternate approaches and hints.</p></div>
+      <div class="card"><h3>LaTeX-Quality Math</h3><p><span class="check">✓</span>Crisp, readable formulas and proofs.</p></div>
+      <div class="card"><h3>Exam-Ready Practice</h3><p><span class="check">✓</span>Drills with instant feedback.</p></div>
     </div>
   </section>
 
@@ -121,24 +181,24 @@
         <h3>Free Plan</h3>
         <div class="price">₵0 / mo</div>
         <ul>
-          <li>Up to 10 math questions / month</li>
+          <li><span class="limit">10 Photo Solve</span> credits / month</li>
           <li>Basic step-by-step explanations</li>
-          <li>Access to selected worked examples</li>
+          <li>Selected worked examples</li>
         </ul>
         <button class="btn btn-secondary" id="startFreeBtn">Start free</button>
       </div>
 
       <!-- Plus Monthly -->
       <div class="plan">
-        <div class="badge">Popular</div>
+        <div class="badge-right">Popular</div>
         <h3>Plus Monthly</h3>
         <div class="price">₵99 / mo</div>
         <ul>
-          <li>Unlimited math problem solving</li>
+          <li class="key">Unlimited Photo Solve</li>
           <li>Advanced reasoning & proofs</li>
           <li>Full worked-examples library</li>
         </ul>
-        <button class="btn btn-primary" data-plan="PLUS_MONTHLY" id="plusMonthlyBtn">Subscribe Monthly</button>
+        <button class="btn btn-primary" id="plusMonthlyBtn">Subscribe Monthly</button>
       </div>
 
       <!-- Pro Annual -->
@@ -146,11 +206,11 @@
         <h3>Pro Annual</h3>
         <div class="price">₵790 / yr</div>
         <ul>
+          <li class="key">Unlimited Photo Solve</li>
           <li>Everything in Plus</li>
-          <li>Annual discount (save 34%)</li>
           <li>Priority support</li>
         </ul>
-        <button class="btn btn-primary" data-plan="PRO_ANNUAL" id="proAnnualBtn">Subscribe Annually</button>
+        <button class="btn btn-primary" id="proAnnualBtn">Subscribe Annually</button>
       </div>
     </div>
   </section>
@@ -159,8 +219,8 @@
   <section class="container">
     <h2>What Our Users Say</h2>
     <div class="testimonials">
-      <div class="testimonial">“I finally understood calculus limits—your hints + step-by-step solved it!”<br><strong>— Ama A., Student</strong></div>
-      <div class="testimonial">“The worked examples and proofs made exam prep way faster.”<br><strong>— Daniel K., Engineering</strong></div>
+      <div class="testimonial">“I snapped my calculus question and got clean steps to the answer in seconds.”<br><strong>— Ama A., Student</strong></div>
+      <div class="testimonial">“The Photo Solve feature is worth it alone. Unlimited makes revision painless.”<br><strong>— Daniel K., Engineering</strong></div>
     </div>
   </section>
 
@@ -268,6 +328,10 @@
       const r = await fetch("/api/signup-free", { method:"POST", headers:{ "Content-Type":"application/json" }, credentials:"include", body:JSON.stringify({email,password})});
       return r.json();
     }
+    async function photoSolve(fd){
+      const r = await fetch("/api/photo-solve",{ method:"POST", credentials:"include", body:fd });
+      return r.json();
+    }
 
     // Utilities
     function goToChat(){ location.assign("/chat.html"); }
@@ -286,7 +350,7 @@
     function authOK(r){ return r && (r.status === "ok" || r.status === "success") && (r.user?.email || r.email); }
     function authEmail(r){ return (r && (r.user?.email || r.email)) || ""; }
 
-    // Header buttons + auth state
+    // Header auth state
     async function reflectAuth(){
       const me = await apiMe();
       const openChatBtn = document.getElementById("openChatBtn");
@@ -420,14 +484,13 @@
     signupPassword2.addEventListener('keydown',(e)=>{ if(e.key==='Enter') handleSignupSubmit(); });
     signupGoLogin.addEventListener('click',(e)=>{ e.preventDefault(); closeSignup(); openLogin(); });
 
-    // Pricing actions (no email input on page)
+    // Pricing actions
     const startFreeBtn   = document.getElementById("startFreeBtn");
     const plusMonthlyBtn = document.getElementById("plusMonthlyBtn");
     const proAnnualBtn   = document.getElementById("proAnnualBtn");
     let pendingPlan = null; // to resume checkout after auth
 
     startFreeBtn.addEventListener('click', ()=>{
-      // If authed, just open chat. Otherwise open signup
       apiMe().then(me=>{
         if(me?.status==="ok" && me.user?.email){ location.assign("/chat.html"); }
         else { openSignup(); }
@@ -476,7 +539,7 @@
     plusMonthlyBtn.addEventListener('click', ()=>startSubscriptionFlow(PLAN_CODE_PLUS_MONTHLY,"Plus Monthly"));
     proAnnualBtn.addEventListener('click', ()=>startSubscriptionFlow(PLAN_CODE_PRO_ANNUAL,"Pro Annual"));
 
-    // If login completes from modal & there is a pending plan, continue to checkout
+    // Resume checkout after login if pending
     (function wireLoginResume(){
       const oldHandleLoginSubmit = handleLoginSubmit;
       window.handleLoginSubmit = async function(){
@@ -494,6 +557,71 @@
       loginSubmit.addEventListener('click', window.handleLoginSubmit);
       loginPassword.addEventListener('keydown',(e)=>{ if(e.key==='Enter') window.handleLoginSubmit(); });
     })();
+
+    // Homepage demo: photo upload
+    const demoUploadBtn = document.getElementById('demoUploadBtn');
+    const demoFile      = document.getElementById('demoFile');
+    const demoThumb     = document.getElementById('demoThumb');
+    const demoPreview   = document.getElementById('demoPreview');
+    const heroTryPhoto  = document.getElementById('heroTryPhoto');
+    const heroSignup    = document.getElementById('heroSignup');
+    const goUnlimitedBtn= document.getElementById('goUnlimitedBtn');
+
+    heroSignup.addEventListener('click', ()=> openSignup());
+    heroTryPhoto.addEventListener('click', async ()=>{
+      const me = await apiMe();
+      if(me?.status==="ok" && me.user?.email){
+        demoFile.click();
+      }else{
+        openSignup();
+      }
+    });
+
+    demoUploadBtn.addEventListener('click', async ()=>{
+      const me = await apiMe();
+      if(me?.status==="ok" && me.user?.email){
+        demoFile.click();
+      }else{
+        openSignup();
+      }
+    });
+
+    goUnlimitedBtn.addEventListener('click', ()=> {
+      // Scroll to pricing; highlight Plus
+      document.getElementById('pricing').scrollIntoView({ behavior:'smooth' });
+    });
+
+    demoFile.addEventListener('change', async ()=>{
+      const file = demoFile.files && demoFile.files[0];
+      if(!file) return;
+      const okTypes=['image/png','image/jpeg','image/jpg','image/webp'];
+      if(!okTypes.includes(file.type)){ alert('Please choose a PNG, JPG, or WEBP image.'); demoFile.value=''; return; }
+      if(file.size>6*1024*1024){ alert('Image is larger than 6MB.'); demoFile.value=''; return; }
+
+      // Show thumb
+      const url = URL.createObjectURL(file);
+      demoThumb.src = url;
+      demoThumb.style.display = 'inline-block';
+
+      // Call photo-solve
+      const fd = new FormData();
+      fd.append('image', file);
+      fd.append('gptType', 'math');
+      // short homepage hint:
+      fd.append('attempt', 'Please extract the problem and solve step-by-step.');
+
+      demoPreview.textContent = "Solving… this can take a few seconds.";
+      try{
+        const r = await photoSolve(fd);
+        const text = (r && r.response) ? r.response : "No response text returned.";
+        demoPreview.textContent = text;
+      }catch(e){
+        demoPreview.innerHTML = '<span class="dim">Photo solve failed. Please try again or open the full chat.</span>';
+      }finally{
+        // revoke in a bit so the user can still see the thumb
+        setTimeout(()=> URL.revokeObjectURL(url), 30000);
+      }
+    });
 
     document.getElementById("year").textContent = new Date().getFullYear();
     reflectAuth();
