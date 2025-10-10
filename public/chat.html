@@ -52,7 +52,7 @@
     .u-plan{font-size:12px;color:var(--muted)}
     .carat{color:#aab1c7}
 
-    /* User dropdown (like ChatGPT) */
+    /* User dropdown */
     .user-menu{
       position:absolute;
       left:10px;
@@ -125,7 +125,6 @@
     .toast.show{display:block}
   </style>
 
-  <!-- Markdown renderer + sanitizer -->
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 </head>
@@ -139,7 +138,7 @@
       </div>
       <div class="side-list" id="convList"></div>
 
-      <!-- User dropdown (hidden by default) -->
+      <!-- User dropdown -->
       <div class="user-menu" id="userMenu" role="menu" aria-hidden="true">
         <div class="um-head">
           <div class="avatar" id="umAvatar">--</div>
@@ -149,10 +148,7 @@
           </div>
         </div>
         <div class="um-item" id="umUpgrade"><span class="um-icon">⬆️</span><span class="um-text">Upgrade plan</span><span class="um-right" id="umPlanBadge">Free</span></div>
-        <div class="um-item" id="umPersonal"><span class="um-icon">✨</span><span class="um-text">Personalization</span></div>
-        <div class="um-item" id="umSettings"><span class="um-icon">⚙️</span><span class="um-text">Settings</span></div>
         <div class="um-sep"></div>
-        <div class="um-item" id="umHelp"><span class="um-icon">❓</span><span class="um-text">Help</span><span class="um-right">›</span></div>
         <div class="um-item" id="umLogout"><span class="um-icon">↩️</span><span class="um-text">Log out</span></div>
       </div>
 
@@ -184,7 +180,6 @@
           <div class="meta-row">
             <label for="gptType">Assistant</label>
             <select id="gptType">
-              <!-- Math GPT only -->
               <option value="math">Math GPT</option>
             </select>
             <span id="status" style="margin-left:auto;"></span>
@@ -261,9 +256,6 @@
     const umEmail    = document.getElementById('umEmail');
     const umPlanBadge= document.getElementById('umPlanBadge');
     const umUpgrade  = document.getElementById('umUpgrade');
-    const umPersonal = document.getElementById('umPersonal');
-    const umSettings = document.getElementById('umSettings');
-    const umHelp     = document.getElementById('umHelp');
     const umLogout   = document.getElementById('umLogout');
 
     /* Share modal elements */
@@ -278,8 +270,8 @@
     let readOnly = false;
 
     /* Conversation title cache to support auto-titling on first message */
-    const convTitleCache = {};         // id -> title (from sidebar list)
-    const pendingAutoTitle = new Set(); // ids created via "+ New Chat" that still need a real title
+    const convTitleCache = {};
+    const pendingAutoTitle = new Set();
 
     /* Placeholder (always Math) */
     function updatePlaceholder() {
@@ -375,7 +367,6 @@
     async function loadConversations(selectId=null){
       const list = await api.listConvs();
       convListEl.innerHTML='';
-      // refresh cache
       list.forEach(c=>{ convTitleCache[c.id] = c.title; });
 
       list.filter(c=>!c.archived).forEach(c=>{
@@ -427,15 +418,15 @@
     promptEl.addEventListener('input', autoresize);
     promptEl.addEventListener('keydown', (e)=>{ if(e.key==='Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); if(!sendBtn.disabled) composerEl.requestSubmit(); } });
 
-    /* Decide if this conversation needs auto-title */
+    /* Auto-title helpers */
     function shouldAutoTitleFor(convId){
-      if (!convId) return true; // new (no id yet)
+      if (!convId) return true;
       if (pendingAutoTitle.has(convId)) return true;
       const t = (convTitleCache[convId]||'').trim().toLowerCase();
       return t === 'new chat' || t === 'untitled' || t === '';
     }
 
-    /* Submit text (Math only) */
+    /* Submit text */
     composerEl.addEventListener('submit', async (e)=>{
       e.preventDefault(); if(readOnly) return;
       const text=(promptEl.value||'').trim(); if(!text) return;
@@ -473,7 +464,7 @@
       }
     });
 
-    /* Photo Solve (Math only) */
+    /* Photo Solve */
     photoBtn.addEventListener('click',()=> !readOnly && photoFile.click());
     photoFile.addEventListener('change', async ()=>{
       if(readOnly) return;
@@ -545,9 +536,6 @@
     document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') toggleUserMenu(false); });
 
     umUpgrade.addEventListener('click', ()=>{ location.href='/index.html#pricing'; });
-    umPersonal.addEventListener('click', ()=>{ alert('Personalization is coming soon.'); toggleUserMenu(false); });
-    umSettings.addEventListener('click', ()=>{ alert('Settings are coming soon.'); toggleUserMenu(false); });
-    umHelp.addEventListener('click', ()=>{ alert('Help center is coming soon.'); toggleUserMenu(false); });
     umLogout.addEventListener('click', async ()=>{ try{ await api.logout(); }catch{} location.replace('/index.html'); });
 
     /* Read-only shared links */
@@ -567,7 +555,7 @@
       }catch{ renderMessage('assistant','Could not load shared conversation.'); }
     }
 
-    /* Format user name + initials from email */
+    /* Name helpers */
     function nameFromEmail(email){
       const local = (email||'').split('@')[0];
       const pretty = local.replace(/[._-]+/g,' ').trim().split(' ').map(s=>s ? s[0].toUpperCase()+s.slice(1) : '').join(' ');
@@ -593,14 +581,14 @@
         const displayName = nameFromEmail(email);
         const initials = initialsFrom(displayName);
 
-        document.getElementById('userName').textContent = displayName;
-        document.getElementById('userPlan').textContent = planLabel;
-        document.getElementById('userAvatar').textContent  = initials;
+        userNameEl.textContent = displayName;
+        userPlanEl.textContent = planLabel;
+        userAvatar.textContent  = initials;
 
-        document.getElementById('umName').textContent   = displayName;
-        document.getElementById('umEmail').textContent  = email;
-        document.getElementById('umAvatar').textContent = initials;
-        document.getElementById('umPlanBadge').textContent = planLabel;
+        umName.textContent   = displayName;
+        umEmail.textContent  = email;
+        umAvatar.textContent = initials;
+        umPlanBadge.textContent = planLabel;
 
         userCard.title = `${displayName} • ${planLabel}`;
         return true;
@@ -627,4 +615,3 @@
   </script>
 </body>
 </html>
-```0
