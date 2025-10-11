@@ -214,7 +214,7 @@
     function setVh(){ const vh = window.innerHeight * 0.01; document.documentElement.style.setProperty('--vh', `${vh*100}px`); }
     setVh(); window.addEventListener('resize', setVh);
 
-    /* API */
+    /* API (return JSON even for 4xx/5xx + include status) */
     const api = {
       listConvs: ()=>fetch('/api/conversations',{credentials:'include'}).then(r=>r.json()),
       createConv:(title)=>fetch('/api/conversations',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({title})}).then(r=>r.json()),
@@ -222,9 +222,17 @@
       deleteConv:(id)=>fetch(`/api/conversations/${id}`,{method:'DELETE',credentials:'include'}).then(r=>r.json()),
       archiveConv:(id,archived=true)=>fetch(`/api/conversations/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({archived})}).then(r=>r.json()),
       getConvMsgs:(id)=>fetch(`/api/conversations/${id}`,{credentials:'include'}).then(r=>r.json()),
-      chat:(payload)=>fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(payload)}).then(r=>r.json()),
+      chat: async (payload)=>{
+        const r = await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(payload)});
+        const j = await r.json().catch(()=>({}));
+        return Object.assign(j,{__status:r.status});
+      },
       me:()=>fetch('/api/me',{credentials:'include'}).then(r=>r.json()),
-      photoSolve:(fd)=>fetch('/api/photo-solve',{method:'POST',credentials:'include',body:fd}).then(r=>r.json()),
+      photoSolve: async (fd)=>{
+        const r = await fetch('/api/photo-solve',{method:'POST',credentials:'include',body:fd});
+        const j = await r.json().catch(()=>({}));
+        return Object.assign(j,{__status:r.status});
+      },
       shareCreate:(id)=>fetch(`/api/conversations/${id}/share`,{method:'POST',credentials:'include'}).then(r=>r.json()),
       getShared:(token)=>fetch(`/api/share/${encodeURIComponent(token)}`).then(r=>r.json()),
       logout:()=>fetch('/api/logout',{method:'POST',credentials:'include'})
@@ -331,14 +339,6 @@
     function scrollToBottom(){ messagesEl.scrollTop = messagesEl.scrollHeight; }
     function now(){ return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
 
-    /* Limit message helper (for FREE plan caps) */
-    function renderLimitMessage(msg){
-      const friendly = (msg || "You've reached your Free plan limit.") + `
-
-[Upgrade to continue →](/index.html#pricing)`;
-      renderMessage('assistant', friendly);
-    }
-
     /* Share modal */
     function openShareModal(convId){ pendingShareConvId=convId; shareOverlay.classList.add('open'); shareOverlay.setAttribute('aria-hidden','false'); shareLinkInput.value=''; shareLinkInput.placeholder='Generating…'; setTimeout(()=>createShareBtn.focus(),10); }
     function closeShareModal(){ shareOverlay.classList.remove('open'); shareOverlay.setAttribute('aria-hidden','true'); pendingShareConvId=null; }
@@ -414,7 +414,7 @@
     promptEl.addEventListener('input', autoresize);
     promptEl.addEventListener('keydown', (e)=>{ if(e.key==='Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); if(!sendBtn.disabled) composerEl.requestSubmit(); } });
 
-    /* Submit text */
+    /* Should we auto-title this convo? */
     function shouldAutoTitleFor(convId){
       if (!convId) return true;
       if (pendingAutoTitle.has(convId)) return true;
@@ -422,6 +422,7 @@
       return t === 'new chat' || t === 'untitled' || t === '';
     }
 
+    /* Submit text */
     document.getElementById('composer').addEventListener('submit', async (e)=>{
       e.preventDefault(); if(readOnly) return;
       const text=(promptEl.value||'').trim(); if(!text) return;
@@ -432,11 +433,6 @@
         if(currentConvId) payload.conversationId=currentConvId;
 
         const res=await api.chat(payload);
-
-        if (res && res.status === 'limit') {
-          renderLimitMessage(res.message);
-          return;
-        }
 
         if(!currentConvId && res.conversationId){
           currentConvId=res.conversationId;
@@ -455,7 +451,8 @@
           }catch{}
         }
 
-        renderMessage('assistant', res.response||''); scrollToBottom();
+        const out = (typeof res?.response === 'string') ? res.response : (res?.error ? 'Sorry, something went wrong.' : '');
+        renderMessage('assistant', out); scrollToBottom();
       }catch{
         renderMessage('assistant','Sorry, something went wrong. Please try again.'); scrollToBottom();
       }finally{
@@ -486,11 +483,6 @@
         const wasNew = !currentConvId;
         const res=await api.photoSolve(fd);
 
-        if (res && res.status === 'limit') {
-          renderLimitMessage(res.message);
-          return;
-        }
-
         if(wasNew && res.conversationId){
           currentConvId=res.conversationId;
           convTitleCache[currentConvId] = 'New chat';
@@ -508,7 +500,8 @@
           }catch{}
         }
 
-        renderMessage('assistant', res.response||'No response text returned.'); scrollToBottom();
+        const out = (typeof res?.response === 'string') ? res.response : (res?.error ? 'Photo solve failed.' : 'No response text returned.');
+        renderMessage('assistant', out); scrollToBottom();
       }catch{
         renderMessage('assistant','Photo solve failed. Please try another image.'); scrollToBottom();
       }finally{
@@ -625,7 +618,7 @@
             setUserUI(me.user.email, me.user.plan||'FREE');
           }
         }
-      }catch{/* ignore transient errors */}
+      }catch{/* ignore */}
     }
 
     /* Init */
@@ -639,7 +632,7 @@
       // Keep the plan fresh after upgrades
       document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refreshPlan(); });
       window.addEventListener('focus', refreshPlan);
-      setInterval(refreshPlan, 15000); // lightweight heartbeat
+      setInterval(refreshPlan, 15000);
 
       const fromUrl = p.get('c');
       await loadConversations(fromUrl?Number(fromUrl):null);
