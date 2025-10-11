@@ -31,9 +31,9 @@ const {
   OPENAI_MODEL,
   PAYSTACK_PUBLIC_KEY,
   PAYSTACK_SECRET_KEY,
-  PLAN_CODE_PLUS_MONTHLY,   // optional, used if you configured explicit plan codes
+  PLAN_CODE_PLUS_MONTHLY,   // optional
   PLAN_CODE_PRO_ANNUAL,     // optional
-  FRONTEND_ORIGIN,          // optional, if you host frontend elsewhere
+  FRONTEND_ORIGIN,          // optional
   FREE_DAILY_TEXT_LIMIT,
   FREE_DAILY_PHOTO_LIMIT,
 } = process.env;
@@ -63,7 +63,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// Create base tables if missing (ensure backtick closes correctly)
+// Create base tables if missing
 async function createBaseSchema() {
   await pool.query(`
     create table if not exists users (
@@ -162,19 +162,19 @@ async function migrateLegacyConversations() {
          and c.user_email = u.email
     `);
 
-    const placeholderEmail = \`legacy+\${crypto.randomBytes(6).toString("hex")}@gptshelp.local\`;
+    const placeholderEmail = `legacy+${crypto.randomBytes(6).toString("hex")}@gptshelp.local`;
     const u = await pool.query(
-      \`insert into users(email, plan) values ($1, 'FREE')
+      `insert into users(email, plan) values ($1, 'FREE')
        on conflict(email) do update set email=excluded.email
-       returning id\`,
+       returning id`,
       [placeholderEmail]
     );
     await pool.query(
-      \`update conversations set user_id=$1 where user_id is null\`,
+      `update conversations set user_id=$1 where user_id is null`,
       [u.rows[0].id]
     );
 
-    await pool.query(\`alter table conversations drop column user_email\`);
+    await pool.query(`alter table conversations drop column user_email`);
 
     await pool.query("commit");
     console.log("[MIGRATE] conversations.user_email -> user_id migration complete.");
@@ -313,7 +313,7 @@ async function openaiChat(messages) {
   return data?.choices?.[0]?.message?.content || "";
 }
 
-// ---------------- small utils for Paystack ----------------
+// ---------------- Paystack helpers ----------------
 function extractPlanCode(ps) {
   return (
     ps?.data?.plan?.plan_code ||
@@ -622,7 +622,6 @@ app.post("/api/chat", async (req, res) => {
       [convId]
     );
 
-    // Math-only, but keep gptType support if present
     const system =
       gptType === "math"
         ? "You are Math GPT. Solve math problems step-by-step with clear reasoning, and show workings. Be accurate and concise."
