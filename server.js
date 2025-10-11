@@ -105,8 +105,17 @@ async function createBaseSchema() {
       created_at  timestamptz not null default now()
     );
 
+    -- NEW: usage events for limits
+    create table if not exists usage_events (
+      id         bigserial primary key,
+      user_id    bigint not null references users(id) on delete cascade,
+      kind       text not null check (kind in ('PHOTO','TEXT')),
+      created_at timestamptz not null default now()
+    );
+
     create index if not exists conversations_user_idx on conversations(user_id, created_at desc);
     create index if not exists messages_conv_idx on messages(conversation_id, id);
+    create index if not exists usage_events_user_kind_idx on usage_events(user_id, kind, created_at);
   `);
 }
 
@@ -251,6 +260,39 @@ async function setUserPassword(email, pass) {
   await pool.query(
     `update users set pass_salt=$2, pass_hash=$3, updated_at=now() where email=$1`,
     [email, salt, hash]
+  );
+}
+
+// ---------------- usage helpers (limits) ----------------
+const FREE_MAX_PHOTO_LIFETIME = 2;   // lifetime photo solves for FREE
+const FREE_MAX_TEXT_PER_MONTH = 10;  // text chats per calendar month for FREE
+
+async function countPhotoSolvesLifetime(userId) {
+  const r = await pool.query(
+    `select count(*)::int as n
+       from usage_events
+      where user_id=$1 and kind='PHOTO'`,
+    [userId]
+  );
+  return r.rows[0]?.n ?? 0;
+}
+
+async function countTextSolvesThisMonth(userId) {
+  const r = await pool.query(
+    `select count(*)::int as n
+       from usage_events
+      where user_id=$1
+        and kind='TEXT'
+        and created_at >= date_trunc('month', now())`,
+    [userId]
+  );
+  return r.rows[0]?.n ?? 0;
+}
+
+async function addUsage(userId, kind) {
+  await pool.query(
+    `insert into usage_events(user_id, kind) values($1,$2)`,
+    [userId, kind]
   );
 }
 
@@ -516,12 +558,24 @@ app.get("/api/share/:token", async (req, res) => {
   res.json({ title: s.rows[0].title, messages: msgs.rows });
 });
 
-// ---------------- chat ----------------
+// ---------------- chat (TEXT solves) ----------------
 app.post("/api/chat", async (req, res) => {
   try {
     const u = await requireUser(req, res); if (!u) return;
     const { message, gptType, conversationId } = req.body || {};
     if (!message) return res.status(400).json({ error: "message required" });
+
+    // LIMITS: FREE plan -> 10 text messages per calendar month
+    const userPlan = (u.plan || "FREE").toUpperCase();
+    if (userPlan === "FREE") {
+      const used = await countTextSolvesThisMonth(u.id);
+      if (used >= FREE_MAX_TEXT_PER_MONTH) {
+        return res.status(200).json({
+          status: "limit",
+          message: "You've reached the 10 text solves per month on the Free plan. Upgrade to continue."
+        });
+      }
+    }
 
     let convId = conversationId ? Number(conversationId) : null;
     if (convId) {
@@ -560,6 +614,11 @@ app.post("/api/chat", async (req, res) => {
       [convId, "assistant", answer]
     );
 
+    // record usage for FREE (after success)
+    if (userPlan === "FREE") {
+      await addUsage(u.id, "TEXT");
+    }
+
     res.json({ response: answer, conversationId: convId });
   } catch (e) {
     console.error("chat", e);
@@ -567,12 +626,24 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-// ---------------- photo solve ----------------
+// ---------------- photo solve (PHOTO solves) ----------------
 app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
   try {
     const u = await requireUser(req, res); if (!u) return;
     const { gptType, conversationId, attempt } = req.body || {};
     if (!req.file) return res.status(400).json({ error: "image required" });
+
+    // LIMITS: FREE plan -> 2 lifetime photo solves
+    const userPlan = (u.plan || "FREE").toUpperCase();
+    if (userPlan === "FREE") {
+      const used = await countPhotoSolvesLifetime(u.id);
+      if (used >= FREE_MAX_PHOTO_LIFETIME) {
+        return res.status(200).json({
+          status: "limit",
+          message: "Free plan includes 2 photo solves. Upgrade to PLUS or PRO for unlimited photo solving."
+        });
+      }
+    }
 
     let convId = conversationId ? Number(conversationId) : null;
     if (convId) {
@@ -630,6 +701,12 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
       `insert into messages(conversation_id, role, content) values($1,$2,$3)`,
       [convId, "assistant", answer]
     );
+
+    // record usage for FREE (after success)
+    if (userPlan === "FREE") {
+      await addUsage(u.id, "PHOTO");
+    }
+
     res.json({ response: answer, conversationId: convId });
   } catch (e) {
     console.error("photo-solve", e);
