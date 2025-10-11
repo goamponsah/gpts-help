@@ -214,7 +214,7 @@
     function setVh(){ const vh = window.innerHeight * 0.01; document.documentElement.style.setProperty('--vh', `${vh*100}px`); }
     setVh(); window.addEventListener('resize', setVh);
 
-    /* API (return JSON even for 4xx/5xx + include status) */
+    /* API (capture HTTP status for quota handling) */
     const api = {
       listConvs: ()=>fetch('/api/conversations',{credentials:'include'}).then(r=>r.json()),
       createConv:(title)=>fetch('/api/conversations',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({title})}).then(r=>r.json()),
@@ -422,6 +422,14 @@
       return t === 'new chat' || t === 'untitled' || t === '';
     }
 
+    /* Render a quota/upgrade message */
+    function renderQuotaMessage(message, link){
+      const safeMsg = message || "You've reached the free limit.";
+      const url = link || "/index.html#pricing";
+      const md = `${safeMsg}\n\n[Upgrade now](${url})`;
+      renderMessage('assistant', md);
+    }
+
     /* Submit text */
     document.getElementById('composer').addEventListener('submit', async (e)=>{
       e.preventDefault(); if(readOnly) return;
@@ -434,6 +442,7 @@
 
         const res=await api.chat(payload);
 
+        // Create convo on first response (even if quota)
         if(!currentConvId && res.conversationId){
           currentConvId=res.conversationId;
           convTitleCache[currentConvId] = 'New chat';
@@ -441,6 +450,7 @@
           await loadConversations(currentConvId);
         }
 
+        // Auto title if allowed
         if (shouldAutoTitleFor(currentConvId) && text){
           const autoTitle=makeTitleFrom(text);
           try{
@@ -451,8 +461,15 @@
           }catch{}
         }
 
-        const out = (typeof res?.response === 'string') ? res.response : (res?.error ? 'Sorry, something went wrong.' : '');
-        renderMessage('assistant', out); scrollToBottom();
+        // Quota handling
+        if(res.__status === 402){
+          renderQuotaMessage(res.message, res.upgradeLink);
+        } else if (res.__status && res.__status !== 200){
+          renderMessage('assistant', res.message || 'Sorry, something went wrong. Please try again.');
+        } else {
+          renderMessage('assistant', typeof res?.response === 'string' ? res.response : ''); 
+        }
+        scrollToBottom();
       }catch{
         renderMessage('assistant','Sorry, something went wrong. Please try again.'); scrollToBottom();
       }finally{
@@ -500,8 +517,15 @@
           }catch{}
         }
 
-        const out = (typeof res?.response === 'string') ? res.response : (res?.error ? 'Photo solve failed.' : 'No response text returned.');
-        renderMessage('assistant', out); scrollToBottom();
+        if(res.__status === 402){
+          renderQuotaMessage(res.message, res.upgradeLink);
+        } else if (res.__status && res.__status !== 200){
+          renderMessage('assistant', res.message || 'Photo solve failed. Please try again.');
+        } else {
+          const out = (typeof res?.response === 'string') ? res.response : 'No response text returned.';
+          renderMessage('assistant', out);
+        }
+        scrollToBottom();
       }catch{
         renderMessage('assistant','Photo solve failed. Please try another image.'); scrollToBottom();
       }finally{
@@ -645,4 +669,3 @@
   </script>
 </body>
 </html>
-```0
