@@ -267,7 +267,7 @@
     let pendingShareConvId = null;
     let readOnly = false;
 
-    /* Title helpers for convs (unchanged) */
+    /* Title helpers for convs */
     const convTitleCache = {};
     const pendingAutoTitle = new Set();
 
@@ -330,6 +330,14 @@
     function clearMessages(){ messagesEl.innerHTML=''; }
     function scrollToBottom(){ messagesEl.scrollTop = messagesEl.scrollHeight; }
     function now(){ return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
+
+    /* Limit message helper (for FREE plan caps) */
+    function renderLimitMessage(msg){
+      const friendly = (msg || "You've reached your Free plan limit.") + `
+
+[Upgrade to continue →](/index.html#pricing)`;
+      renderMessage('assistant', friendly);
+    }
 
     /* Share modal */
     function openShareModal(convId){ pendingShareConvId=convId; shareOverlay.classList.add('open'); shareOverlay.setAttribute('aria-hidden','false'); shareLinkInput.value=''; shareLinkInput.placeholder='Generating…'; setTimeout(()=>createShareBtn.focus(),10); }
@@ -425,6 +433,11 @@
 
         const res=await api.chat(payload);
 
+        if (res && res.status === 'limit') {
+          renderLimitMessage(res.message);
+          return;
+        }
+
         if(!currentConvId && res.conversationId){
           currentConvId=res.conversationId;
           convTitleCache[currentConvId] = 'New chat';
@@ -472,6 +485,11 @@
 
         const wasNew = !currentConvId;
         const res=await api.photoSolve(fd);
+
+        if (res && res.status === 'limit') {
+          renderLimitMessage(res.message);
+          return;
+        }
 
         if(wasNew && res.conversationId){
           currentConvId=res.conversationId;
@@ -602,7 +620,6 @@
       try{
         const me = await api.me();
         if (me?.user?.email){
-          // Only update if the label actually changed
           const newLabel = planLabelize(me.user.plan||'FREE');
           if (userPlanEl.textContent !== newLabel){
             setUserUI(me.user.email, me.user.plan||'FREE');
@@ -635,3 +652,4 @@
   </script>
 </body>
 </html>
+```0
