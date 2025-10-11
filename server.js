@@ -41,6 +41,10 @@ if (!JWT_SECRET) console.warn("[WARN] JWT_SECRET not set; a random one will be u
 if (!OPENAI_API_KEY) console.warn("[WARN] OPENAI_API_KEY not set.");
 const OPENAI_DEFAULT_MODEL = OPENAI_MODEL || "gpt-4o-mini";
 
+// === FREE TIER LIMITS (per device per month; also enforced per user when FREE) ===
+const FREE_TEXT_LIMIT  = 10;
+const FREE_PHOTO_LIMIT = 2;
+
 // ---------------- middlewares ----------------
 if (FRONTEND_ORIGIN) {
   app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
@@ -105,17 +109,22 @@ async function createBaseSchema() {
       created_at  timestamptz not null default now()
     );
 
-    -- NEW: usage events for limits
-    create table if not exists usage_events (
-      id         bigserial primary key,
-      user_id    bigint not null references users(id) on delete cascade,
-      kind       text not null check (kind in ('PHOTO','TEXT')),
-      created_at timestamptz not null default now()
+    -- per-device, per-month free usage
+    create table if not exists free_usage (
+      id          bigserial primary key,
+      month_key   text not null,         -- 'YYYY-MM'
+      device_id   text not null,
+      user_id     bigint,                -- optional, helpful for analysis
+      ip          text,
+      photo_count int not null default 0,
+      text_count  int not null default 0,
+      created_at  timestamptz not null default now(),
+      unique(month_key, device_id)
     );
 
     create index if not exists conversations_user_idx on conversations(user_id, created_at desc);
     create index if not exists messages_conv_idx on messages(conversation_id, id);
-    create index if not exists usage_events_user_kind_idx on usage_events(user_id, kind, created_at);
+    create index if not exists free_usage_user_idx on free_usage(user_id, month_key);
   `);
 }
 
@@ -131,11 +140,7 @@ async function migrateLegacyConversations() {
   const hasUserId    = colCheck.rows.some(r => r.column_name === "user_id");
 
   if (!hasUserEmail) {
-    // Ensure user_id is NOT NULL and FK if present but nullable
-    if (hasUserId) {
-      // if any null user_id remains, keep nullable (do not ALTER to NOT NULL to avoid crashes)
-      // app logic never creates new rows without user_id.
-    }
+    // Ensure user_id is present; keep nullable to avoid rewrite failures on legacy rows
     return;
   }
 
@@ -143,12 +148,10 @@ async function migrateLegacyConversations() {
 
   await pool.query("begin");
   try {
-    // 1) ensure user_id column exists
     if (!hasUserId) {
       await pool.query(`alter table conversations add column user_id bigint`);
     }
 
-    // 2) create user rows for any emails in conversations not already in users
     await pool.query(`
       insert into users (email, plan)
       select distinct coalesce(user_email,'') as email, 'FREE'
@@ -157,7 +160,6 @@ async function migrateLegacyConversations() {
       on conflict (email) do nothing
     `);
 
-    // 3) backfill user_id by joining on users.email
     await pool.query(`
       update conversations c
          set user_id = u.id
@@ -166,7 +168,6 @@ async function migrateLegacyConversations() {
          and c.user_email = u.email
     `);
 
-    // 4) handle any rows with null user_email -> create a placeholder user
     const placeholderEmail = `legacy+${crypto.randomBytes(6).toString("hex")}@gptshelp.local`;
     const u = await pool.query(
       `insert into users(email, plan) values ($1, 'FREE')
@@ -179,7 +180,6 @@ async function migrateLegacyConversations() {
       [u.rows[0].id]
     );
 
-    // 5) drop user_email column
     await pool.query(`alter table conversations drop column user_email`);
 
     await pool.query("commit");
@@ -226,6 +226,20 @@ function needEmail(req, res) {
   return s.email;
 }
 
+// ---- device id cookie + month key ----
+function getOrSetDeviceId(req, res) {
+  let did = req.cookies?.did;
+  if (!did) {
+    did = crypto.randomBytes(24).toString("hex");
+    // device id is not sensitive; we DO NOT use httpOnly so client can read if needed
+    res.cookie("did", did, { secure: true, sameSite: "Lax", path: "/", maxAge: 365 * 24 * 60 * 60 * 1000 });
+  }
+  return did;
+}
+function monthKey(d = new Date()) {
+  return d.toISOString().slice(0, 7); // 'YYYY-MM'
+}
+
 // password hashing (scrypt)
 const scrypt = util.promisify(crypto.scrypt);
 async function hashPassword(pw) {
@@ -260,39 +274,6 @@ async function setUserPassword(email, pass) {
   await pool.query(
     `update users set pass_salt=$2, pass_hash=$3, updated_at=now() where email=$1`,
     [email, salt, hash]
-  );
-}
-
-// ---------------- usage helpers (limits) ----------------
-const FREE_MAX_PHOTO_LIFETIME = 2;   // lifetime photo solves for FREE
-const FREE_MAX_TEXT_PER_MONTH = 10;  // text chats per calendar month for FREE
-
-async function countPhotoSolvesLifetime(userId) {
-  const r = await pool.query(
-    `select count(*)::int as n
-       from usage_events
-      where user_id=$1 and kind='PHOTO'`,
-    [userId]
-  );
-  return r.rows[0]?.n ?? 0;
-}
-
-async function countTextSolvesThisMonth(userId) {
-  const r = await pool.query(
-    `select count(*)::int as n
-       from usage_events
-      where user_id=$1
-        and kind='TEXT'
-        and created_at >= date_trunc('month', now())`,
-    [userId]
-  );
-  return r.rows[0]?.n ?? 0;
-}
-
-async function addUsage(userId, kind) {
-  await pool.query(
-    `insert into usage_events(user_id, kind) values($1,$2)`,
-    [userId, kind]
   );
 }
 
@@ -451,6 +432,23 @@ async function requireUser(req, res) {
   return u;
 }
 
+// ---------------- free-quota helpers ----------------
+async function getOrCreateDeviceUsage({ deviceId, userId, ip, month_key }) {
+  const r = await pool.query(
+    `insert into free_usage(month_key, device_id, user_id, ip)
+         values($1,$2,$3,$4)
+     on conflict(month_key, device_id) do update set device_id=excluded.device_id
+     returning id, photo_count, text_count`,
+    [month_key, deviceId, userId || null, ip || null]
+  );
+  return r.rows[0];
+}
+
+function isPaid(plan) {
+  const p = String(plan || "FREE").toUpperCase();
+  return p === "PLUS" || p === "PRO";
+}
+
 // ---------------- conversations ----------------
 app.get("/api/conversations", async (req, res) => {
   const u = await requireUser(req, res); if (!u) return;
@@ -558,24 +556,31 @@ app.get("/api/share/:token", async (req, res) => {
   res.json({ title: s.rows[0].title, messages: msgs.rows });
 });
 
-// ---------------- chat (TEXT solves) ----------------
+// ---------------- chat (TEXT) ----------------
 app.post("/api/chat", async (req, res) => {
   try {
     const u = await requireUser(req, res); if (!u) return;
-    const { message, gptType, conversationId } = req.body || {};
-    if (!message) return res.status(400).json({ error: "message required" });
 
-    // LIMITS: FREE plan -> 10 text messages per calendar month
-    const userPlan = (u.plan || "FREE").toUpperCase();
-    if (userPlan === "FREE") {
-      const used = await countTextSolvesThisMonth(u.id);
-      if (used >= FREE_MAX_TEXT_PER_MONTH) {
-        return res.status(200).json({
-          status: "limit",
-          message: "You've reached the 10 text solves per month on the Free plan. Upgrade to continue."
+    // Device + month usage row
+    const deviceId = getOrSetDeviceId(req, res);
+    const mkey = monthKey();
+    const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket.remoteAddress || null;
+
+    // Enforce free limits for FREE plan (paid are unlimited)
+    if (!isPaid(u.plan)) {
+      const usage = await getOrCreateDeviceUsage({ deviceId, userId: u.id, ip, month_key: mkey });
+      if (usage.text_count >= FREE_TEXT_LIMIT) {
+        return res.status(402).json({
+          error: "limit_reached",
+          message: `You've used your free ${FREE_TEXT_LIMIT} text problems on this device for ${mkey}. Upgrade to continue.`
         });
       }
+      // Pre-increment on accept (so fast-fail if concurrent)
+      await pool.query(`update free_usage set text_count = text_count + 1 where id=$1`, [usage.id]);
     }
+
+    const { message, gptType, conversationId } = req.body || {};
+    if (!message) return res.status(400).json({ error: "message required" });
 
     let convId = conversationId ? Number(conversationId) : null;
     if (convId) {
@@ -596,7 +601,7 @@ app.post("/api/chat", async (req, res) => {
     );
 
     const system =
-      gptType === "math"
+      (gptType === "math" || !gptType)
         ? "You are Math GPT. Solve math problems step-by-step with clear reasoning, and show workings. Be accurate and concise."
         : "You are a helpful writing assistant. Be clear, structured, and helpful.";
 
@@ -614,11 +619,6 @@ app.post("/api/chat", async (req, res) => {
       [convId, "assistant", answer]
     );
 
-    // record usage for FREE (after success)
-    if (userPlan === "FREE") {
-      await addUsage(u.id, "TEXT");
-    }
-
     res.json({ response: answer, conversationId: convId });
   } catch (e) {
     console.error("chat", e);
@@ -626,24 +626,30 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-// ---------------- photo solve (PHOTO solves) ----------------
+// ---------------- photo solve (VISION) ----------------
 app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
   try {
     const u = await requireUser(req, res); if (!u) return;
-    const { gptType, conversationId, attempt } = req.body || {};
-    if (!req.file) return res.status(400).json({ error: "image required" });
 
-    // LIMITS: FREE plan -> 2 lifetime photo solves
-    const userPlan = (u.plan || "FREE").toUpperCase();
-    if (userPlan === "FREE") {
-      const used = await countPhotoSolvesLifetime(u.id);
-      if (used >= FREE_MAX_PHOTO_LIFETIME) {
-        return res.status(200).json({
-          status: "limit",
-          message: "Free plan includes 2 photo solves. Upgrade to PLUS or PRO for unlimited photo solving."
+    // Device + month usage row
+    const deviceId = getOrSetDeviceId(req, res);
+    const mkey = monthKey();
+    const ip = req.headers["x-forwarded-for"]?.split(",")[0]?.trim() || req.socket.remoteAddress || null;
+
+    // Enforce free limits for FREE plan (paid are unlimited)
+    if (!isPaid(u.plan)) {
+      const usage = await getOrCreateDeviceUsage({ deviceId, userId: u.id, ip, month_key: mkey });
+      if (usage.photo_count >= FREE_PHOTO_LIMIT) {
+        return res.status(402).json({
+          error: "limit_reached",
+          message: `You've used your free ${FREE_PHOTO_LIMIT} Photo Solves on this device for ${mkey}. Upgrade to continue.`
         });
       }
+      await pool.query(`update free_usage set photo_count = photo_count + 1 where id=$1`, [usage.id]);
     }
+
+    const { gptType, conversationId, attempt } = req.body || {};
+    if (!req.file) return res.status(400).json({ error: "image required" });
 
     let convId = conversationId ? Number(conversationId) : null;
     if (convId) {
@@ -663,7 +669,7 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
     const dataUrl = `data:${mime};base64,${b64}`;
 
     const system =
-      gptType === "math"
+      (gptType === "math" || !gptType)
         ? "You are Math GPT. Read the problem from the image and solve it step-by-step. Explain clearly."
         : "You are a helpful assistant. Describe and analyze the content of the image, then answer the user's request.";
 
@@ -701,12 +707,6 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
       `insert into messages(conversation_id, role, content) values($1,$2,$3)`,
       [convId, "assistant", answer]
     );
-
-    // record usage for FREE (after success)
-    if (userPlan === "FREE") {
-      await addUsage(u.id, "PHOTO");
-    }
-
     res.json({ response: answer, conversationId: convId });
   } catch (e) {
     console.error("photo-solve", e);
