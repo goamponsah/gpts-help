@@ -1,5 +1,8 @@
-// server.js (ESM)
-// package.json: { "type": "module" }
+// server.js  (ESM)
+// package.json must include:  "type": "module"
+// Node 18+
+//
+// npm i express cookie-parser cors jsonwebtoken multer pg nodemailer
 
 import express from "express";
 import cookieParser from "cookie-parser";
@@ -15,11 +18,11 @@ import nodemailer from "nodemailer";
 
 const { Pool } = pg;
 
-// ---------- paths ----------
+// ---------------- paths ----------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ---------- app & env ----------
+// ---------------- app & env ----------------
 const app = express();
 
 const {
@@ -29,61 +32,66 @@ const {
   OPENAI_MODEL,
   PAYSTACK_PUBLIC_KEY,
   PAYSTACK_SECRET_KEY,
-  PLAN_CODE_PLUS_MONTHLY,
-  PLAN_CODE_PRO_ANNUAL,
-  FRONTEND_ORIGIN,
+  PLAN_CODE_PLUS_MONTHLY,   // optional explicit mapping
+  PLAN_CODE_PRO_ANNUAL,     // optional explicit mapping
+  FRONTEND_ORIGIN,          // optional if hosting frontend elsewhere
 
-  // Mail (Zoho SMTP)
+  // Email verification
   SMTP_HOST,
   SMTP_PORT,
   SMTP_SECURE,
   SMTP_USER,
   SMTP_PASS,
-  SMTP_FROM
+  SMTP_FROM,        // optional; defaults to SMTP_USER
+  APP_BASE_URL      // e.g., https://gptshelp.online
 } = process.env;
+
+if (!DATABASE_URL) console.error("[ERROR] DATABASE_URL not set");
+if (!JWT_SECRET) console.warn("[WARN] JWT_SECRET not set; a random one will be used (sessions reset on restart).");
+if (!OPENAI_API_KEY) console.warn("[WARN] OPENAI_API_KEY not set.");
+if (!APP_BASE_URL) console.warn("[WARN] APP_BASE_URL not set; verification links may be wrong.");
+if (!(SMTP_HOST && SMTP_PORT && SMTP_USER && SMTP_PASS)) {
+  console.warn("[WARN] SMTP_* env not fully set; email verification won't send.");
+}
 
 const OPENAI_DEFAULT_MODEL = OPENAI_MODEL || "gpt-4o-mini";
 
-// free plan monthly limits (by device)
-const FREE_TEXT_LIMIT  = 10;
-const FREE_PHOTO_LIMIT = 2;
-
-// ---------- middleware ----------
-if (FRONTEND_ORIGIN) app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
+// ---------------- middlewares ----------------
+if (FRONTEND_ORIGIN) {
+  app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
+}
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, "public")));
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-// ---------- db ----------
+// ---------------- db ----------------
 const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
+// Create base tables if missing
 async function createBaseSchema() {
   await pool.query(`
     create table if not exists users (
-      id             bigserial primary key,
-      email          text not null unique,
-      pass_salt      text,
-      pass_hash      text,
-      plan           text not null default 'FREE',
-      verified       boolean not null default false,
-      verify_token   text,
-      verify_expires timestamptz,
-      created_at     timestamptz not null default now(),
-      updated_at     timestamptz not null default now()
+      id            bigserial primary key,
+      email         text not null unique,
+      pass_salt     text,
+      pass_hash     text,
+      plan          text not null default 'FREE',
+      created_at    timestamptz not null default now(),
+      updated_at    timestamptz not null default now()
     );
 
     create table if not exists conversations (
-      id          bigserial primary key,
-      user_id     bigint references users(id) on delete cascade,
-      title       text not null,
-      archived    boolean not null default false,
-      created_at  timestamptz not null default now(),
-      updated_at  timestamptz not null default now()
+      id            bigserial primary key,
+      user_id       bigint,
+      title         text not null,
+      archived      boolean not null default false,
+      created_at    timestamptz not null default now(),
+      updated_at    timestamptz not null default now()
     );
 
     create table if not exists messages (
@@ -112,23 +120,82 @@ async function createBaseSchema() {
       created_at  timestamptz not null default now()
     );
 
-    -- device quotas (Option 1)
-    create table if not exists device_quotas (
-      id           bigserial primary key,
-      device_id    text not null,
-      period_start date not null,
-      text_used    int  not null default 0,
-      photo_used   int  not null default 0,
-      unique(device_id, period_start)
-    );
+    create index if not exists conversations_user_idx on conversations(user_id, created_at desc);
+    create index if not exists messages_conv_idx on messages(conversation_id, id);
+  `);
 
-    create index if not exists conv_user_idx on conversations(user_id, created_at desc);
-    create index if not exists msgs_conv_idx on messages(conversation_id, id);
+  // ***** Option A: Add email verification columns/idempotent *****
+  await pool.query(`
+    alter table users
+      add column if not exists is_verified boolean not null default false,
+      add column if not exists verify_token text,
+      add column if not exists verify_expires timestamptz;
+    create index if not exists users_verify_token_idx on users(verify_token);
   `);
 }
 
+// Migrate legacy schema (if conversations has user_email column)
 async function migrateLegacyConversations() {
-  // no legacy user_email migration needed in your latest schema; kept as no-op
+  const colCheck = await pool.query(`
+    select column_name
+      from information_schema.columns
+     where table_name='conversations'
+       and column_name in ('user_email','user_id')
+  `);
+  const hasUserEmail = colCheck.rows.some(r => r.column_name === "user_email");
+  const hasUserId    = colCheck.rows.some(r => r.column_name === "user_id");
+
+  if (!hasUserEmail) {
+    // ensure user_id stays nullable for any legacy/null rows
+    return;
+  }
+
+  console.log("[MIGRATE] Found legacy conversations.user_email. Migrating to user_id …");
+
+  await pool.query("begin");
+  try {
+    if (!hasUserId) {
+      await pool.query(`alter table conversations add column user_id bigint`);
+    }
+
+    // ensure users rows exist
+    await pool.query(`
+      insert into users (email, plan)
+      select distinct coalesce(user_email,'') as email, 'FREE'
+        from conversations
+       where user_email is not null and user_email <> ''
+      on conflict (email) do nothing
+    `);
+
+    // backfill FK
+    await pool.query(`
+      update conversations c
+         set user_id = u.id
+        from users u
+       where c.user_id is null
+         and c.user_email = u.email
+    `);
+
+    // place any remaining nulls on a placeholder user
+    const placeholderEmail = `legacy+${crypto.randomBytes(6).toString("hex")}@gptshelp.local`;
+    const u = await pool.query(
+      `insert into users(email, plan) values ($1, 'FREE')
+       on conflict(email) do update set email=excluded.email
+       returning id`,
+      [placeholderEmail]
+    );
+    await pool.query(
+      `update conversations set user_id=$1 where user_id is null`,
+      [u.rows[0].id]
+    );
+
+    await pool.query(`alter table conversations drop column user_email`);
+    await pool.query("commit");
+    console.log("[MIGRATE] conversations.user_email -> user_id migration complete.");
+  } catch (e) {
+    await pool.query("rollback");
+    console.error("[MIGRATE] Failed; leaving legacy columns as-is:", e);
+  }
 }
 
 async function ensureSchema() {
@@ -137,9 +204,53 @@ async function ensureSchema() {
 }
 await ensureSchema();
 
-// ---------- crypto / auth helpers ----------
-const SJWT = JWT_SECRET || crypto.randomBytes(48).toString("hex");
+// ---------------- email (nodemailer) ----------------
+const mailer =
+  SMTP_HOST && SMTP_PORT && SMTP_USER && SMTP_PASS
+    ? nodemailer.createTransport({
+        host: SMTP_HOST,
+        port: Number(SMTP_PORT),
+        secure: String(SMTP_SECURE || "").toLowerCase() === "true" || Number(SMTP_PORT) === 465,
+        auth: { user: SMTP_USER, pass: SMTP_PASS }
+      })
+    : null;
 
+async function sendVerificationEmail(toEmail, token) {
+  if (!mailer) return false;
+  const base = APP_BASE_URL || "http://localhost:3000";
+  const link = `${base}/api/verify-email?token=${encodeURIComponent(token)}`;
+  const from = SMTP_FROM || SMTP_USER;
+
+  try {
+    await mailer.sendMail({
+      from,
+      to: toEmail,
+      subject: "Verify your email — GPTs Help",
+      html: `
+        <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,sans-serif">
+          <h2>Verify your email</h2>
+          <p>Thanks for signing up to GPTs Help. Click the button below to verify your email address:</p>
+          <p>
+            <a href="${link}" style="display:inline-block;background:#5865f2;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">
+              Verify Email
+            </a>
+          </p>
+          <p style="color:#666">Or copy this link and open it in your browser:<br/>
+            <span style="word-break:break-all">${link}</span>
+          </p>
+          <p style="color:#999;font-size:12px">If you did not sign up, please ignore this email.</p>
+        </div>
+      `
+    });
+    return true;
+  } catch (err) {
+    console.warn("[MAIL] send failed:", err?.message || err);
+    return false;
+  }
+}
+
+// ---------------- auth helpers ----------------
+const SJWT = JWT_SECRET || crypto.randomBytes(48).toString("hex");
 function cookieOptions() {
   const cross = Boolean(FRONTEND_ORIGIN);
   return {
@@ -168,17 +279,7 @@ function needEmail(req, res) {
   return s.email;
 }
 
-// Device id cookie for quota (Option 1)
-function getOrSetDeviceId(req, res) {
-  let did = req.cookies?.did;
-  if (!did) {
-    did = crypto.randomUUID();
-    res.cookie("did", did, { ...cookieOptions(), httpOnly: false }); // readable by client, persistent
-  }
-  return did;
-}
-
-// password hashing
+// password hashing (scrypt)
 const scrypt = util.promisify(crypto.scrypt);
 async function hashPassword(pw) {
   const salt = crypto.randomBytes(16).toString("hex");
@@ -197,8 +298,8 @@ async function verifyPassword(pw, salt, hash) {
 async function upsertUser(email, plan = "FREE") {
   const r = await pool.query(
     `insert into users(email, plan) values($1,$2)
-       on conflict(email) do update set email = excluded.email
-     returning *`,
+       on conflict(email) do update set email=excluded.email
+     returning id, email, plan, is_verified`,
     [email, plan]
   );
   return r.rows[0];
@@ -215,43 +316,7 @@ async function setUserPassword(email, pass) {
   );
 }
 
-// ---------- mail (SMTP / Zoho) ----------
-let mailReady = true;
-if (!SMTP_HOST || !SMTP_PORT || !SMTP_USER || !SMTP_PASS || !SMTP_FROM) {
-  console.warn("[WARN] SMTP_* env not fully set; email verification won't send.");
-  mailReady = false;
-}
-
-const transporter = mailReady
-  ? nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: Number(SMTP_PORT || 465),
-      secure: String(SMTP_SECURE || "true") === "true",
-      auth: { user: SMTP_USER, pass: SMTP_PASS },
-    })
-  : null;
-
-async function sendMail(to, subject, html) {
-  if (!mailReady) throw new Error("SMTP not configured");
-  return transporter.sendMail({
-    from: SMTP_FROM,
-    to,
-    subject,
-    html
-  });
-}
-
-function appBaseUrl(req) {
-  // prefer your domain if deployed
-  const domain = "https://gptshelp.online";
-  try {
-    const host = req.get("host");
-    if (host) return `https://${host}`;
-  } catch {}
-  return domain;
-}
-
-// ---------- OpenAI ----------
+// ---------------- OpenAI ----------------
 async function openaiChat(messages) {
   const r = await fetch("https://api.openai.com/v1/chat/completions", {
     method: "POST",
@@ -270,7 +335,7 @@ async function openaiChat(messages) {
   return data?.choices?.[0]?.message?.content || "";
 }
 
-// ---------- Paystack helpers ----------
+// ---------------- small utils for Paystack ----------------
 function extractPlanCode(ps) {
   return (
     ps?.data?.plan?.plan_code ||
@@ -290,7 +355,7 @@ function mapPlanCodeToLabel(code) {
   return "ONE_TIME";
 }
 
-// ---------- health & public-config ----------
+// ---------------- health & public config ----------------
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 app.get("/api/public-config", (_req, res) => {
   res.json({
@@ -301,80 +366,72 @@ app.get("/api/public-config", (_req, res) => {
   });
 });
 
-// ---------- auth ----------
+// ---------------- auth ----------------
 app.post("/api/signup-free", async (req, res) => {
   try {
     const { email, password } = req.body || {};
     if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
       return res.status(400).json({ status: "error", message: "Valid email required" });
     }
+    const u = await upsertUser(email, "FREE");
 
-    const user = await upsertUser(email, "FREE");
     if (password && password.length >= 8) await setUserPassword(email, password);
 
     // generate verify token
     const token = crypto.randomBytes(24).toString("hex");
-    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
+    const ttl = 1000 * 60 * 60 * 24; // 24h
+    const expiresAt = new Date(Date.now() + ttl);
     await pool.query(
-      `update users set verify_token=$2, verify_expires=$3, verified=false, updated_at=now() where id=$1`,
-      [user.id, token, expires]
+      `update users set verify_token=$2, verify_expires=$3, is_verified = coalesce(is_verified,false), updated_at=now() where email=$1`,
+      [email, token, expiresAt]
     );
 
-    // send email (best effort)
-    const base = appBaseUrl(req);
-    const link = `${base}/api/verify?token=${encodeURIComponent(token)}`;
-    try {
-      await sendMail(
-        email,
-        "Verify your email for GPTs Help",
-        `
-        <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,sans-serif">
-          <h2>Verify your email</h2>
-          <p>Click the button below to verify your email and start using Math GPT.</p>
-          <p><a href="${link}" style="display:inline-block;background:#6f42c1;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Verify Email</a></p>
-          <p>Or open this link: <br>${link}</p>
-          <p style="color:#666">This link expires in 24 hours.</p>
-        </div>`
-      );
-    } catch (err) {
-      console.warn("[MAIL] send failed:", err.message || err);
-    }
+    // try to send email
+    const sent = await sendVerificationEmail(email, token);
 
-    // set session cookie immediately; UI can block chat until verified if you want
-    setSessionCookie(res, { email, plan: "FREE" });
-    res.json({ status: "success", user: { email }, emailed: mailReady });
+    // sign in immediately (like many apps), but front-end can show "verify your email" banner
+    setSessionCookie(res, { email: u.email, plan: u.plan });
+    res.json({
+      status: "success",
+      user: { email: u.email, plan: u.plan, isVerified: false },
+      emailSent: sent
+    });
   } catch (e) {
-    console.error("signup-free", e);
+    console.error("signup-free error:", e);
     res.status(500).json({ status: "error", message: "Could not create user" });
   }
 });
 
-app.get("/api/verify", async (req, res) => {
+app.get("/api/verify-email", async (req, res) => {
   try {
-    const token = String(req.query.token || "");
+    const token = (req.query.token || "").toString();
     if (!token) return res.status(400).send("Missing token");
+
     const r = await pool.query(
-      `update users
-          set verified=true, verify_token=null, verify_expires=null, updated_at=now()
-        where verify_token=$1 and (verify_expires is null or verify_expires > now())
-      returning email`,
+      `select email, verify_expires from users where verify_token=$1`,
       [token]
     );
     if (!r.rowCount) return res.status(400).send("Invalid or expired token");
-    const email = r.rows[0].email;
-    // keep it simple: take user to chat
-    res.redirect("/chat.html");
+
+    const row = r.rows[0];
+    if (!row.verify_expires || new Date(row.verify_expires).getTime() < Date.now()) {
+      return res.status(400).send("Token expired");
+    }
+
+    await pool.query(
+      `update users
+          set is_verified=true, verify_token=null, verify_expires=null, updated_at=now()
+        where verify_token=$1`,
+      [token]
+    );
+
+    // Redirect to homepage with a flag
+    const base = APP_BASE_URL || "/";
+    res.redirect(`${base}/index.html?verified=1`);
   } catch (e) {
+    console.error("verify-email error:", e);
     res.status(500).send("Verification failed");
   }
-});
-
-app.get("/api/me", async (req, res) => {
-  const s = readSession(req);
-  if (!s?.email) return res.status(401).json({ status: "unauthenticated" });
-  const u = await getUserByEmail(s.email);
-  if (!u) return res.status(401).json({ status: "unauthenticated" });
-  res.json({ status: "ok", user: { email: u.email, plan: (u.plan || "FREE"), verified: !!u.verified } });
 });
 
 app.post("/api/login", async (req, res) => {
@@ -388,17 +445,25 @@ app.post("/api/login", async (req, res) => {
 
     if (!u.pass_hash) {
       if (password.length < 8) return res.status(400).json({ status: "error", message: "Password must be at least 8 characters." });
-      await setUserPassword(email, password); // first-time set
+      await setUserPassword(email, password); // first-time password set
     } else {
       const ok = await verifyPassword(password, u.pass_salt, u.pass_hash);
       if (!ok) return res.status(401).json({ status: "error", message: "Invalid email or password." });
     }
     setSessionCookie(res, { email: u.email, plan: u.plan || "FREE" });
-    res.json({ status: "ok", user: { email: u.email } });
+    res.json({ status: "ok", user: { email: u.email, isVerified: !!u.is_verified } });
   } catch (e) {
     console.error("login", e);
     res.status(500).json({ status: "error", message: "Login failed" });
   }
+});
+
+app.get("/api/me", async (req, res) => {
+  const s = readSession(req);
+  if (!s?.email) return res.status(401).json({ status: "unauthenticated" });
+  const u = await getUserByEmail(s.email);
+  if (!u) return res.status(401).json({ status: "unauthenticated" });
+  res.json({ status: "ok", user: { email: u.email, plan: (u.plan || "FREE"), isVerified: !!u.is_verified } });
 });
 
 app.post("/api/logout", (_req, res) => {
@@ -406,7 +471,7 @@ app.post("/api/logout", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-// ---------- paystack verify ----------
+// ---------------- paystack verify ----------------
 app.post("/api/paystack/verify", async (req, res) => {
   try {
     const { reference } = req.body || {};
@@ -444,7 +509,7 @@ app.post("/api/paystack/verify", async (req, res) => {
   }
 });
 
-// ---------- helpers ----------
+// ---------------- auth-required helper ----------------
 async function requireUser(req, res) {
   const email = needEmail(req, res);
   if (!email) return null;
@@ -452,52 +517,8 @@ async function requireUser(req, res) {
   if (!u) { res.status(401).json({ status: "unauthenticated" }); return null; }
   return u;
 }
-function monthStart(d = new Date()) {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
-}
-async function getAndBumpDeviceQuota(req, res, kind /* 'text' | 'photo' */, plan) {
-  // Only enforce for FREE plan
-  if ((plan || "FREE").toUpperCase() !== "FREE") return { allowed: true };
 
-  const did = getOrSetDeviceId(req, res);
-  const period = monthStart();
-  const r = await pool.query(
-    `insert into device_quotas(device_id, period_start)
-       values($1,$2)
-       on conflict(device_id, period_start) do update set device_id=excluded.device_id
-     returning id, text_used, photo_used`,
-    [did, period]
-  );
-  const row = r.rows[0];
-  const text_used = Number(row.text_used || 0);
-  const photo_used = Number(row.photo_used || 0);
-
-  if (kind === "text") {
-    if (text_used >= FREE_TEXT_LIMIT) {
-      return { allowed: false, reason: "TEXT_LIMIT", remaining: 0 };
-    }
-    await pool.query(
-      `update device_quotas set text_used=text_used+1 where id=$1`,
-      [row.id]
-    );
-    return { allowed: true, remaining: FREE_TEXT_LIMIT - (text_used + 1) };
-  }
-
-  if (kind === "photo") {
-    if (photo_used >= FREE_PHOTO_LIMIT) {
-      return { allowed: false, reason: "PHOTO_LIMIT", remaining: 0 };
-    }
-    await pool.query(
-      `update device_quotas set photo_used=photo_used+1 where id=$1`,
-      [row.id]
-    );
-    return { allowed: true, remaining: FREE_PHOTO_LIMIT - (photo_used + 1) };
-  }
-
-  return { allowed: true };
-}
-
-// ---------- conversations ----------
+// ---------------- conversations ----------------
 app.get("/api/conversations", async (req, res) => {
   const u = await requireUser(req, res); if (!u) return;
   const r = await pool.query(
@@ -525,16 +546,18 @@ app.patch("/api/conversations/:id", async (req, res) => {
   const id = Number(req.params.id);
   const { title, archived } = req.body || {};
   const fields = [];
-  const vals = [id, u.id];
-  if (typeof title === "string") { fields.push(`title=$${fields.length + 3}`); vals.push(title.trim() || "Untitled"); }
-  if (typeof archived === "boolean") { fields.push(`archived=$${fields.length + 3}`); vals.push(!!archived); }
+  const values = [];
+  let idx = 1;
+
+  if (typeof title === "string") { fields.push(`title=$${++idx}`); values.push(title.trim() || "Untitled"); }
+  if (typeof archived === "boolean") { fields.push(`archived=$${++idx}`); values.push(!!archived); }
   if (!fields.length) return res.json({ ok: true });
 
   await pool.query(
     `update conversations
         set ${fields.join(", ")}, updated_at=now()
-      where id=$1 and user_id=$2`,
-    vals
+      where id=$1 and user_id=$${++idx}`,
+    [id, ...values, u.id]
   );
   res.json({ ok: true });
 });
@@ -561,7 +584,7 @@ app.get("/api/conversations/:id", async (req, res) => {
   res.json({ id, title: conv.rows[0].title, messages: msgs.rows });
 });
 
-// ---------- share ----------
+// ---------------- share links ----------------
 app.post("/api/conversations/:id/share", async (req, res) => {
   const u = await requireUser(req, res); if (!u) return;
   const id = Number(req.params.id);
@@ -602,22 +625,10 @@ app.get("/api/share/:token", async (req, res) => {
   res.json({ title: s.rows[0].title, messages: msgs.rows });
 });
 
-// ---------- chat ----------
+// ---------------- chat ----------------
 app.post("/api/chat", async (req, res) => {
   try {
     const u = await requireUser(req, res); if (!u) return;
-
-    // enforce free limit per device
-    const bump = await getAndBumpDeviceQuota(req, res, "text", u.plan);
-    if (!bump.allowed) {
-      return res.status(402).json({
-        error: "limit",
-        limitType: "text",
-        message: "You've reached the free text limit.",
-        upgradeUrl: "/index.html#pricing"
-      });
-    }
-
     const { message, gptType, conversationId } = req.body || {};
     if (!message) return res.status(400).json({ error: "message required" });
 
@@ -640,9 +651,9 @@ app.post("/api/chat", async (req, res) => {
     );
 
     const system =
-      gptType === "math"
+      (gptType === "math" || !gptType)
         ? "You are Math GPT. Solve math problems step-by-step with clear reasoning, and show workings. Be accurate and concise."
-        : "You are a helpful assistant.";
+        : "You are a helpful writing assistant. Be clear, structured, and helpful.";
 
     const msgs = [{ role: "system", content: system }, ...hist.rows, { role: "user", content: message }];
 
@@ -665,22 +676,10 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-// ---------- photo solve ----------
+// ---------------- photo solve ----------------
 app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
   try {
     const u = await requireUser(req, res); if (!u) return;
-
-    // enforce free limit per device
-    const bump = await getAndBumpDeviceQuota(req, res, "photo", u.plan);
-    if (!bump.allowed) {
-      return res.status(402).json({
-        error: "limit",
-        limitType: "photo",
-        message: "You've reached the free photo solve limit.",
-        upgradeUrl: "/index.html#pricing"
-      });
-    }
-
     const { gptType, conversationId, attempt } = req.body || {};
     if (!req.file) return res.status(400).json({ error: "image required" });
 
@@ -702,7 +701,7 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
     const dataUrl = `data:${mime};base64,${b64}`;
 
     const system =
-      gptType === "math"
+      (gptType === "math" || !gptType)
         ? "You are Math GPT. Read the problem from the image and solve it step-by-step. Explain clearly."
         : "You are a helpful assistant. Describe and analyze the content of the image, then answer the user's request.";
 
@@ -747,11 +746,8 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
   }
 });
 
-// ---------- start ----------
+// ---------------- start ----------------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`GPTs Help server running on :${PORT}`);
-  if (!mailReady) {
-    console.warn("[WARN] Email verification disabled (SMTP_* not fully set).");
-  }
 });
