@@ -2,7 +2,7 @@
   "name": "gpts-help",
   "version": "1.0.0",
   "private": true,
-  "description": "GPTs Help – AI tutoring and content suite with Paystack, email/password auth, and Postgres persistence",
+  "description": "GPTs Help – Math GPT photo-solve and chat AI with Paystack subscriptions, email verification, and Postgres persistence",
   "type": "module",
   "main": "server.js",
   "scripts": {
@@ -10,13 +10,19 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
+    "axios": "^1.7.7",
     "bcryptjs": "^2.4.3",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
     "express": "^4.21.1",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.1",
-    "pg": "^8.12.0"
+    "nanoid": "^5.0.7",
+    "nodemailer": "^6.9.13",
+    "openai": "^4.56.0",
+    "pg": "^8.12.0",
+    "form-data": "^4.0.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.0"
@@ -28,11 +34,12 @@
     "AI",
     "GPT",
     "Paystack",
-    "Math",
-    "Content",
-    "Tutoring",
-    "Postgres"
+    "MathGPT",
+    "PhotoSolve",
+    "EmailVerification",
+    "Postgres",
+    "Tutoring"
   ],
-  "license": "MIT"
+  "license": "MIT",
+  "author": "GPTs Help"
 }
-
