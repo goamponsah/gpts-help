@@ -71,9 +71,6 @@ async function createBaseSchema() {
       pass_salt      text,
       pass_hash      text,
       plan           text not null default 'FREE',
-      verified       boolean not null default false,
-      verify_token   text,
-      verify_expires timestamptz,
       created_at     timestamptz not null default now(),
       updated_at     timestamptz not null default now()
     );
@@ -105,12 +102,12 @@ async function createBaseSchema() {
 
     /* per-user monthly usage counters */
     create table if not exists user_usage (
-      id         bigserial primary key,
-      user_id    bigint not null references users(id) on delete cascade,
-      month_key  text not null,
-      text_count int not null default 0,
-      photo_count int not null default 0,
-      updated_at timestamptz not null default now(),
+      id           bigserial primary key,
+      user_id      bigint not null references users(id) on delete cascade,
+      month_key    text not null,
+      text_count   int not null default 0,
+      photo_count  int not null default 0,
+      updated_at   timestamptz not null default now(),
       unique(user_id, month_key)
     );
 
@@ -126,6 +123,16 @@ async function createBaseSchema() {
 
     create index if not exists conversations_user_idx on conversations(user_id, created_at desc);
     create index if not exists messages_conv_idx on messages(conversation_id, id);
+  `);
+}
+
+/* add NEW columns to existing users table if missing */
+async function ensureUserColumns() {
+  await pool.query(`
+    alter table users
+      add column if not exists verified boolean not null default false,
+      add column if not exists verify_token text,
+      add column if not exists verify_expires timestamptz
   `);
 }
 
@@ -182,6 +189,7 @@ async function migrateLegacyConversations() {
 
 async function ensureSchema() {
   await createBaseSchema();
+  await ensureUserColumns();          // <-- this fixes your error
   await migrateLegacyConversations();
 }
 await ensureSchema();
@@ -276,7 +284,7 @@ function mapPlanCodeToLabel(code) {
   return "ONE_TIME";
 }
 
-/* ---------------- misc ---------------- */
+/* ---------------- usage helpers ---------------- */
 const monthKey = (d=new Date()) => `${d.getUTCFullYear()}-${String(d.getUTCMonth()+1).padStart(2,"0")}`;
 
 async function getOrCreateUsage(userId, mKey) {
@@ -331,7 +339,7 @@ app.post("/api/signup-free", async (req, res) => {
       [u0.id, token, expires]
     );
 
-    const verifyLink = `${APP_BASE_URL.replace(/\/$/,"")}/index.html?verify=${encodeURIComponent(token)}`;
+    const verifyLink = `${APP_BASE_URL?.replace(/\/$/,"") || ""}/index.html?verify=${encodeURIComponent(token)}`;
     if (mailer) {
       try {
         await mailer.sendMail({
@@ -385,7 +393,7 @@ app.post("/api/resend-verification", async (req, res) => {
     const token = crypto.randomBytes(24).toString("hex");
     const expires = new Date(Date.now() + 24*3600*1000);
     await pool.query(`update users set verify_token=$2, verify_expires=$3 where id=$1`, [u.id, token, expires]);
-    const verifyLink = `${APP_BASE_URL.replace(/\/$/,"")}/index.html?verify=${encodeURIComponent(token)}`;
+    const verifyLink = `${APP_BASE_URL?.replace(/\/$/,"") || ""}/index.html?verify=${encodeURIComponent(token)}`;
     if (mailer) {
       try {
         await mailer.sendMail({
@@ -466,7 +474,7 @@ app.post("/api/paystack/verify", async (req, res) => {
 
     if (data?.status && status === "success" && email) {
       const label = mapPlanCodeToLabel(planCode);
-      const u = await upsertUser(email);
+      await upsertUser(email);
       if (label !== "ONE_TIME") {
         await pool.query(`update users set plan=$2, updated_at=now() where email=$1`, [email, label]);
       }
@@ -648,7 +656,6 @@ app.post("/api/chat", async (req, res) => {
     await pool.query(`insert into messages(conversation_id, role, content) values($1,$2,$3)`,
       [convId, "assistant", answer]);
 
-    // count usage after success
     if ((u.plan || "FREE") === "FREE") await incUsage(u.id, "text");
 
     res.json({ response: answer, conversationId: convId });
