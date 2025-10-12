@@ -214,7 +214,7 @@
     function setVh(){ const vh = window.innerHeight * 0.01; document.documentElement.style.setProperty('--vh', `${vh*100}px`); }
     setVh(); window.addEventListener('resize', setVh);
 
-    /* API */
+    /* API (changed: return ok/status/json) */
     const api = {
       listConvs: ()=>fetch('/api/conversations',{credentials:'include'}).then(r=>r.json()),
       createConv:(title)=>fetch('/api/conversations',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({title})}).then(r=>r.json()),
@@ -222,13 +222,20 @@
       deleteConv:(id)=>fetch(`/api/conversations/${id}`,{method:'DELETE',credentials:'include'}).then(r=>r.json()),
       archiveConv:(id,archived=true)=>fetch(`/api/conversations/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({archived})}).then(r=>r.json()),
       getConvMsgs:(id)=>fetch(`/api/conversations/${id}`,{credentials:'include'}).then(r=>r.json()),
-      chat:(payload)=>fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(payload)}).then(r=>r.json()),
-      me:()=>fetch('/api/me',{credentials:'include'}).then(r=>r.json()),
-      photoSolve:(fd)=>fetch('/api/photo-solve',{method:'POST',credentials:'include',body:fd}).then(r=>r.json()),
+      chat: async (payload)=>{
+        const r = await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(payload)});
+        const json = await r.json().catch(()=>({}));
+        return { ok:r.ok, status:r.status, json };
+      },
+      me: ()=>fetch('/api/me',{credentials:'include'}).then(r=>r.json()),
+      photoSolve: async (fd)=>{
+        const r = await fetch('/api/photo-solve',{method:'POST',credentials:'include',body:fd});
+        const json = await r.json().catch(()=>({}));
+        return { ok:r.ok, status:r.status, json };
+      },
       shareCreate:(id)=>fetch(`/api/conversations/${id}/share`,{method:'POST',credentials:'include'}).then(r=>r.json()),
       getShared:(token)=>fetch(`/api/share/${encodeURIComponent(token)}`).then(r=>r.json()),
-      logout:()=>fetch('/api/logout',{method:'POST',credentials:'include'}),
-      publicConfig:()=>fetch('/api/public-config').then(r=>r.json())
+      logout:()=>fetch('/api/logout',{method:'POST',credentials:'include'})
     };
 
     /* Elements */
@@ -268,13 +275,9 @@
     let pendingShareConvId = null;
     let readOnly = false;
 
-    /* Title helpers for convs */
+    /* Title helpers for convs (unchanged) */
     const convTitleCache = {};
     const pendingAutoTitle = new Set();
-
-    /* Free limits (for messages) */
-    let FREE_LIMITS = { text: 10, photo: 2 };
-    (async ()=>{ try{ const cfg = await api.publicConfig(); if(cfg?.freeLimits) FREE_LIMITS = cfg.freeLimits; }catch{} })();
 
     /* Placeholder */
     function updatePlaceholder() {
@@ -331,6 +334,11 @@
       bubble.appendChild(small); bubble.appendChild(document.createTextNode(caption||'📷 Photo uploaded'));
       if(url){ const img=document.createElement('img'); img.className='thumb'; img.src=url; img.alt='uploaded image'; bubble.appendChild(img); }
       row.appendChild(bubble); messagesEl.appendChild(row);
+    }
+    function renderUpgrade(limitType, url){
+      const kind = limitType === 'photo' ? 'photo solves (2 free)' : 'messages (10 free)';
+      const md = `**You’ve reached the free limit for ${kind}.**\n\n[Upgrade to continue →](${url || '/index.html#pricing'})`;
+      renderMessage('assistant', md);
     }
     function clearMessages(){ messagesEl.innerHTML=''; }
     function scrollToBottom(){ messagesEl.scrollTop = messagesEl.scrollHeight; }
@@ -411,18 +419,6 @@
     promptEl.addEventListener('input', autoresize);
     promptEl.addEventListener('keydown', (e)=>{ if(e.key==='Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); if(!sendBtn.disabled) composerEl.requestSubmit(); } });
 
-    /* Limit/verify helper messages */
-    function renderLimitNotice(kind){
-      const kindLabel = kind==='photo' ? 'photo solves' : 'messages';
-      const md = `**Free limit reached** — You’ve used your free ${kindLabel} for this month.\n\n[Upgrade to Plus](/index.html#pricing) for unlimited solving.`;
-      renderMessage('assistant', md);
-    }
-    function renderVerifyNotice(){
-      const md = `**Please verify your email** — We’ve sent a verification link to your inbox. Click it and try again.`;
-      renderMessage('assistant', md);
-    }
-
-    /* Submit text */
     function shouldAutoTitleFor(convId){
       if (!convId) return true;
       if (pendingAutoTitle.has(convId)) return true;
@@ -430,6 +426,7 @@
       return t === 'new chat' || t === 'untitled' || t === '';
     }
 
+    /* Submit text */
     document.getElementById('composer').addEventListener('submit', async (e)=>{
       e.preventDefault(); if(readOnly) return;
       const text=(promptEl.value||'').trim(); if(!text) return;
@@ -441,12 +438,17 @@
 
         const res=await api.chat(payload);
 
-        // handle limit & verify statuses
-        if(res?.status === 'limit'){ renderLimitNotice('text'); return; }
-        if(res?.status === 'unverified'){ renderVerifyNotice(); return; }
+        if(!res.ok && res.status===402){
+          renderUpgrade('text', res.json.upgradeUrl);
+          return;
+        }
+        if(!res.ok){
+          renderMessage('assistant','Sorry, something went wrong. Please try again.');
+          return;
+        }
 
-        if(!currentConvId && res.conversationId){
-          currentConvId=res.conversationId;
+        if(!currentConvId && res.json.conversationId){
+          currentConvId=res.json.conversationId;
           convTitleCache[currentConvId] = 'New chat';
           pendingAutoTitle.add(currentConvId);
           await loadConversations(currentConvId);
@@ -462,7 +464,7 @@
           }catch{}
         }
 
-        renderMessage('assistant', res.response||''); scrollToBottom();
+        renderMessage('assistant', res.json.response||''); scrollToBottom();
       }catch{
         renderMessage('assistant','Sorry, something went wrong. Please try again.'); scrollToBottom();
       }finally{
@@ -493,12 +495,17 @@
         const wasNew = !currentConvId;
         const res=await api.photoSolve(fd);
 
-        // handle limit & verify statuses
-        if(res?.status === 'limit'){ renderLimitNotice('photo'); return; }
-        if(res?.status === 'unverified'){ renderVerifyNotice(); return; }
+        if(!res.ok && res.status===402){
+          renderUpgrade('photo', res.json.upgradeUrl);
+          return;
+        }
+        if(!res.ok){
+          renderMessage('assistant','Photo solve failed. Please try again.'); 
+          return;
+        }
 
-        if(wasNew && res.conversationId){
-          currentConvId=res.conversationId;
+        if(wasNew && res.json.conversationId){
+          currentConvId=res.json.conversationId;
           convTitleCache[currentConvId] = 'New chat';
           pendingAutoTitle.add(currentConvId);
           await loadConversations(currentConvId);
@@ -514,7 +521,7 @@
           }catch{}
         }
 
-        renderMessage('assistant', res.response||'No response text returned.'); scrollToBottom();
+        renderMessage('assistant', res.json.response||'No response text returned.'); scrollToBottom();
       }catch{
         renderMessage('assistant','Photo solve failed. Please try another image.'); scrollToBottom();
       }finally{
@@ -631,7 +638,7 @@
             setUserUI(me.user.email, me.user.plan||'FREE');
           }
         }
-      }catch{/* ignore */}
+      }catch{}
     }
 
     /* Init */
@@ -642,7 +649,6 @@
 
       const ok=await guardAuth(); if(!ok) return;
 
-      // Keep the plan fresh after upgrades
       document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refreshPlan(); });
       window.addEventListener('focus', refreshPlan);
       setInterval(refreshPlan, 15000);
