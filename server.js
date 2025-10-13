@@ -36,9 +36,9 @@ const {
   FRONTEND_ORIGIN,          // optional, if you host frontend elsewhere
 
   // Mailgun HTTP API
-  MAILGUN_API_KEY,
+  MAILGUN_API_KEY,          // Live API or Domain Sending Key
   MAILGUN_DOMAIN,           // e.g. mg.gptshelp.online
-  MAIL_FROM,                // e.g. 'GPTs Help <no-reply@mg.gptshelp.online>'
+  MAIL_FROM,                // e.g. 'GPTs Help <postmaster@mg.gptshelp.online>'
   MAILGUN_REGION            // 'us' (default) or 'eu'
 } = process.env;
 
@@ -227,8 +227,10 @@ async function mailgunSend({ to, subject, html, text }) {
     console.warn("[MAIL] Skipped (env incomplete)");
     return { ok: false, skipped: true };
   }
-  const region = (MAILGUN_REGION || "us").toLowerCase() === "eu" ? "api.eu.mailgun.net" : "api.mailgun.net";
-  const url = `https://${region}/v3/${encodeURIComponent(MAILGUN_DOMAIN)}/messages`;
+  const regionHost = (MAILGUN_REGION || "us").toLowerCase() === "eu"
+    ? "api.eu.mailgun.net"
+    : "api.mailgun.net";
+  const url = `https://${regionHost}/v3/${encodeURIComponent(MAILGUN_DOMAIN)}/messages`;
 
   const form = new URLSearchParams();
   form.set("from", MAIL_FROM);
@@ -237,21 +239,34 @@ async function mailgunSend({ to, subject, html, text }) {
   if (text) form.set("text", text);
   if (html) form.set("html", html);
 
-  const r = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: "Basic " + Buffer.from(`api:${MAILGUN_API_KEY}`).toString("base64"),
-      "Content-Type": "application/x-www-form-urlencoded"
-    },
-    body: form
-  });
+  // Add a 10s timeout so we don't hang signup
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), 10_000);
 
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) {
-    console.error("[MAIL] send failed:", r.status, data);
-    return { ok: false, status: r.status, data };
+  let data = {};
+  try {
+    const r = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: "Basic " + Buffer.from(`api:${MAILGUN_API_KEY}`).toString("base64"),
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: form,
+      signal: ctrl.signal
+    });
+    clearTimeout(t);
+    data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      console.error("[MAIL] send failed:", r.status, data);
+      return { ok: false, status: r.status, data };
+    }
+    console.log("[MAIL] queued:", data?.id || data?.message || "ok");
+    return { ok: true, data };
+  } catch (err) {
+    clearTimeout(t);
+    console.error("[MAIL] send failed:", err?.name || "", err?.message || err);
+    return { ok: false, error: err?.message || String(err) };
   }
-  return { ok: true, data };
 }
 
 function verificationEmailHtml(link) {
@@ -316,9 +331,10 @@ app.post("/api/signup-free", async (req, res) => {
       [email, token, until.toISOString()]
     );
 
-    const base = req.headers.origin || (FRONTEND_ORIGIN || "");
-    const host = base || `${req.protocol}://${req.get("host")}`;
-    const link = `${host}/api/verify-email?token=${encodeURIComponent(token)}`;
+    // build verify link: prefer FRONTEND_ORIGIN; else request host
+    const originFromHeader = req.headers.origin;
+    const base = FRONTEND_ORIGIN || originFromHeader || `${req.protocol}://${req.get("host")}`;
+    const link = `${base}/api/verify-email?token=${encodeURIComponent(token)}`;
 
     // send email (best-effort)
     await mailgunSend({
@@ -336,6 +352,38 @@ app.post("/api/signup-free", async (req, res) => {
   }
 });
 
+// Re-send verification (user must be logged in and unverified)
+app.post("/api/resend-verification", async (req, res) => {
+  try {
+    const email = needEmail(req, res); if (!email) return;
+    const u = await getUserByEmail(email);
+    if (!u) return res.status(404).json({ status: "error", message: "User not found" });
+    if (u.verified) return res.json({ status: "ok", message: "Already verified" });
+
+    const token = crypto.randomBytes(24).toString("hex");
+    const until = new Date(Date.now() + 24*60*60*1000);
+    await pool.query(
+      `update users set verify_token=$2, verify_expires=$3, updated_at=now() where email=$1`,
+      [email, token, until.toISOString()]
+    );
+
+    const base = FRONTEND_ORIGIN || req.headers.origin || `${req.protocol}://${req.get("host")}`;
+    const link = `${base}/api/verify-email?token=${encodeURIComponent(token)}`;
+
+    await mailgunSend({
+      to: email,
+      subject: "Verify your email — GPTs Help",
+      html: verificationEmailHtml(link),
+      text: `Verify your email: ${link}`
+    });
+
+    res.json({ status: "ok", verifySent: true });
+  } catch (e) {
+    console.error("resend-verification", e);
+    res.status(500).json({ status: "error", message: "Could not send verification" });
+  }
+});
+
 app.get("/api/verify-email", async (req, res) => {
   try {
     const { token } = req.query || {};
@@ -348,8 +396,6 @@ app.get("/api/verify-email", async (req, res) => {
       [token]
     );
     if (!r.rowCount) return res.status(400).send("Invalid or expired token");
-    const email = r.rows[0].email;
-    // Keep UX simple: land them in chat after verify
     res.redirect("/chat.html");
   } catch (e) {
     console.error("verify-email", e);
