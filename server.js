@@ -1,8 +1,6 @@
 // server.js  (ESM)
 // package.json must include:  "type": "module"
 // Node 18+
-//
-// npm i express cookie-parser cors jsonwebtoken multer pg
 
 import express from "express";
 import cookieParser from "cookie-parser";
@@ -17,11 +15,11 @@ import pg from "pg";
 
 const { Pool } = pg;
 
-/* ---------------- paths ---------------- */
+// ---------------- paths ----------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-/* ---------------- app & env ---------------- */
+// ---------------- app & env ----------------
 const app = express();
 
 const {
@@ -29,26 +27,29 @@ const {
   JWT_SECRET,
   OPENAI_API_KEY,
   OPENAI_MODEL,
+
+  // Paystack
   PAYSTACK_PUBLIC_KEY,
   PAYSTACK_SECRET_KEY,
-  PLAN_CODE_PLUS_MONTHLY,   // optional
+  PLAN_CODE_PLUS_MONTHLY,   // optional explicit plan codes
   PLAN_CODE_PRO_ANNUAL,     // optional
-  FRONTEND_ORIGIN,          // optional
+
+  FRONTEND_ORIGIN,          // optional (if frontend hosted elsewhere)
 
   // Resend
   RESEND_API_KEY,
-  RESEND_FROM
+  RESEND_FROM               // e.g. 'GPTs Help <no-reply@updates.gptshelp.online>'
 } = process.env;
 
 if (!DATABASE_URL) console.error("[ERROR] DATABASE_URL not set");
 if (!JWT_SECRET) console.warn("[WARN] JWT_SECRET not set; a random one will be used (sessions reset on restart).");
-if (!OPENAI_API_KEY) console.warn("[WARN] OPENAI_API_KEY not set.");
+if (!OPENAI_API_KEY) console.warn("[WARN] OPENAI_API_KEY not set (chat will fail).");
 if (!RESEND_API_KEY || !RESEND_FROM) {
   console.warn("[WARN] RESEND_* env not fully set; emails will be skipped.");
 }
 const OPENAI_DEFAULT_MODEL = OPENAI_MODEL || "gpt-4o-mini";
 
-/* ---------------- middlewares ---------------- */
+// ---------------- middlewares ----------------
 if (FRONTEND_ORIGIN) {
   app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
 }
@@ -58,7 +59,7 @@ app.use(express.static(path.join(__dirname, "public")));
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-/* ---------------- db ---------------- */
+// ---------------- db ----------------
 const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: { rejectUnauthorized: false }
@@ -117,22 +118,20 @@ async function ensureSchema() {
       created_at  timestamptz not null default now()
     );
 
-    -- Free-tier usage per device (by natural day)
+    -- Free-tier usage per device (per natural day)
     create table if not exists device_quotas (
-      id           bigserial primary key,
-      device_id    text not null,
-      period_start timestamptz not null default (date_trunc('day', now())),
-      text_count   integer not null default 0,
-      photo_count  integer not null default 0,
-      day          date not null default current_date,
-      unique (device_id, day)
+      device_id     text not null,
+      period_start  date not null,
+      text_count    integer not null default 0,
+      photo_count   integer not null default 0,
+      primary key (device_id, period_start)
     );
 
     create index if not exists conversations_user_idx on conversations(user_id, created_at desc);
     create index if not exists messages_conv_idx on messages(conversation_id, id);
   `);
 
-  // Add missing columns for older installs
+  // Backfill columns on users if older installs (safe ALTERs)
   const cols = await pool.query(`
     select column_name from information_schema.columns
     where table_name='users'
@@ -147,7 +146,7 @@ async function ensureSchema() {
 }
 await ensureSchema();
 
-/* ---------------- helpers ---------------- */
+// ---------------- auth helpers ----------------
 const SJWT = JWT_SECRET || crypto.randomBytes(48).toString("hex");
 function cookieOptions() {
   const cross = Boolean(FRONTEND_ORIGIN);
@@ -176,11 +175,13 @@ function needEmail(req, res) {
   if (!s?.email) { res.status(401).json({ status: "unauthenticated" }); return null; }
   return s.email;
 }
+
+// Ensure device cookie for per-device quotas
 function ensureDevice(req, res) {
   let { did } = req.cookies || {};
   if (!did) {
     did = crypto.randomUUID();
-    res.cookie("did", did, { ...cookieOptions(), httpOnly: false });
+    res.cookie("did", did, { ...cookieOptions(), httpOnly: false }); // readable by frontend if needed
   }
   return did;
 }
@@ -223,13 +224,14 @@ async function setUserPassword(email, pass) {
   );
 }
 
-/* ---------------- Resend mail ---------------- */
-async function sendResend({ to, subject, html, text }) {
+// ---------------- Resend (HTTP API) ----------------
+async function resendSend({ to, subject, html, text }) {
   if (!RESEND_API_KEY || !RESEND_FROM) {
-    console.warn("[MAIL] Skipped (env incomplete)");
+    console.warn("[MAIL] Skipped (RESEND env incomplete)");
     return { ok: false, skipped: true };
   }
-  const r = await fetch("https://api.resend.com/emails", {
+  const url = `https://api.resend.com/emails`;
+  const r = await fetch(url, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${RESEND_API_KEY}`,
@@ -250,6 +252,7 @@ async function sendResend({ to, subject, html, text }) {
   }
   return { ok: true, data };
 }
+
 function verificationEmailHtml(link) {
   return `
   <div style="font-family:system-ui,Segoe UI,Arial,sans-serif;line-height:1.5;">
@@ -263,13 +266,13 @@ function resetEmailHtml(link) {
   return `
   <div style="font-family:system-ui,Segoe UI,Arial,sans-serif;line-height:1.5;">
     <h2>Reset your password</h2>
-    <p>Click the button below to set a new password. This link expires in 60 minutes.</p>
-    <p><a href="${link}" style="display:inline-block;background:#5865f2;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;">Set new password</a></p>
-    <p style="color:#777">If the button doesn’t work, copy and paste this link:<br>${link}</p>
+    <p>We received a request to reset your password for <strong>GPTs Help</strong>.</p>
+    <p><a href="${link}" style="display:inline-block;background:#0d6efd;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;">Reset password</a></p>
+    <p style="color:#777">This link expires in 60 minutes. If you didn’t request a reset, you can ignore this email.</p>
   </div>`;
 }
 
-/* ---------------- Paystack utils ---------------- */
+// ---------------- small utils for Paystack ----------------
 function extractPlanCode(ps) {
   return (
     ps?.data?.plan?.plan_code ||
@@ -291,7 +294,7 @@ function mapPlanCodeToLabel(code) {
   return "ONE_TIME";
 }
 
-/* ---------------- health & public config ---------------- */
+// ---------------- health & public config ----------------
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 app.get("/api/public-config", (_req, res) => {
   res.json({
@@ -302,7 +305,7 @@ app.get("/api/public-config", (_req, res) => {
   });
 });
 
-/* ---------------- auth ---------------- */
+// ---------------- auth ----------------
 app.post("/api/signup-free", async (req, res) => {
   try {
     const { email, password } = req.body || {};
@@ -318,6 +321,12 @@ app.post("/api/signup-free", async (req, res) => {
     await pool.query(
       `update users set verify_token=$2, verify_expires=$3, verified=false, updated_at=now()
         where email=$1`,
+      [email, until.toISOString() ? email : email, until.toISOString()] // placeholder to keep array length; will be replaced below
+    );
+    // Fix parameter order (avoid mistakes if edited): 
+    await pool.query(
+      `update users set verify_token=$2, verify_expires=$3, verified=false, updated_at=now()
+        where email=$1`,
       [email, token, until.toISOString()]
     );
 
@@ -325,7 +334,8 @@ app.post("/api/signup-free", async (req, res) => {
     const host = base || `${req.protocol}://${req.get("host")}`;
     const link = `${host}/api/verify-email?token=${encodeURIComponent(token)}`;
 
-    await sendResend({
+    // send email (best-effort)
+    await resendSend({
       to: email,
       subject: "Verify your email — GPTs Help",
       html: verificationEmailHtml(link),
@@ -352,10 +362,70 @@ app.get("/api/verify-email", async (req, res) => {
       [token]
     );
     if (!r.rowCount) return res.status(400).send("Invalid or expired token");
+    // Land them in chat after verify
     res.redirect("/chat.html");
   } catch (e) {
     console.error("verify-email", e);
     res.status(500).send("Verification failed");
+  }
+});
+
+// Password reset (request)
+app.post("/api/request-password-reset", async (req, res) => {
+  try {
+    const email = (req.body?.email || "").trim().toLowerCase();
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      return res.status(400).json({ status: "error", message: "Valid email required" });
+    }
+    const u = await getUserByEmail(email);
+    // Respond success even if not found (don’t leak users)
+    const token = crypto.randomBytes(24).toString("hex");
+    const until = new Date(Date.now() + 60*60*1000); // 60 mins
+    if (u) {
+      await pool.query(
+        `update users set reset_token=$2, reset_expires=$3, updated_at=now() where email=$1`,
+        [email, token, until.toISOString()]
+      );
+      const base = req.headers.origin || (FRONTEND_ORIGIN || "");
+      const host = base || `${req.protocol}://${req.get("host")}`;
+      const link = `${host}/reset.html?token=${encodeURIComponent(token)}`;
+      await resendSend({
+        to: email,
+        subject: "Reset your password — GPTs Help",
+        html: resetEmailHtml(link),
+        text: `Reset your password (expires in 60 minutes): ${link}`
+      });
+    }
+    res.json({ status: "ok" });
+  } catch (e) {
+    console.error("request-password-reset", e);
+    res.status(500).json({ status: "error", message: "Could not send reset link" });
+  }
+});
+
+// Password reset (apply)
+app.post("/api/reset-password", async (req, res) => {
+  try {
+    const { token, password } = req.body || {};
+    if (!token || !password || password.length < 8) {
+      return res.status(400).json({ status: "error", message: "Invalid request" });
+    }
+    const r = await pool.query(
+      `select email from users where reset_token=$1 and now() <= coalesce(reset_expires, now())`,
+      [token]
+    );
+    if (!r.rowCount) return res.status(400).json({ status: "error", message: "Invalid or expired token" });
+    const email = r.rows[0].email;
+
+    await setUserPassword(email, password);
+    await pool.query(
+      `update users set reset_token=null, reset_expires=null, updated_at=now() where email=$1`,
+      [email]
+    );
+    res.json({ status: "ok" });
+  } catch (e) {
+    console.error("reset-password", e);
+    res.status(500).json({ status: "error", message: "Could not reset password" });
   }
 });
 
@@ -396,70 +466,7 @@ app.post("/api/logout", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-/* -------- password reset (Resend) -------- */
-app.post("/api/password-reset/request", async (req, res) => {
-  try {
-    const { email } = req.body || {};
-    if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
-      return res.json({ status: "ok" });
-    }
-    const u = await getUserByEmail(email);
-    if (!u) return res.json({ status: "ok" });
-
-    const token = crypto.randomBytes(24).toString("hex");
-    const until = new Date(Date.now() + 60*60*1000); // 60 min
-    await pool.query(
-      `update users set reset_token=$2, reset_expires=$3, updated_at=now()
-        where email=$1`,
-      [email, token, until.toISOString()]
-    );
-
-    const base = req.headers.origin || (FRONTEND_ORIGIN || "");
-    const host = base || `${req.protocol}://${req.get("host")}`;
-    const link = `${host}/index.html?reset=${encodeURIComponent(token)}`;
-
-    await sendResend({
-      to: email,
-      subject: "Reset your password — GPTs Help",
-      html: resetEmailHtml(link),
-      text: `Set a new password: ${link}`
-    });
-
-    res.json({ status: "ok" });
-  } catch (e) {
-    console.error("password-reset-request", e);
-    res.json({ status: "ok" });
-  }
-});
-
-app.post("/api/password-reset/confirm", async (req, res) => {
-  try {
-    const { token, password } = req.body || {};
-    if (!token || typeof token !== "string" || !password || password.length < 8) {
-      return res.status(400).json({ status: "error", message: "Invalid request" });
-    }
-    const r = await pool.query(
-      `select email from users
-        where reset_token=$1 and (reset_expires is null or now() <= reset_expires)
-        limit 1`,
-      [token]
-    );
-    if (!r.rowCount) return res.status(400).json({ status: "error", message: "Invalid or expired link" });
-
-    const email = r.rows[0].email;
-    await setUserPassword(email, password);
-    await pool.query(
-      `update users set reset_token=null, reset_expires=null, updated_at=now() where email=$1`,
-      [email]
-    );
-    res.json({ status: "ok" });
-  } catch (e) {
-    console.error("password-reset-confirm", e);
-    res.status(500).json({ status: "error", message: "Reset failed" });
-  }
-});
-
-/* ---------------- paystack verify ---------------- */
+// ---------------- paystack verify ----------------
 app.post("/api/paystack/verify", async (req, res) => {
   try {
     const { reference } = req.body || {};
@@ -497,7 +504,7 @@ app.post("/api/paystack/verify", async (req, res) => {
   }
 });
 
-/* ---------------- auth-required helper ---------------- */
+// ---------------- auth-required helper ----------------
 async function requireUser(req, res) {
   const email = needEmail(req, res);
   if (!email) return null;
@@ -506,89 +513,110 @@ async function requireUser(req, res) {
   return u;
 }
 
-/* ---------------- quotas (single source of truth) ---------------- */
+// ---------------- quotas ----------------
 const FREE_TEXT_LIMIT = 10;
 const FREE_PHOTO_LIMIT = 2;
 
 async function getQuota(deviceId) {
-  const day = new Date().toISOString().slice(0,10);
-  await pool.query(
-    `insert into device_quotas(device_id, day)
-       values($1, $2)
-     on conflict (device_id, day) do nothing`,
-    [deviceId, day]
-  );
+  const period = new Date().toISOString().slice(0,10); // yyyy-mm-dd
   const r = await pool.query(
-    `select text_count, photo_count from device_quotas where device_id=$1 and day=$2`,
-    [deviceId, day]
+    `insert into device_quotas(device_id, period_start)
+       values($1,$2)
+       on conflict (device_id, period_start) do update set device_id=excluded.device_id
+     returning text_count, photo_count`,
+    [deviceId, period]
   );
-  if (!r.rowCount) return { day, text_count: 0, photo_count: 0 };
-  return { day, ...r.rows[0] };
+  return { period, ...r.rows[0] };
 }
 async function bumpQuota(deviceId, kind) {
-  const day = new Date().toISOString().slice(0,10);
+  const period = new Date().toISOString().slice(0,10);
   if (kind === "text") {
     await pool.query(
-      `update device_quotas set text_count=text_count+1 where device_id=$1 and day=$2`,
-      [deviceId, day]
+      `update device_quotas set text_count=text_count+1 where device_id=$1 and period_start=$2`,
+      [deviceId, period]
     );
   } else {
     await pool.query(
-      `update device_quotas set photo_count=photo_count+1 where device_id=$1 and day=$2`,
-      [deviceId, day]
+      `update device_quotas set photo_count=photo_count+1 where device_id=$1 and period_start=$2`,
+      [deviceId, period]
     );
   }
 }
 
-/* ---------------- conversations ---------------- */
-/* Digit-only route params prevent NaN IDs from ever reaching these handlers */
-app.get("/api/conversations/:id(\\d+)", async (req, res) => {
-  const u = await requireUser(req, res); if (!u) return;
-  const id = parseInt(req.params.id, 10);
-  if (!Number.isFinite(id)) return res.status(400).json({ error: "invalid id" });
+// ---------------- auto-title helper ----------------
+async function retitleConversation(convId, userMsg, assistantMsg) {
+  try {
+    if (!OPENAI_API_KEY) return;
 
-  const conv = await pool.query(`select id, title from conversations where id=$1 and user_id=$2`, [id, u.id]);
-  if (!conv.rowCount) return res.status(404).json({ error: "not found" });
-  const msgs = await pool.query(
-    `select role, content, created_at
-       from messages
-      where conversation_id=$1
-      order by id`,
-    [id]
+    const { rows } = await pool.query(
+      `select title from conversations where id=$1`,
+      [convId]
+    );
+    if (!rows.length) return;
+    const current = (rows[0].title || "").trim();
+
+    const looksFinal =
+      current !== "New chat" &&
+      current.length <= 60 &&
+      /^[A-Z].+/.test(current);
+
+    if (looksFinal) return;
+
+    const prompt = [
+      {
+        role: "system",
+        content:
+          "Create a short, clear chat title (max 6 words). No quotes. Title case. Avoid punctuation unless needed."
+      },
+      {
+        role: "user",
+        content:
+          `User message:\n${userMsg}\n\nAssistant reply:\n${assistantMsg}\n\nReturn only the title.`
+      }
+    ];
+
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: OPENAI_DEFAULT_MODEL,
+        messages: prompt,
+        temperature: 0.2
+      })
+    });
+
+    if (!r.ok) return;
+    const j = await r.json();
+    const title = (j?.choices?.[0]?.message?.content || "")
+      .replace(/["“”]/g, "")
+      .trim()
+      .slice(0, 60);
+
+    if (!title) return;
+
+    await pool.query(
+      `update conversations set title=$2, updated_at=now() where id=$1`,
+      [convId, title]
+    );
+  } catch {
+    // best-effort
+  }
+}
+
+// ---------------- conversations ----------------
+app.get("/api/conversations", async (req, res) => {
+  const u = await requireUser(req, res); if (!u) return;
+  const r = await pool.query(
+    `select id, title, archived
+       from conversations
+      where user_id=$1
+      order by created_at desc`,
+    [u.id]
   );
-  res.json({ id, title: conv.rows[0].title, messages: msgs.rows });
-});
-
-app.patch("/api/conversations/:id(\\d+)", async (req, res) => {
-  const u = await requireUser(req, res); if (!u) return;
-  const id = parseInt(req.params.id, 10);
-  if (!Number.isFinite(id)) return res.status(400).json({ error: "invalid id" });
-
-  const { title, archived } = req.body || {};
-  const fields = [];
-  const values = [];
-  let idx = 1;
-
-  if (typeof title === "string") { fields.push(`title=$${++idx}`); values.push(title.trim() || "Untitled"); }
-  if (typeof archived === "boolean") { fields.push(`archived=$${++idx}`); values.push(!!archived); }
-  if (!fields.length) return res.json({ ok: true });
-
-  await pool.query(
-    `update conversations
-        set ${fields.join(", ")}, updated_at=now()
-      where id=$1 and user_id=$${++idx}`,
-    [id, ...values, u.id]
-  );
-  res.json({ ok: true });
-});
-
-app.delete("/api/conversations/:id(\\d+)", async (req, res) => {
-  const u = await requireUser(req, res); if (!u) return;
-  const id = parseInt(req.params.id, 10);
-  if (!Number.isFinite(id)) return res.status(400).json({ error: "invalid id" });
-
-  await pool.query(`delete from conversations where id=$1 and user_id=$2`, [id, u.id]);
-  res.json({ ok: true });
+  res.json(r.rows);
 });
 
 app.post("/api/conversations", async (req, res) => {
@@ -601,12 +629,58 @@ app.post("/api/conversations", async (req, res) => {
   res.json(r.rows[0]);
 });
 
-/* ---------------- share links ---------------- */
-app.post("/api/conversations/:id(\\d+)/share", async (req, res) => {
+app.patch("/api/conversations/:id", async (req, res) => {
   const u = await requireUser(req, res); if (!u) return;
-  const id = parseInt(req.params.id, 10);
+  const id = Number(req.params.id);
   if (!Number.isFinite(id)) return res.status(400).json({ error: "invalid id" });
 
+  const { title, archived } = req.body || {};
+  const fields = [];
+  const values = [id, u.id];
+  let idx = 2;
+
+  if (typeof title === "string") { fields.push(`title=$${++idx}`); values.push(title.trim() || "Untitled"); }
+  if (typeof archived === "boolean") { fields.push(`archived=$${++idx}`); values.push(!!archived); }
+  if (!fields.length) return res.json({ ok: true });
+
+  await pool.query(
+    `update conversations
+        set ${fields.join(", ")}, updated_at=now()
+      where id=$1 and user_id=$2`,
+    values
+  );
+  res.json({ ok: true });
+});
+
+app.delete("/api/conversations/:id", async (req, res) => {
+  const u = await requireUser(req, res); if (!u) return;
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "invalid id" });
+  await pool.query(`delete from conversations where id=$1 and user_id=$2`, [id, u.id]);
+  res.json({ ok: true });
+});
+
+app.get("/api/conversations/:id", async (req, res) => {
+  const u = await requireUser(req, res); if (!u) return;
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "invalid id" });
+  const conv = await pool.query(`select id, title from conversations where id=$1 and user_id=$2`, [id, u.id]);
+  if (!conv.rowCount) return res.status(404).json({ error: "not found" });
+  const msgs = await pool.query(
+    `select role, content, created_at
+       from messages
+      where conversation_id=$1
+      order by id`,
+    [id]
+  );
+  res.json({ id, title: conv.rows[0].title, messages: msgs.rows });
+});
+
+// ---------------- share links ----------------
+app.post("/api/conversations/:id/share", async (req, res) => {
+  const u = await requireUser(req, res); if (!u) return;
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "invalid id" });
   const own = await pool.query(`select id from conversations where id=$1 and user_id=$2`, [id, u.id]);
   if (!own.rowCount) return res.status(404).json({ error: "not found" });
 
@@ -644,14 +718,21 @@ app.get("/api/share/:token", async (req, res) => {
   res.json({ title: s.rows[0].title, messages: msgs.rows });
 });
 
-/* ---------------- chat (text) ---------------- */
+// ---------------- chat (text) ----------------
 app.post("/api/chat", async (req, res) => {
   try {
     const u = await requireUser(req, res); if (!u) return;
+
+    // Require verified email
+    if (!u.verified) {
+      return res.status(403).json({ status: "verify_required", message: "Please verify your email to use chat." });
+    }
+
     const deviceId = ensureDevice(req, res);
     const { message, gptType, conversationId } = req.body || {};
     if (!message) return res.status(400).json({ error: "message required" });
 
+    // free-tier quota (device-based)
     if ((u.plan || "FREE") === "FREE") {
       const q = await getQuota(deviceId);
       if (q.text_count >= FREE_TEXT_LIMIT) {
@@ -664,12 +745,12 @@ app.post("/api/chat", async (req, res) => {
       }
     }
 
-    let convId = conversationId != null ? parseInt(conversationId, 10) : null;
-    if (Number.isFinite(convId)) {
+    let convId = Number(conversationId);
+    if (!Number.isFinite(convId)) convId = null;
+
+    if (convId) {
       const own = await pool.query(`select id from conversations where id=$1 and user_id=$2`, [convId, u.id]);
       if (!own.rowCount) convId = null;
-    } else {
-      convId = null;
     }
     if (!convId) {
       const r = await pool.query(
@@ -717,23 +798,34 @@ app.post("/api/chat", async (req, res) => {
       [convId, "assistant", answer]
     );
 
+    // bump quota on success for FREE
     if ((u.plan || "FREE") === "FREE") await bumpQuota(deviceId, "text");
+
+    // auto-title (best-effort)
+    retitleConversation(convId, message, answer).catch(()=>{});
 
     res.json({ response: answer, conversationId: convId });
   } catch (e) {
-    console.error("chat", e);
+    console.error("chat error:", e);
     res.status(500).json({ error: "Chat failed" });
   }
 });
 
-/* ---------------- photo solve ---------------- */
+// ---------------- photo solve ----------------
 app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
   try {
     const u = await requireUser(req, res); if (!u) return;
+
+    // Require verified email
+    if (!u.verified) {
+      return res.status(403).json({ status: "verify_required", message: "Please verify your email to use photo solve." });
+    }
+
     const deviceId = ensureDevice(req, res);
     const { gptType, conversationId, attempt } = req.body || {};
     if (!req.file) return res.status(400).json({ error: "image required" });
 
+    // free-tier quota (device-based)
     if ((u.plan || "FREE") === "FREE") {
       const q = await getQuota(deviceId);
       if (q.photo_count >= FREE_PHOTO_LIMIT) {
@@ -746,12 +838,11 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
       }
     }
 
-    let convId = conversationId != null ? parseInt(conversationId, 10) : null;
-    if (Number.isFinite(convId)) {
+    let convId = Number(conversationId);
+    if (!Number.isFinite(convId)) convId = null;
+    if (convId) {
       const own = await pool.query(`select id from conversations where id=$1 and user_id=$2`, [convId, u.id]);
       if (!own.rowCount) convId = null;
-    } else {
-      convId = null;
     }
     if (!convId) {
       const r = await pool.query(
@@ -805,7 +896,11 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
       [convId, "assistant", answer]
     );
 
+    // bump quota on success for FREE
     if ((u.plan || "FREE") === "FREE") await bumpQuota(deviceId, "photo");
+
+    // auto-title (best-effort)
+    retitleConversation(convId, attempt || "Photo solve", answer).catch(()=>{});
 
     res.json({ response: answer, conversationId: convId });
   } catch (e) {
@@ -814,7 +909,7 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
   }
 });
 
-/* ---------------- start ---------------- */
+// ---------------- start ----------------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`GPTs Help server running on :${PORT}`);
