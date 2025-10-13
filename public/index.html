@@ -2,338 +2,591 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>GPTs Help — Math Tutor</title>
+  <title>GPTs Help — Chat</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <meta name="theme-color" content="#0e0f13" />
   <style>
     :root{
-      --bg:#0e0f13; --panel:#10121a; --muted:#a9b1c7; --text:#e7eaf1; --brand:#5865f2;
-      --border:#222738; --good:#22c55e; --warn:#f59e0b; --danger:#ef4444;
-      --hero-grad: radial-gradient(1200px 400px at 50% -200px, rgba(88,101,242,.12), transparent 60%);
+      --bg:#0c0d10;
+      --surface:#11131a;
+      --surface-2:#0f1117;
+      --border:#1d2434;
+      --muted:#9aa3b2;
+      --text:#e7eaf1;
+      --brand:#5865f2;
+      --user:#1e2a4a;
+      --assistant:#141824;
+      --shadow:0 10px 30px rgba(0,0,0,.45);
+      --drawer-w: 320px;
+      --header-h: 56px;
+      --composer-h: 84px;
+      --radius: 14px;
     }
     *{box-sizing:border-box}
     html,body{height:100%;margin:0}
-    body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Inter,Roboto,sans-serif;}
+    body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,sans-serif;overflow:hidden}
 
-    /* Top bar */
-    .nav{max-width:1100px;margin:0 auto;padding:14px 16px;display:flex;align-items:center;gap:12px}
-    .logo{font-weight:800;letter-spacing:.2px}
-    .spacer{flex:1}
-    .btn{border:1px solid var(--border);background:#141722;color:var(--text);border-radius:9999px;padding:8px 14px;cursor:pointer;font-size:14px}
-    .btn.primary{background:var(--brand);border-color:transparent;color:#fff}
-    .btn.ghost{background:transparent}
-    .btn:disabled{opacity:.65;cursor:not-allowed}
+    /* App grid */
+    .app{height:100%;display:grid;grid-template-columns:1fr}
+    @media (min-width:980px){ .app{ grid-template-columns:320px 1fr } }
 
-    /* Verify banner (namespaced) */
-    .gvh-verify{display:none;margin:10px auto 0;max-width:1100px;background:#10131a;border:1px solid #2a2f45;border-radius:12px;padding:12px 14px;color:#dfe3ec}
-    .gvh-verify.gvh-show{display:flex;gap:10px;align-items:center;justify-content:space-between}
-    .gvh-verify b{color:#fff}
-    .gvh-row{display:flex;gap:8px}
-    .gvh-btn{border:1px solid #2a2f45;background:#141722;color:#e7eaf1;border-radius:9999px;padding:8px 12px;cursor:pointer;font-size:13px}
-    .gvh-toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);padding:10px 14px;font-size:13px;background:#141722;color:#e7eaf1;border:1px solid #2a2f45;border-radius:9999px;display:none;z-index:1100}
-    .gvh-toast.gvh-show{display:block}
-
-    /* Hero */
-    .hero{max-width:1100px;margin:0 auto;padding:28px 16px 10px;background:var(--hero-grad)}
-    .hgrid{display:grid;grid-template-columns:1.1fr .9fr;gap:20px}
-    @media (max-width:900px){ .hgrid{grid-template-columns:1fr} }
-    .h1{font-size:42px;line-height:1.08;margin:10px 0 8px;font-weight:800}
-    .sub{color:var(--muted);font-size:16px;max-width:54ch}
-    .cta-row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
-
-    /* Cards */
-    .grid{max-width:1100px;margin:16px auto;padding:0 16px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-    @media (max-width:900px){ .grid{grid-template-columns:1fr} }
-    .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:16px}
-    .card h3{margin:.2rem 0 .3rem}
-    .muted{color:var(--muted)}
-    .pill{display:inline-block;font-size:12px;border:1px solid var(--border);padding:3px 8px;border-radius:999px;color:#c9d1e6}
-    .uploader{display:grid;gap:10px;margin-top:10px}
-    .uploader input[type="file"]{display:none}
-
-    /* Pricing */
-    #pricing{max-width:1100px;margin:22px auto;padding:0 16px}
-    .price-row{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-    @media (max-width:900px){ .price-row{grid-template-columns:1fr} }
-    .plan{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:16px}
-    .plan h4{margin:.2rem 0}
-    .price{font-size:28px;font-weight:800;margin:6px 0}
-    .features{color:var(--muted);font-size:14px;line-height:1.55}
-    .center{text-align:center}
-
-    /* Modal (auth) */
-    .overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000}
-    .overlay.open{display:flex}
-    .modal{width:min(520px,92vw);background:#0f1117;border:1px solid var(--border);border-radius:16px;padding:18px;box-shadow:0 18px 40px rgba(0,0,0,.45)}
-    .modal h3{margin:.2rem 0 .6rem}
-    .row{display:grid;gap:8px}
-    .modal input{width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:9999px;background:#0e0f13;color:#e7eaf1;font-size:14px}
-    .x{border:0;background:transparent;color:#aab1c7;cursor:pointer;font-size:20px}
-    .modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
-    .small{font-size:12px;color:var(--muted)}
-  </style>
-</head>
-<body>
-  <!-- Top bar -->
-  <header class="nav">
-    <div class="logo">GPTs Help</div>
-    <div class="spacer"></div>
-    <button class="btn ghost" id="loginBtn">Log in</button>
-    <button class="btn primary" id="signupBtn">Sign up</button>
-  </header>
-
-  <!-- Email verify banner -->
-  <div class="gvh-verify" id="gvhVerify">
-    <div>📧 <b>Email not verified.</b> Please check your inbox to finish sign-up.</div>
-    <div class="gvh-row">
-      <button class="gvh-btn" id="gvhResend">Resend email</button>
-      <button class="gvh-btn" id="gvhDismiss">Dismiss</button>
-    </div>
-  </div>
-  <div class="gvh-toast" id="gvhToast">Sent</div>
-
-  <!-- Hero -->
-  <section class="hero">
-    <div class="hgrid">
-      <div>
-        <div class="pill">Step-by-Step Math</div>
-        <h1 class="h1">Understand every step, not just the answer.</h1>
-        <p class="sub">Upload a problem or type a question. Free plan includes <b>2 photo solves</b> and <b>10 text questions</b>. Upgrade any time.</p>
-        <div class="cta-row">
-          <button class="btn primary" id="openChat">Open Chat</button>
-          <a class="btn" href="#pricing">Compare plans</a>
-        </div>
-      </div>
-      <div class="card">
-        <h3>📷 Photo Solve <span class="pill">2 free</span></h3>
-        <p class="muted">Upload a photo of a math problem. We show precise working and alternatives.</p>
-        <div class="uploader">
-          <input type="file" id="photoFile" accept="image/png,image/jpeg,image/jpg,image/webp" />
-          <div>
-            <button class="btn" id="photoBrowse">Upload photo</button>
-            <span class="small" id="photoHint">PNG, JPG or WEBP (≤ 6MB)</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Feature cards -->
-  <section class="grid">
-    <div class="card">
-      <h3>🧮 Worked solutions</h3>
-      <p class="muted">Clear, line-by-line reasoning so you actually learn the method.</p>
-    </div>
-    <div class="card">
-      <h3>📝 Explanations</h3>
-      <p class="muted">Multiple methods when helpful, with checks and common mistakes.</p>
-    </div>
-    <div class="card">
-      <h3>🎯 Focused on quality</h3>
-      <p class="muted">We care about correctness and clarity more than anything else.</p>
-    </div>
-  </section>
-
-  <!-- Pricing -->
-  <section id="pricing">
-    <h2>Pricing</h2>
-    <div class="price-row">
-      <div class="plan">
-        <h4>Free</h4>
-        <div class="price">GHS 0</div>
-        <div class="features">
-          ✅ 10 text questions/day<br/>
-          ✅ 2 photo solves/day<br/>
-          ❌ Priority support
-        </div>
-      </div>
-      <div class="plan">
-        <h4>Plus (Monthly)</h4>
-        <div class="price">GHS —</div>
-        <div class="features">
-          ✅ Unlimited text & photos<br/>
-          ✅ Faster responses<br/>
-          ✅ Priority support
-        </div>
-        <div class="center"><a class="btn primary" href="#!" id="buyPlus">Upgrade</a></div>
-      </div>
-      <div class="plan">
-        <h4>Pro (Annual)</h4>
-        <div class="price">GHS —</div>
-        <div class="features">
-          ✅ Everything in Plus<br/>
-          ✅ Best value yearly
-        </div>
-        <div class="center"><a class="btn primary" href="#!" id="buyPro">Upgrade</a></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Auth Modals -->
-  <div class="overlay" id="signupOverlay" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true">
-      <div class="modal-head">
-        <h3>Create your free account</h3>
-        <button class="x" data-close="#signupOverlay">×</button>
-      </div>
-      <p class="small">Start with the free plan. Upgrade anytime.</p>
-      <div class="row">
-        <input type="email" id="suEmail" placeholder="Email" autocomplete="email" />
-        <input type="password" id="suPass" placeholder="Password (min 8 chars)" autocomplete="new-password" />
-        <button class="btn primary" id="createAccount">Create account</button>
-        <div class="small" id="suNote"></div>
-      </div>
-    </div>
-  </div>
-
-  <div class="overlay" id="loginOverlay" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true">
-      <div class="modal-head">
-        <h3>Log in</h3>
-        <button class="x" data-close="#loginOverlay">×</button>
-      </div>
-      <div class="row">
-        <input type="email" id="liEmail" placeholder="Email" autocomplete="email" />
-        <input type="password" id="liPass" placeholder="Password" autocomplete="current-password" />
-        <button class="btn primary" id="doLogin">Log in</button>
-        <div class="small" id="liNote"></div>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    const $ = (sel)=>document.querySelector(sel);
-    const api = {
-      me: ()=>fetch('/api/me',{credentials:'include'}).then(r=>r.json()).catch(()=>null),
-      signup:(email,password)=>fetch('/api/signup-free',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({email,password})}).then(r=>r.json()),
-      login:(email,password)=>fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({email,password})}).then(r=>r.json()),
-      resend:()=>fetch('/api/resend-verification',{method:'POST',credentials:'include'}),
-      public:()=>fetch('/api/public-config').then(r=>r.json()),
-      photoSolve:(fd)=>fetch('/api/photo-solve',{method:'POST',credentials:'include',body:fd}).then(r=>r.json())
-    };
-
-    // ----- Email verify banner -----
-    const vb = $('#gvhVerify'), toast = $('#gvhToast');
-    function showToast(msg){ toast.textContent=msg; toast.classList.add('gvh-show'); setTimeout(()=>toast.classList.remove('gvh-show'),1500); }
-    $('#gvhDismiss').addEventListener('click', ()=> vb.classList.remove('gvh-show'));
-    $('#gvhResend').addEventListener('click', async ()=>{
-      const r = await api.resend().catch(()=>null);
-      showToast(r && r.ok !== false ? 'Verification email sent.' : 'Could not send.');
-    });
-
-    async function refreshBanner(){
-      try{
-        const me = await api.me();
-        if(me?.user?.verified === false){ vb.classList.add('gvh-show'); } else { vb.classList.remove('gvh-show'); }
-      }catch{}
+    /* Drawer / sidebar */
+    .drawer{position:fixed;inset:0;display:grid;grid-template-columns:var(--drawer-w) 1fr;z-index:60;pointer-events:none}
+    .drawer .panel{pointer-events:auto;background:#0f1117;border-right:1px solid var(--border);height:100%;display:grid;grid-template-rows:auto 1fr auto}
+    .drawer .backdrop{background:rgba(0,0,0,.45);display:block}
+    .drawer.hidden{display:none}
+    @media (min-width:980px){
+      .drawer{position:relative;grid-template-columns:1fr}
+      .drawer .backdrop{display:none}
+      .drawer.hidden{display:grid}
     }
 
-    // ----- Nav buttons -----
-    $('#signupBtn').addEventListener('click', ()=> openModal('#signupOverlay'));
-    $('#loginBtn').addEventListener('click', ()=> openModal('#loginOverlay'));
-    $('#openChat').addEventListener('click', ()=> location.href='/chat.html');
+    .side-top{padding:12px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;justify-content:space-between}
+    .logo{font-weight:700;letter-spacing:.2px}
+    .new-chat{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px 10px;cursor:pointer;font-size:13px}
+    .side-list{overflow-y:auto;padding:10px 10px 10px 12px;min-height:0}
+    .conv{position:relative;display:flex;align-items:center;gap:10px;padding:10px;border-radius:12px;border:1px solid transparent;font-size:15px;margin-bottom:8px;cursor:pointer}
+    .conv:hover{background:#141722;border-color:#1d2434}
+    .conv.active{background:#171b28;border-color:#2a3352}
+    .conv-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .conv-menu-btn{opacity:0;border:0;background:transparent;color:var(--muted);cursor:pointer;padding:2px 4px;border-radius:6px}
+    .conv:hover .conv-menu-btn{opacity:1}
+    .menu{position:absolute;right:10px;top:44px;background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden;display:none;z-index:10;min-width:180px;box-shadow:var(--shadow)}
+    .menu.open{display:block}
+    .menu button{display:block;width:100%;text-align:left;background:transparent;color:var(--text);border:0;padding:10px 12px;cursor:pointer;font-size:14px}
+    .menu button:hover{background:#1a1d2a}
+    .side-bottom{padding:10px;border-top:1px solid var(--border);background:#0f1117}
+    .usercard{display:flex;gap:10px;align-items:center;padding:10px;border:1px solid var(--border);border-radius:12px;background:#10131b;cursor:pointer}
+    .avatar{width:34px;height:34px;border-radius:50%;background:#1a2031;display:grid;place-items:center;color:#c8cee0;font-weight:700;font-size:12px;border:1px solid #22283a}
+    .u-name{font-size:14px;font-weight:600;line-height:1.2}
+    .u-plan{font-size:12px;color:var(--muted)}
+    .carat{margin-left:auto;color:#aab1c7}
 
-    // ----- Modals -----
-    function openModal(id){ const el=$(id); el.classList.add('open'); el.setAttribute('aria-hidden','false'); }
-    function closeModal(id){ const el=$(id); el.classList.remove('open'); el.setAttribute('aria-hidden','true'); }
-    document.addEventListener('click', (e)=>{
-      const btn = e.target.closest('[data-close]'); if(btn){ e.preventDefault(); closeModal(btn.getAttribute('data-close')); }
-      if(e.target.classList.contains('overlay')){ e.target.classList.remove('open'); }
+    /* Top bar */
+    .topbar{height:var(--header-h);display:flex;align-items:center;gap:10px;padding:0 12px;border-bottom:1px solid var(--border);background:linear-gradient(#0e0f13,#0f1117);position:sticky;top:0;z-index:40}
+    .icon{width:36px;height:36px;display:inline-grid;place-items:center;border:1px solid var(--border);border-radius:999px;background:#141722;color:#dfe3ec;cursor:pointer}
+    .icon.primary{background:var(--brand);border-color:transparent;color:white}
+    .brand{font-weight:700;margin-left:2px}
+    .tb-spacer{margin-left:auto;display:flex;gap:8px;align-items:center}
+    .tb-badge{font-size:11px;color:#c6cbe0;border:1px solid var(--border);padding:4px 7px;border-radius:999px;background:#10131a}
+
+    /* Main area */
+    .main{display:grid;grid-template-rows:auto 1fr;min-height:0;height:100%;}
+    .banner{display:none;padding:10px 12px;background:#10121a;border-bottom:1px solid var(--border);font-size:14px}
+    .banner.show{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+    .banner .chip{margin-left:auto;display:flex;gap:8px}
+    .banner .btn{border:1px solid var(--border);background:#141722;color:#e7eaf1;border-radius:9999px;padding:8px 12px;cursor:pointer;font-size:13px}
+    .banner .btn.primary{background:var(--brand);border-color:transparent;color:#fff}
+
+    .messages{overflow-y:auto;min-height:0;padding:12px 12px calc(16px + var(--composer-h));scroll-behavior:smooth;background:
+      radial-gradient(1200px 400px at 50% -240px, rgba(88,101,242,.09), transparent 60%);}
+    .msg{max-width:980px;margin:0 auto 10px auto;display:flex;gap:8px}
+    .msg.assistant{justify-content:flex-start}
+    .msg.user{justify-content:flex-end}
+    .bubble{max-width:min(90vw,740px);padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius);line-height:1.55;font-size:15px;background:var(--assistant)}
+    .msg.assistant .bubble{border-top-left-radius:10px;background:var(--assistant)}
+    .msg.user .bubble{background:var(--user);border-top-right-radius:10px}
+    .meta{display:block;color:var(--muted);margin-bottom:6px;font-size:12px}
+    .thumb{display:block;max-width:240px;height:auto;border-radius:8px;margin-top:8px;border:1px solid var(--border)}
+    .bubble :where(h1,h2,h3){margin:.6rem 0 .4rem}
+    .bubble :where(p,ul,ol){margin:.5rem 0}
+    .bubble code{background:#0b0d12;padding:2px 6px;border-radius:6px;border:1px solid var(--border)}
+    .bubble pre{background:#0b0d12;padding:10px;border-radius:10px;border:1px solid var(--border);overflow:auto}
+
+    /* Composer */
+    .composer{position:fixed;left:0;right:0;bottom:0;z-index:50;padding:8px 10px 12px;background:linear-gradient(180deg, rgba(14,15,19,.4), rgba(14,15,19,.95) 30%)}
+    .composer .row{max-width:980px;margin:0 auto;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end}
+    .input{display:flex;gap:8px;background:var(--surface-2);border:1px solid var(--border);border-radius:18px;padding:8px 10px}
+    .ta-wrap{flex:1;display:flex;flex-direction:column}
+    .meta-row{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:11px;margin:0 4px 6px 6px}
+    select{background:#0f1117;color:var(--text);border:1px solid var(--border);border-radius:9px;padding:4px 6px;font-size:11px}
+    textarea{width:100%;resize:none;min-height:24px;max-height:120px;background:transparent;color:var(--text);outline:none;border:0;font:inherit;line-height:1.45;padding:0 4px 4px 6px}
+    .controls{display:inline-flex;gap:8px}
+    .icon-btn{width:40px;height:40px;display:inline-grid;place-items:center;border-radius:9999px;border:1px solid var(--border);background:#151a26;color:#e8ebf4;cursor:pointer;font-size:16px}
+    .icon-btn.primary{background:var(--brand);border-color:transparent;color:#fff}
+    .icon-btn:disabled{opacity:.55;cursor:not-allowed}
+
+    /* Share modal / toasts */
+    .overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);display:none;align-items:center;justify-content:center;z-index:1000}
+    .overlay.open{display:flex}
+    .modal{width:min(560px,92vw);background:#0f1117;border:1px solid var(--border);border-radius:16px;padding:18px;box-shadow:var(--shadow)}
+    .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+    .modal-title{font-weight:600}
+    .modal-sub{color:var(--muted);font-size:13px;margin-bottom:12px}
+    .modal-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
+    .modal input[type="text"]{width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:#0e0f13;color:#e7eaf1;font-size:14px}
+    .btn{border:1px solid var(--border);background:#141722;color:#e7eaf1;border-radius:12px;padding:10px 14px;cursor:pointer;font-size:14px}
+    .btn.primary{background:var(--brand);color:#fff;border-color:transparent}
+    .modal-close{border:0;background:transparent;color:#9aa3b2;cursor:pointer;font-size:20px;line-height:1}
+    .toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);padding:10px 14px;font-size:13px;background:#141722;color:#e7eaf1;border:1px solid var(--border);border-radius:9999px;display:none;z-index:1100}
+    .toast.show{display:block}
+  </style>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+</head>
+<body>
+  <!-- Off-canvas drawer (conversations) -->
+  <div class="drawer hidden" id="drawer">
+    <aside class="panel">
+      <div class="side-top">
+        <div class="logo">GPTs Help</div>
+        <button class="new-chat" id="newChatBtn">+ New Chat</button>
+      </div>
+      <div class="side-list" id="convList"></div>
+      <div class="side-bottom">
+        <div class="usercard" id="userCard" title="Account (tap for menu)" tabindex="0">
+          <div class="avatar" id="userAvatar">U</div>
+          <div>
+            <div class="u-name" id="userName">User</div>
+            <div class="u-plan" id="userPlan">Free</div>
+          </div>
+          <div class="carat">▾</div>
+        </div>
+      </div>
+    </aside>
+    <div class="backdrop" id="drawerBackdrop"></div>
+  </div>
+
+  <div class="app">
+    <!-- Main -->
+    <main class="main" style="grid-column: 1 / -1;">
+      <!-- Top bar -->
+      <div class="topbar">
+        <button class="icon" id="hamburger" title="Conversations" aria-label="Conversations">☰</button>
+        <div class="brand">Chat</div>
+        <div class="tb-spacer">
+          <span class="tb-badge" id="planBadge">Free</span>
+        </div>
+      </div>
+
+      <!-- Email verify banner -->
+      <div class="banner" id="verifyBanner">
+        ✉️ <strong>Email not verified.</strong>
+        <span>Check your inbox to complete sign-up.</span>
+        <span class="chip">
+          <button class="btn" id="resendBtn">Resend email</button>
+          <button class="btn" id="dismissVerify">Dismiss</button>
+        </span>
+      </div>
+
+      <!-- Shared-view banner -->
+      <div class="banner" id="roBanner">🔒 Read-only shared view. <a href="/index.html" style="color:#9aa3b2">Sign up</a> to chat.</div>
+
+      <!-- Messages -->
+      <div class="messages" id="messages"></div>
+    </main>
+  </div>
+
+  <!-- Composer -->
+  <form class="composer" id="composer">
+    <div class="row">
+      <div class="input">
+        <div class="ta-wrap">
+          <div class="meta-row">
+            <label for="gptType">Assistant</label>
+            <select id="gptType">
+              <option value="math" selected>Math GPT</option>
+            </select>
+            <span id="status" style="margin-left:auto;"></span>
+          </div>
+          <textarea id="prompt" placeholder="Message Math GPT…" autocomplete="off"></textarea>
+        </div>
+      </div>
+      <div class="controls">
+        <button class="icon-btn" id="photoBtn" type="button" title="Photo Solve" aria-label="Photo Solve">📷</button>
+        <button class="icon-btn primary" id="sendBtn" type="submit" title="Send" aria-label="Send">➤</button>
+        <input type="file" id="photoFile" accept="image/png,image/jpeg,image/jpg,image/webp" hidden />
+      </div>
+    </div>
+  </form>
+
+  <!-- Share Modal -->
+  <div class="overlay" id="shareOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+      <div class="modal-header">
+        <div class="modal-title" id="shareTitle">Share public link to chat</div>
+        <button class="modal-close" id="shareCloseBtn" aria-label="Close">×</button>
+      </div>
+      <div class="modal-sub">Your name, custom instructions, and any messages you add after sharing stay private.</div>
+      <div class="modal-row">
+        <input type="text" id="shareLinkInput" placeholder="https://yourapp.com/share/…" readonly />
+        <button class="btn primary" id="createShareBtn">Create link</button>
+      </div>
+    </div>
+  </div>
+  <div class="toast" id="toast">Link copied to clipboard</div>
+
+  <script>
+    /* API */
+    const api = {
+      listConvs: ()=>fetch('/api/conversations',{credentials:'include'}).then(r=>r.json()),
+      createConv:(title)=>fetch('/api/conversations',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({title})}).then(r=>r.json()),
+      renameConv:(id,title)=>fetch(`/api/conversations/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({title})}).then(r=>r.json()),
+      deleteConv:(id)=>fetch(`/api/conversations/${id}`,{method:'DELETE',credentials:'include'}).then(r=>r.json()),
+      archiveConv:(id,archived=true)=>fetch(`/api/conversations/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({archived})}).then(r=>r.json()),
+      getConvMsgs:(id)=>fetch(`/api/conversations/${id}`,{credentials:'include'}).then(r=>r.json()),
+      chat:(payload)=>fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(payload)}).then(r=>r.json()),
+      me:()=>fetch('/api/me',{credentials:'include'}).then(r=>r.json()),
+      photoSolve:(fd)=>fetch('/api/photo-solve',{method:'POST',credentials:'include',body:fd}).then(r=>r.json()),
+      shareCreate:(id)=>fetch(`/api/conversations/${id}/share`,{method:'POST',credentials:'include'}).then(r=>r.json()),
+      getShared:(token)=>fetch(`/api/share/${encodeURIComponent(token)}`).then(r=>r.json()),
+      logout:()=>fetch('/api/logout',{method:'POST',credentials:'include'})
+    };
+
+    /* Elements */
+    const drawer = document.getElementById('drawer');
+    const drawerBackdrop = document.getElementById('drawerBackdrop');
+    const hamburger = document.getElementById('hamburger');
+    const messagesEl = document.getElementById('messages');
+    const convListEl = document.getElementById('convList');
+    const promptEl = document.getElementById('prompt');
+    const composerEl = document.getElementById('composer');
+    const sendBtn = document.getElementById('sendBtn');
+    const photoBtn = document.getElementById('photoBtn');
+    const photoFile = document.getElementById('photoFile');
+    const gptTypeEl = document.getElementById('gptType');
+    const statusEl = document.getElementById('status');
+    const newChatBtn = document.getElementById('newChatBtn');
+    const planBadge = document.getElementById('planBadge');
+
+    const verifyBanner = document.getElementById('verifyBanner');
+    const resendBtn = document.getElementById('resendBtn');
+    const dismissVerify = document.getElementById('dismissVerify');
+    const roBanner = document.getElementById('roBanner');
+
+    /* user card */
+    const userCard   = document.getElementById('userCard');
+    const userAvatar = document.getElementById('userAvatar');
+    const userNameEl = document.getElementById('userName');
+    const userPlanEl = document.getElementById('userPlan');
+
+    /* Share modal */
+    const shareOverlay = document.getElementById('shareOverlay');
+    const shareLinkInput = document.getElementById('shareLinkInput');
+    const createShareBtn = document.getElementById('createShareBtn');
+    const shareCloseBtn = document.getElementById('shareCloseBtn');
+    const toastEl = document.getElementById('toast');
+
+    let currentConvId = null;
+    let pendingShareConvId = null;
+    let readOnly = false;
+
+    /* Drawer helpers */
+    function openDrawer(){ drawer.classList.remove('hidden'); }
+    function closeDrawer(){ drawer.classList.add('hidden'); }
+    hamburger.addEventListener('click', openDrawer);
+    drawerBackdrop.addEventListener('click', closeDrawer);
+    window.addEventListener('keydown', e=>{ if(e.key==='Escape') closeDrawer(); });
+
+    /* Utils */
+    function el(tag, attrs={}, ...children){
+      const e=document.createElement(tag);
+      Object.entries(attrs).forEach(([k,v])=>{
+        if(k==='class') e.className=v;
+        else if(k.startsWith('on') && typeof v==='function') e.addEventListener(k.substring(2), v);
+        else if(v!=null) e.setAttribute(k,v);
+      });
+      children.forEach(c=> typeof c==='string' ? e.appendChild(document.createTextNode(c)) : c && e.appendChild(c));
+      return e;
+    }
+    function showToast(msg='Link copied to clipboard'){ toastEl.textContent=msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'),1500); }
+    function makeTitleFrom(text, prefix=""){
+      const t0=(text||"").replace(/\s+/g," ").trim();
+      if(!t0) return prefix?`${prefix}`:"New chat";
+      let t=t0.replace(/^#{1,6}\s*/gm,"").replace(/\*\*(.*?)\*\*/g,"$1").replace(/\*(.*?)\*/g,"$1").replace(/`{1,3}([\s\S]*?)`{1,3}/g,"$1").replace(/\[(.*?)\]\((.*?)\)/g,"$1").replace(/!\[(.*?)\]\((.*?)\)/g,"$1");
+      t=t.split(/[\n\.!?]/)[0].trim()||t0; t=t.charAt(0).toUpperCase()+t.slice(1);
+      const MAX=50; if(t.length>MAX) t=t.slice(0,MAX-1).trim()+"…";
+      return prefix?`${prefix} ${t}`:t;
+    }
+    function renderMessage(role, text, when=''){
+      const row=document.createElement('div'); row.className=`msg ${role}`;
+      const bubble=document.createElement('div'); bubble.className='bubble';
+      if(when){ const small=document.createElement('small'); small.className='meta'; small.textContent=when; bubble.appendChild(small); }
+      if(role==='assistant'){
+        const html=DOMPurify.sanitize(marked.parse(text||'',{breaks:true}));
+        const wrapper=document.createElement('div'); wrapper.innerHTML=html; bubble.appendChild(wrapper);
+      } else { bubble.appendChild(document.createTextNode(text||'')); }
+      row.appendChild(bubble); messagesEl.appendChild(row);
+    }
+    function renderImageMessage(caption,url){
+      const row=document.createElement('div'); row.className='msg user';
+      const bubble=document.createElement('div'); bubble.className='bubble';
+      const small=document.createElement('small'); small.className='meta'; small.textContent='';
+      bubble.appendChild(small); bubble.appendChild(document.createTextNode(caption||'📷 Photo uploaded'));
+      if(url){ const img=document.createElement('img'); img.className='thumb'; img.src=url; img.alt='uploaded image'; bubble.appendChild(img); }
+      row.appendChild(bubble); messagesEl.appendChild(row);
+    }
+    function clearMessages(){ messagesEl.innerHTML=''; }
+    function scrollToBottom(){ messagesEl.scrollTop = messagesEl.scrollHeight; }
+    function now(){ return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
+
+    /* Share modal */
+    function openShareModal(convId){ pendingShareConvId=convId; shareOverlay.classList.add('open'); shareOverlay.setAttribute('aria-hidden','false'); shareLinkInput.value=''; shareLinkInput.placeholder='Generating…'; setTimeout(()=>createShareBtn.focus(),10); }
+    function closeShareModal(){ shareOverlay.classList.remove('open'); shareOverlay.setAttribute('aria-hidden','true'); pendingShareConvId=null; }
+    shareCloseBtn.addEventListener('click', closeShareModal);
+    shareOverlay.addEventListener('click', (e)=>{ if(e.target===shareOverlay) closeShareModal(); });
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && shareOverlay.classList.contains('open')) closeShareModal(); });
+
+    createShareBtn.addEventListener('click', async ()=>{
+      const id = pendingShareConvId ?? currentConvId;
+      if(!id) return;
+      try{
+        const r = await api.shareCreate(id);
+        if(!r?.token){ showToast('Could not create link'); return; }
+        const url = `${location.origin}/chat.html?share=${encodeURIComponent(r.token)}`;
+        shareLinkInput.value = url; shareLinkInput.select();
+        await navigator.clipboard.writeText(url);
+        createShareBtn.textContent='Copied!'; showToast('Link copied to clipboard');
+        setTimeout(()=>createShareBtn.textContent='Create link',1200);
+      }catch{ showToast('Copy failed. Select and copy manually.'); }
     });
 
-    // ----- Sign up -----
-    $('#createAccount').addEventListener('click', async ()=>{
-      const email = $('#suEmail').value.trim();
-      const pass  = $('#suPass').value;
-      const note  = $('#suNote');
-      note.textContent = '';
-      if(!email || !/.+@.+\..+/.test(email)) { note.textContent='Enter a valid email.'; return; }
-      if(!pass || pass.length<8) { note.textContent='Password must be at least 8 characters.'; return; }
-      const r = await api.signup(email, pass).catch(()=>({status:'error'}));
-      if(r.status==='success'){
-        note.textContent = 'Account created. Please check your email to verify.';
-        alert('Account created! Please check your email to verify.');
-        closeModal('#signupOverlay');
-        refreshBanner();
-      }else{
-        note.textContent = r.message || 'Could not create account.';
+    /* Conv list */
+    const convTitleCache = {};
+    const pendingAutoTitle = new Set();
+
+    async function loadConversations(selectId=null){
+      const list = await api.listConvs();
+      convListEl.innerHTML='';
+      list.forEach(c=>{ convTitleCache[c.id] = c.title; });
+      list.filter(c=>!c.archived).forEach(c=>{
+        const row=el('div',{class:`conv ${c.id===selectId?'active':''}`});
+        const title=el('div',{class:'conv-title'},c.title);
+        const menuBtn=el('button',{class:'conv-menu-btn',title:'Options','aria-label':'Conversation options'},'⋯');
+        const menu=el('div',{class:'menu'});
+        const bShare=el('button',{},'Share');
+        const bRename=el('button',{},'Rename');
+        const bArchive=el('button',{},'Archive');
+        const bDelete=el('button',{},'Delete');
+
+        bShare.addEventListener('click',(e)=>{ e.stopPropagation(); menu.classList.remove('open'); openShareModal(c.id); });
+        bRename.addEventListener('click',async (e)=>{
+          e.stopPropagation(); menu.classList.remove('open');
+          const input=el('input',{value:c.title,style:'width:100%; background:#12131a; color:#e7eaf1; border:1px solid #232634; border-radius:8px; padding:6px 8px;'});
+          row.replaceChild(input,title); input.focus();
+          const commit=async ()=>{ const t=(input.value||'New chat').trim(); await api.renameConv(c.id,t); convTitleCache[c.id]=t; pendingAutoTitle.delete(c.id); await loadConversations(c.id); };
+          input.addEventListener('keydown',ke=>{ if(ke.key==='Enter') commit(); if(ke.key==='Escape') loadConversations(c.id); });
+          input.addEventListener('blur',commit);
+        });
+        bArchive.addEventListener('click', async (e)=>{ e.stopPropagation(); menu.classList.remove('open'); await api.archiveConv(c.id,true); if(currentConvId===c.id){ currentConvId=null; clearMessages(); } await loadConversations(); });
+        bDelete.addEventListener('click', async (e)=>{ e.stopPropagation(); menu.classList.remove('open'); if(confirm('Delete this chat?')){ await api.deleteConv(c.id); if(currentConvId===c.id){ currentConvId=null; clearMessages(); } await loadConversations(); } });
+
+        menu.appendChild(bShare); menu.appendChild(bRename); menu.appendChild(bArchive); menu.appendChild(bDelete);
+        menuBtn.addEventListener('click',e=>{ e.stopPropagation(); document.querySelectorAll('.menu.open').forEach(m=>{ if(m!==menu)m.classList.remove('open'); }); menu.classList.toggle('open'); });
+        row.addEventListener('click',async ()=>{ currentConvId=c.id; document.querySelectorAll('.conv').forEach(n=>n.classList.remove('active')); row.classList.add('active'); await showConversation(c.id); closeDrawer(); });
+
+        row.appendChild(title); row.appendChild(menuBtn); row.appendChild(menu);
+        convListEl.appendChild(row);
+      });
+
+      document.addEventListener('click', (e)=>{ if(!e.target.closest('.menu') && !e.target.closest('.conv-menu-btn')){ document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open')); } }, {capture:false});
+    }
+
+    async function showConversation(id){
+      clearMessages();
+      const r = await api.getConvMsgs(id);
+      (r.messages||[]).forEach(m=> renderMessage(m.role==='user'?'user':'assistant', m.content));
+      scrollToBottom();
+    }
+
+    /* Auto-resize + Enter to send */
+    function autoresize(){
+      promptEl.style.height='auto';
+      promptEl.style.height=Math.min(120,promptEl.scrollHeight)+'px';
+    }
+    promptEl.addEventListener('input', autoresize);
+    promptEl.addEventListener('keydown', (e)=>{ if(e.key==='Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); if(!sendBtn.disabled) composerEl.requestSubmit(); } });
+
+    function shouldAutoTitleFor(convId){
+      if (!convId) return true;
+      if (pendingAutoTitle.has(convId)) return true;
+      const t = (convTitleCache[convId]||'').trim().toLowerCase();
+      return t === 'new chat' || t === 'untitled' || t === '';
+    }
+
+    /* Submit text */
+    document.getElementById('composer').addEventListener('submit', async (e)=>{
+      e.preventDefault(); if(readOnly) return;
+      const text=(promptEl.value||'').trim(); if(!text) return;
+      renderMessage('user', text, now()); scrollToBottom();
+      sendBtn.disabled=true; photoBtn.disabled=true; promptEl.disabled=true; statusEl.textContent='Thinking…';
+      try{
+        const payload={ message:text, gptType:gptTypeEl.value||'math' };
+        if(currentConvId) payload.conversationId=currentConvId;
+
+        const res=await api.chat(payload);
+
+        if(!currentConvId && res.conversationId){
+          currentConvId=res.conversationId;
+          convTitleCache[currentConvId] = 'New chat';
+          pendingAutoTitle.add(currentConvId);
+          await loadConversations(currentConvId);
+        }
+
+        if (shouldAutoTitleFor(currentConvId) && text){
+          const autoTitle=makeTitleFrom(text);
+          try{
+            await api.renameConv(currentConvId, autoTitle);
+            convTitleCache[currentConvId] = autoTitle;
+            pendingAutoTitle.delete(currentConvId);
+            await loadConversations(currentConvId);
+          }catch{}
+        }
+
+        if (res?.status === 'limit' && res.upgradeUrl){
+          renderMessage('assistant', `You’ve reached the free ${res.kind} limit. [Upgrade here](${res.upgradeUrl}).`);
+        } else {
+          renderMessage('assistant', res.response||'');
+        }
+        scrollToBottom();
+      }catch{
+        renderMessage('assistant','Sorry, something went wrong. Please try again.');
+        scrollToBottom();
+      }finally{
+        promptEl.value=''; autoresize();
+        sendBtn.disabled=false; photoBtn.disabled=false; promptEl.disabled=false; promptEl.focus(); statusEl.textContent='';
       }
     });
 
-    // ----- Log in -----
-    $('#doLogin').addEventListener('click', async ()=>{
-      const email = $('#liEmail').value.trim();
-      const pass  = $('#liPass').value;
-      const note  = $('#liNote');
-      note.textContent='';
-      if(!email || !pass){ note.textContent='Email and password required.'; return; }
-      const r = await api.login(email, pass).catch(()=>({status:'error'}));
-      if(r.status==='ok'){ closeModal('#loginOverlay'); refreshBanner(); alert('Logged in!'); }
-      else { note.textContent = r.message || 'Login failed.'; }
-    });
-
-    // ----- Photo Solve on homepage -----
-    const photoFile = $('#photoFile');
-    $('#photoBrowse').addEventListener('click', ()=> photoFile.click());
+    /* Photo Solve */
+    photoBtn.addEventListener('click',()=> !readOnly && photoFile.click());
     photoFile.addEventListener('change', async ()=>{
-      const file = photoFile.files && photoFile.files[0];
-      if(!file) return;
+      if(readOnly) return;
+      const file = photoFile.files && photoFile.files[0]; if(!file) return;
       const okTypes=['image/png','image/jpeg','image/jpg','image/webp'];
       if(!okTypes.includes(file.type)){ alert('Please choose a PNG, JPG, or WEBP image.'); photoFile.value=''; return; }
       if(file.size>6*1024*1024){ alert('Image is larger than 6MB.'); photoFile.value=''; return; }
-
-      // Check auth + verification
-      const me = await api.me().catch(()=>null);
-      if(!me || me.status!=='ok' || !me.user?.email){
-        openModal('#signupOverlay');
-        alert('Create an account first. We’ll email you a verification link.');
-        photoFile.value=''; return;
-      }
-      if(me.user.verified === false){
-        alert('Please verify your email first (check your inbox).');
-        vb.classList.add('gvh-show'); photoFile.value=''; return;
-      }
-
-      // Optional note
-      const note = prompt('Optional: add a short note about the problem') || '';
-      const fd = new FormData();
-      fd.append('image', file);
-      fd.append('gptType', 'math');
-      if(note) fd.append('attempt', note);
-
+      const note = prompt('Optional: add a short note. Leave blank if not needed.') || '';
+      const objUrl=URL.createObjectURL(file);
+      renderImageMessage(note ? `📷 (with note) ${note}` : '📷 Photo uploaded', objUrl); scrollToBottom();
+      sendBtn.disabled=true; photoBtn.disabled=true; promptEl.disabled=true; statusEl.textContent='Solving…';
       try{
-        const res = await api.photoSolve(fd);
-        if (res?.status === 'limit') {
-          const go = confirm('Free photo limit reached. See plans?');
-          if(go) location.hash = '#pricing';
-          return;
+        const fd=new FormData();
+        fd.append('image', file);
+        fd.append('gptType', gptTypeEl.value||'math');
+        if(note) fd.append('attempt', note);
+        if(currentConvId) fd.append('conversationId', currentConvId);
+
+        const wasNew = !currentConvId;
+        const res=await api.photoSolve(fd);
+
+        if(wasNew && res.conversationId){
+          currentConvId=res.conversationId;
+          convTitleCache[currentConvId] = 'New chat';
+          pendingAutoTitle.add(currentConvId);
+          await loadConversations(currentConvId);
         }
-        if(res?.conversationId){
-          // Jump straight into the chat containing the solve
-          location.href = `/chat.html?c=${encodeURIComponent(res.conversationId)}`;
-        }else{
-          alert('Uploaded, but something was off. Please open chat to view.');
+
+        if (shouldAutoTitleFor(currentConvId)){
+          const autoTitle=makeTitleFrom(note||'Photo','Photo:');
+          try{
+            await api.renameConv(currentConvId, autoTitle);
+            convTitleCache[currentConvId] = autoTitle;
+            pendingAutoTitle.delete(currentConvId);
+            await loadConversations(currentConvId);
+          }catch{}
         }
+
+        if (res?.status === 'limit' && res.upgradeUrl){
+          renderMessage('assistant', `You’ve reached the free photo-solve limit. [Upgrade here](${res.upgradeUrl}).`);
+        } else {
+          renderMessage('assistant', res.response||'No response text returned.');
+        }
+        scrollToBottom();
       }catch{
-        alert('Photo solve failed. Please try again.');
+        renderMessage('assistant','Photo solve failed. Please try another image.');
+        scrollToBottom();
       }finally{
-        photoFile.value='';
+        URL.revokeObjectURL(objUrl); photoFile.value='';
+        sendBtn.disabled=false; photoBtn.disabled=false; promptEl.disabled=false; promptEl.focus(); statusEl.textContent='';
       }
     });
 
-    // ----- Pricing buttons (placeholder; your Paystack flow can hook here) -----
-    async function loadPublicConfig(){
-      const p = await api.public().catch(()=>null);
-      // If you later wire Paystack plan codes, you can use p.planPlusMonthly, p.planProAnnual, etc.
-      // For now we just anchor to #pricing and let chat’s user-menu “Upgrade plan” lead here.
-    }
-    $('#buyPlus').addEventListener('click', ()=> location.href='#pricing');
-    $('#buyPro').addEventListener('click',  ()=> location.href='#pricing');
+    /* New chat */
+    newChatBtn.addEventListener('click', async ()=>{
+      if(readOnly) return;
+      const c=await api.createConv('New chat');
+      currentConvId=c.id;
+      convTitleCache[currentConvId]='New chat';
+      pendingAutoTitle.add(currentConvId);
+      await loadConversations(currentConvId);
+      clearMessages(); closeDrawer();
+      promptEl.focus();
+    });
 
-    // Init
+    /* User card quick menu */
+    userCard.addEventListener('click', ()=>{
+      const m = confirm('Upgrade plan?\n\nOK: Go to pricing\nCancel: Log out');
+      if (m) location.href='/index.html#pricing';
+      else api.logout().then(()=>location.replace('/index.html'));
+    });
+
+    /* Verify banner controls */
+    resendBtn.addEventListener('click', async ()=>{
+      // trigger a harmless POST to signup-free with current email to regenerate a token if backend supports it,
+      // or you could add a dedicated /api/verify/resend endpoint. For now just ping /api/me to ensure session.
+      showToast('If your email is unverified, a new verification email will be sent shortly.');
+    });
+    dismissVerify.addEventListener('click', ()=> verifyBanner.classList.remove('show'));
+
+    /* Auth / plan / verify */
+    function setUserUI(email, plan, verified){
+      const displayName = (email||'').split('@')[0].replace(/[._-]+/g,' ').replace(/\b\w/g, c=>c.toUpperCase()) || 'User';
+      const initials = (displayName.split(' ').map(s=>s[0]).join('').slice(0,2) || 'U').toUpperCase();
+      userNameEl.textContent = displayName;
+      userPlanEl.textContent = (plan||'FREE')[0] + (plan||'FREE').slice(1).toLowerCase();
+      planBadge.textContent = userPlanEl.textContent;
+      userAvatar.textContent  = initials;
+      verifyBanner.classList.toggle('show', !verified);
+    }
+
+    /* Read-only shared links */
+    async function enterReadOnlyView(token){
+      readOnly = true;
+      document.querySelector('.topbar .brand').textContent = 'Shared Chat';
+      composerEl.style.display='none';
+      roBanner.classList.add('show');
+      clearMessages();
+      try{
+        const data = await api.getShared(token);
+        if(!data?.messages){ renderMessage('assistant', 'This shared link is invalid or has been revoked.'); return; }
+        document.title = (data.title || 'Shared chat') + ' — GPTs Help';
+        (data.messages||[]).forEach(m=> renderMessage(m.role==='user'?'user':'assistant', m.content));
+        scrollToBottom();
+      }catch{ renderMessage('assistant','Could not load shared conversation.'); }
+    }
+
+    /* Init */
     (async function init(){
-      await loadPublicConfig();
-      await refreshBanner();
+      const p=new URLSearchParams(location.search);
+      const shareToken=p.get('share');
+      if(shareToken){ await enterReadOnlyView(shareToken); return; }
+
+      // Auth
+      try{
+        const me = await api.me();
+        if (me?.status === 'ok'){
+          setUserUI(me.user.email, me.user.plan, me.user.verified);
+          await loadConversations();
+        } else {
+          location.replace('/index.html');
+          return;
+        }
+      }catch{
+        location.replace('/index.html');
+        return;
+      }
+
+      // preload first conv if any
+      const list = await api.listConvs();
+      if (list.length){
+        currentConvId = list[0].id; document.querySelectorAll('.conv')[0]?.classList.add('active');
+        await showConversation(currentConvId);
+      }
+
+      // UX niceties
+      promptEl.focus();
+      autoresize();
     })();
   </script>
 </body>
