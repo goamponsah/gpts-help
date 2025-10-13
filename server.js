@@ -506,7 +506,7 @@ async function requireUser(req, res) {
   return u;
 }
 
-/* ---------------- quotas ---------------- */
+/* ---------------- quotas (single source of truth) ---------------- */
 const FREE_TEXT_LIMIT = 10;
 const FREE_PHOTO_LIMIT = 2;
 
@@ -645,39 +645,6 @@ app.get("/api/share/:token", async (req, res) => {
 });
 
 /* ---------------- chat (text) ---------------- */
-const FREE_TEXT_LIMIT = 10;
-const FREE_PHOTO_LIMIT = 2;
-
-async function getQuota(deviceId) {
-  const day = new Date().toISOString().slice(0,10);
-  await pool.query(
-    `insert into device_quotas(device_id, day)
-       values($1, $2)
-     on conflict (device_id, day) do nothing`,
-    [deviceId, day]
-  );
-  const r = await pool.query(
-    `select text_count, photo_count from device_quotas where device_id=$1 and day=$2`,
-    [deviceId, day]
-  );
-  if (!r.rowCount) return { day, text_count: 0, photo_count: 0 };
-  return { day, ...r.rows[0] };
-}
-async function bumpQuota(deviceId, kind) {
-  const day = new Date().toISOString().slice(0,10);
-  if (kind === "text") {
-    await pool.query(
-      `update device_quotas set text_count=text_count+1 where device_id=$1 and day=$2`,
-      [deviceId, day]
-    );
-  } else {
-    await pool.query(
-      `update device_quotas set photo_count=photo_count+1 where device_id=$1 and day=$2`,
-      [deviceId, day]
-    );
-  }
-}
-
 app.post("/api/chat", async (req, res) => {
   try {
     const u = await requireUser(req, res); if (!u) return;
