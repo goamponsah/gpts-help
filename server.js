@@ -383,6 +383,42 @@ app.post("/api/signup-free", async (req, res) => {
   }
 });
 
+app.post("/api/resend-verification", async (req, res) => {
+  try {
+    const email = needEmail(req, res);
+    if (!email) return;
+
+    const u = await getUserByEmail(email);
+    if (!u) return res.status(404).json({ status: "error", message: "No user" });
+    if (u.verified) return res.json({ status: "ok", already: true });
+
+    // new token (24h)
+    const token = crypto.randomBytes(24).toString("hex");
+    const until = new Date(Date.now() + 24*60*60*1000).toISOString();
+    await pool.query(
+      `update users set verify_token=$2, verify_expires=$3, updated_at=now()
+        where email=$1`,
+      [email, token, until]
+    );
+
+    const base = req.headers.origin || (FRONTEND_ORIGIN || "");
+    const host = base || `${req.protocol}://${req.get("host")}`;
+    const link = `${host}/api/verify-email?token=${encodeURIComponent(token)}`;
+
+    await resendSend({
+      to: email,
+      subject: "Verify your email — GPTs Help",
+      html: verificationEmailHtml(link),
+      text: `Verify your email: ${link}`
+    });
+
+    res.json({ status: "ok", sent: true });
+  } catch (e) {
+    console.error("resend-verification", e);
+    res.status(500).json({ status: "error", message: "Failed to send verification" });
+  }
+});
+
 app.get("/api/verify-email", async (req, res) => {
   try {
     const { token } = req.query || {};
@@ -419,7 +455,7 @@ app.post("/api/login", async (req, res) => {
       if (!ok) return res.status(401).json({ status: "error", message: "Invalid email or password." });
     }
     setSessionCookie(res, { email: u.email, plan: u.plan || "FREE" });
-    res.json({ status: "ok", user: { email: u.email } });
+    res.json({ status: "ok", user: { email: u.email, verified: !!u.verified } });
   } catch (e) {
     console.error("login", e);
     res.status(500).json({ status: "error", message: "Login failed" });
@@ -477,12 +513,21 @@ app.post("/api/paystack/verify", async (req, res) => {
   }
 });
 
-/* ---------------- auth-required helper ---------------- */
+/* ---------------- verification-enforcing helper ---------------- */
 async function requireUser(req, res) {
   const email = needEmail(req, res);
   if (!email) return null;
   const u = await getUserByEmail(email);
   if (!u) { res.status(401).json({ status: "unauthenticated" }); return null; }
+  return u;
+}
+async function requireVerifiedUser(req, res) {
+  const u = await requireUser(req, res);
+  if (!u) return null;
+  if (!u.verified) {
+    res.status(403).json({ status: "unverified", message: "Please verify your email to continue." });
+    return null;
+  }
   return u;
 }
 
@@ -517,9 +562,9 @@ async function bumpQuota(deviceId, kind) {
   }
 }
 
-/* ---------------- conversations ---------------- */
+/* ---------------- conversations (verified required) ---------------- */
 app.get("/api/conversations", async (req, res) => {
-  const u = await requireUser(req, res); if (!u) return;
+  const u = await requireVerifiedUser(req, res); if (!u) return;
   const r = await pool.query(
     `select id, title, archived
        from conversations
@@ -531,7 +576,7 @@ app.get("/api/conversations", async (req, res) => {
 });
 
 app.post("/api/conversations", async (req, res) => {
-  const u = await requireUser(req, res); if (!u) return;
+  const u = await requireVerifiedUser(req, res); if (!u) return;
   const title = (req.body?.title || "New chat").trim();
   const r = await pool.query(
     `insert into conversations(user_id, title) values($1,$2) returning id, title`,
@@ -541,7 +586,7 @@ app.post("/api/conversations", async (req, res) => {
 });
 
 app.patch("/api/conversations/:id", async (req, res) => {
-  const u = await requireUser(req, res); if (!u) return;
+  const u = await requireVerifiedUser(req, res); if (!u) return;
   const id = Number(req.params.id);
   const { title, archived } = req.body || {};
   const fields = [];
@@ -562,14 +607,14 @@ app.patch("/api/conversations/:id", async (req, res) => {
 });
 
 app.delete("/api/conversations/:id", async (req, res) => {
-  const u = await requireUser(req, res); if (!u) return;
+  const u = await requireVerifiedUser(req, res); if (!u) return;
   const id = Number(req.params.id);
   await pool.query(`delete from conversations where id=$1 and user_id=$2`, [id, u.id]);
   res.json({ ok: true });
 });
 
 app.get("/api/conversations/:id", async (req, res) => {
-  const u = await requireUser(req, res); if (!u) return;
+  const u = await requireVerifiedUser(req, res); if (!u) return;
   const id = Number(req.params.id);
   const conv = await pool.query(`select id, title from conversations where id=$1 and user_id=$2`, [id, u.id]);
   if (!conv.rowCount) return res.status(404).json({ error: "not found" });
@@ -583,9 +628,9 @@ app.get("/api/conversations/:id", async (req, res) => {
   res.json({ id, title: conv.rows[0].title, messages: msgs.rows });
 });
 
-/* ---------------- share links ---------------- */
+/* ---------------- share links (verified required) ---------------- */
 app.post("/api/conversations/:id/share", async (req, res) => {
-  const u = await requireUser(req, res); if (!u) return;
+  const u = await requireVerifiedUser(req, res); if (!u) return;
   const id = Number(req.params.id);
   const own = await pool.query(`select id from conversations where id=$1 and user_id=$2`, [id, u.id]);
   if (!own.rowCount) return res.status(404).json({ error: "not found" });
@@ -604,6 +649,7 @@ app.post("/api/conversations/:id/share", async (req, res) => {
 });
 
 app.get("/api/share/:token", async (req, res) => {
+  // Public viewer of shared convo remains open (no need to be verified to view)
   const { token } = req.params;
   const s = await pool.query(
     `select c.id, c.title
@@ -624,10 +670,10 @@ app.get("/api/share/:token", async (req, res) => {
   res.json({ title: s.rows[0].title, messages: msgs.rows });
 });
 
-/* ---------------- chat (text) ---------------- */
+/* ---------------- chat (text) — verified required ---------------- */
 app.post("/api/chat", async (req, res) => {
   try {
-    const u = await requireUser(req, res); if (!u) return;
+    const u = await requireVerifiedUser(req, res); if (!u) return;
     const deviceId = ensureDevice(req, res);
     const { message, gptType, conversationId } = req.body || {};
     if (!message) return res.status(400).json({ error: "message required" });
@@ -706,10 +752,10 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-/* ---------------- photo solve ---------------- */
+/* ---------------- photo solve — verified required ---------------- */
 app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
   try {
-    const u = await requireUser(req, res); if (!u) return;
+    const u = await requireVerifiedUser(req, res); if (!u) return;
     const deviceId = ensureDevice(req, res);
     const { gptType, conversationId, attempt } = req.body || {};
     if (!req.file) return res.status(400).json({ error: "image required" });
