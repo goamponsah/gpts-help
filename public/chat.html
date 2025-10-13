@@ -6,18 +6,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root{
-      --sidebar-w:280px;
-      --bg:#0e0f13;
-      --panel:#13141a;
-      --muted:#9aa3b2;
-      --text:#e7eaf1;
-      --brand:#5865f2;
-      --user:#1c2333;
-      --assistant:#13141a;
-      --border:#232634;
-      --vh:100vh;
-      --composer-h:88px;
-      --menu-bg:#0f1117;
+      --sidebar-w:280px; --bg:#0e0f13; --panel:#13141a; --muted:#9aa3b2; --text:#e7eaf1;
+      --brand:#5865f2; --user:#1c2333; --assistant:#13141a; --border:#232634; --vh:100vh;
+      --composer-h:88px; --menu-bg:#0f1117;
     }
     *{box-sizing:border-box}
     html,body{height:100%;margin:0}
@@ -48,36 +39,22 @@
     .side-bottom{position:sticky;bottom:0;padding:10px;border-top:1px solid var(--border);background:#0f1117;display:grid;gap:8px}
     .usercard{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--border);border-radius:12px;background:#10131b;cursor:pointer}
     .avatar{width:34px;height:34px;border-radius:50%;background:#1a2031;display:grid;place-items:center;color:#c8cee0;font-weight:700;font-size:12px;border:1px solid #22283a}
-    .u-name{
-      display:block;font-size:14px;font-weight:600;line-height:1.2;
-      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px;
-    }
-    .u-plan{
-      display:block;margin-top:2px;font-size:12px;color:var(--muted);
-      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px;
-    }
+    .u-name{display:block;font-size:14px;font-weight:600;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px;}
+    .u-plan{display:block;margin-top:2px;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px;}
     .carat{color:#aab1c7}
 
-    /* User dropdown */
-    .user-menu{
-      position:absolute;left:10px;bottom:64px;width:calc(var(--sidebar-w) - 20px);
-      background:var(--menu-bg);border:1px solid var(--border);border-radius:16px;
-      box-shadow:0 18px 40px rgba(0,0,0,.45);display:none;z-index:50;overflow:hidden;
-    }
-    .user-menu.open{display:block}
-    .um-head{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center}
-    .um-email{font-size:13px;color:#cbd2e1}
-    .um-item{display:flex;gap:10px;align-items:center;padding:10px 12px;cursor:pointer}
-    .um-item:hover{background:#151824}
-    .um-sep{height:1px;background:var(--border);margin:6px 0}
-    .um-icon{width:16px;text-align:center;color:#cdd3e6}
-    .um-text{font-size:14px}
-    .um-right{margin-left:auto;color:#8b93ad;font-size:12px}
-
     /* Main */
-    .main{display:grid;grid-template-rows:auto 1fr;min-height:0;height:100%;}
+    .main{display:grid;grid-template-rows:auto auto 1fr;min-height:0;height:100%;}
     .readOnlyBanner{display:none;padding:10px 14px;border-bottom:1px solid var(--border);background:#10121a;color:#cbd2e1;font-size:14px}
     .readOnlyBanner.show{display:block}
+
+    .verifyBanner{display:none;padding:10px 14px;border-bottom:1px solid var(--border);background:#10131a;color:#dfe3ec;font-size:14px}
+    .verifyBanner.show{display:flex;gap:10px;align-items:center;justify-content:space-between}
+    .verifyBanner b{color:#fff}
+    .verifyBanner .actions{display:flex;gap:8px}
+    .btn{border:1px solid var(--border);background:#141722;color:#e7eaf1;border-radius:9999px;padding:8px 12px;cursor:pointer;font-size:13px}
+    .btn.primary{background:var(--brand);color:#fff;border-color:transparent}
+
     .messages{overflow-y:auto;padding:20px 18px calc(20px + var(--composer-h));min-height:0;scroll-behavior:smooth;background:radial-gradient(1200px 400px at 50% -200px, rgba(88,101,242,.08), transparent 60%);}
 
     .msg{max-width:900px;margin:0 auto 12px auto;display:flex}
@@ -116,8 +93,8 @@
     .modal-sub{color:var(--muted);font-size:13px;margin-bottom:12px}
     .modal-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;background:#0f1117}
     .modal input[type="text"]{width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:9999px;background:#0e0f13;color:#e7eaf1;font-size:14px}
-    .btn{border:1px solid var(--border);background:#141722;color:#e7eaf1;border-radius:9999px;padding:10px 14px;cursor:pointer;font-size:14px}
-    .btn.primary{background:var(--brand);color:#fff;border-color:transparent}
+    .btn2{border:1px solid var(--border);background:#141722;color:#e7eaf1;border-radius:9999px;padding:10px 14px;cursor:pointer;font-size:14px}
+    .btn2.primary{background:var(--brand);color:#fff;border-color:transparent}
     .modal-close{border:0;background:transparent;color:#9aa3b2;cursor:pointer;font-size:20px;line-height:1}
     .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);padding:10px 14px;font-size:13px;background:#141722;color:#e7eaf1;border:1px solid var(--border);border-radius:9999px;display:none;z-index:1100}
     .toast.show{display:block}
@@ -166,6 +143,16 @@
     <!-- Main -->
     <main class="main">
       <div class="readOnlyBanner" id="roBanner">🔒 Read-only shared view. <a href="/index.html" style="color:#9aa3b2">Sign up</a> to chat.</div>
+
+      <!-- verify banner -->
+      <div class="verifyBanner" id="verifyBanner">
+        <div>📧 <b>Email not verified.</b> Please check your inbox to complete sign-up.</div>
+        <div class="actions">
+          <button class="btn" id="resendBtn">Resend email</button>
+          <button class="btn" id="dismissVB">Dismiss</button>
+        </div>
+      </div>
+
       <div class="messages" id="messages"></div>
     </main>
   </div>
@@ -203,18 +190,20 @@
       <div class="modal-sub">Your name, custom instructions, and any messages you add after sharing stay private.</div>
       <div class="modal-row">
         <input type="text" id="shareLinkInput" placeholder="https://yourapp.com/share/…" readonly />
-        <button class="btn primary" id="createShareBtn">Create link</button>
+        <button class="btn2 primary" id="createShareBtn">Create link</button>
       </div>
     </div>
   </div>
-  <div class="toast" id="toast">Link copied to clipboard</div>
+  <div class="toast" id="toast">Done</div>
 
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
   <script>
     /* mobile 100vh fix */
     function setVh(){ const vh = window.innerHeight * 0.01; document.documentElement.style.setProperty('--vh', `${vh*100}px`); }
     setVh(); window.addEventListener('resize', setVh);
 
-    /* API (changed: return ok/status/json) */
+    /* API */
     const api = {
       listConvs: ()=>fetch('/api/conversations',{credentials:'include'}).then(r=>r.json()),
       createConv:(title)=>fetch('/api/conversations',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({title})}).then(r=>r.json()),
@@ -222,20 +211,13 @@
       deleteConv:(id)=>fetch(`/api/conversations/${id}`,{method:'DELETE',credentials:'include'}).then(r=>r.json()),
       archiveConv:(id,archived=true)=>fetch(`/api/conversations/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({archived})}).then(r=>r.json()),
       getConvMsgs:(id)=>fetch(`/api/conversations/${id}`,{credentials:'include'}).then(r=>r.json()),
-      chat: async (payload)=>{
-        const r = await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(payload)});
-        const json = await r.json().catch(()=>({}));
-        return { ok:r.ok, status:r.status, json };
-      },
-      me: ()=>fetch('/api/me',{credentials:'include'}).then(r=>r.json()),
-      photoSolve: async (fd)=>{
-        const r = await fetch('/api/photo-solve',{method:'POST',credentials:'include',body:fd});
-        const json = await r.json().catch(()=>({}));
-        return { ok:r.ok, status:r.status, json };
-      },
+      chat:(payload)=>fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(payload)}).then(r=>r.json()),
+      me:()=>fetch('/api/me',{credentials:'include'}).then(r=>r.json()),
+      photoSolve:(fd)=>fetch('/api/photo-solve',{method:'POST',credentials:'include',body:fd}).then(r=>r.json()),
       shareCreate:(id)=>fetch(`/api/conversations/${id}/share`,{method:'POST',credentials:'include'}).then(r=>r.json()),
       getShared:(token)=>fetch(`/api/share/${encodeURIComponent(token)}`).then(r=>r.json()),
-      logout:()=>fetch('/api/logout',{method:'POST',credentials:'include'})
+      logout:()=>fetch('/api/logout',{method:'POST',credentials:'include'}),
+      resendVerify:()=>fetch('/api/resend-verification',{method:'POST',credentials:'include'})
     };
 
     /* Elements */
@@ -250,6 +232,10 @@
     const statusEl = document.getElementById('status');
     const newChatBtn = document.getElementById('newChatBtn');
     const roBanner = document.getElementById('roBanner');
+
+    const verifyBanner = document.getElementById('verifyBanner');
+    const resendBtn = document.getElementById('resendBtn');
+    const dismissVB = document.getElementById('dismissVB');
 
     /* user card/menu elements */
     const userCard   = document.getElementById('userCard');
@@ -279,6 +265,8 @@
     const convTitleCache = {};
     const pendingAutoTitle = new Set();
 
+    function showToast(msg='Done'){ toastEl.textContent=msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'),1500); }
+
     /* Placeholder */
     function updatePlaceholder() {
       promptEl.placeholder = `Message Math GPT…`;
@@ -307,7 +295,7 @@
       children.forEach(c=> typeof c==='string' ? e.appendChild(document.createTextNode(c)) : c && e.appendChild(c));
       return e;
     }
-    function showToast(msg='Link copied to clipboard'){ toastEl.textContent=msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'),1500); }
+    function showToastCopy(msg='Link copied to clipboard'){ showToast(msg); }
     function makeTitleFrom(text, prefix=""){
       const t0=(text||"").replace(/\s+/g," ").trim();
       if(!t0) return prefix?`${prefix}`:"New chat";
@@ -335,11 +323,6 @@
       if(url){ const img=document.createElement('img'); img.className='thumb'; img.src=url; img.alt='uploaded image'; bubble.appendChild(img); }
       row.appendChild(bubble); messagesEl.appendChild(row);
     }
-    function renderUpgrade(limitType, url){
-      const kind = limitType === 'photo' ? 'photo solves (2 free)' : 'messages (10 free)';
-      const md = `**You’ve reached the free limit for ${kind}.**\n\n[Upgrade to continue →](${url || '/index.html#pricing'})`;
-      renderMessage('assistant', md);
-    }
     function clearMessages(){ messagesEl.innerHTML=''; }
     function scrollToBottom(){ messagesEl.scrollTop = messagesEl.scrollHeight; }
     function now(){ return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
@@ -360,9 +343,9 @@
         const url = `${location.origin}/chat.html?share=${encodeURIComponent(r.token)}`;
         shareLinkInput.value = url; shareLinkInput.select();
         await navigator.clipboard.writeText(url);
-        createShareBtn.textContent='Copied!'; showToast('Link copied to clipboard');
+        createShareBtn.textContent='Copied!'; showToastCopy('Link copied to clipboard');
         setTimeout(()=>createShareBtn.textContent='Create link',1200);
-      }catch{ showToast('Copy failed. Select and copy manually.'); }
+      }catch{ showToast('Copy failed'); }
     });
 
     /* Conv list */
@@ -419,6 +402,7 @@
     promptEl.addEventListener('input', autoresize);
     promptEl.addEventListener('keydown', (e)=>{ if(e.key==='Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); if(!sendBtn.disabled) composerEl.requestSubmit(); } });
 
+    /* Submit text */
     function shouldAutoTitleFor(convId){
       if (!convId) return true;
       if (pendingAutoTitle.has(convId)) return true;
@@ -426,7 +410,6 @@
       return t === 'new chat' || t === 'untitled' || t === '';
     }
 
-    /* Submit text */
     document.getElementById('composer').addEventListener('submit', async (e)=>{
       e.preventDefault(); if(readOnly) return;
       const text=(promptEl.value||'').trim(); if(!text) return;
@@ -438,17 +421,8 @@
 
         const res=await api.chat(payload);
 
-        if(!res.ok && res.status===402){
-          renderUpgrade('text', res.json.upgradeUrl);
-          return;
-        }
-        if(!res.ok){
-          renderMessage('assistant','Sorry, something went wrong. Please try again.');
-          return;
-        }
-
-        if(!currentConvId && res.json.conversationId){
-          currentConvId=res.json.conversationId;
+        if(!currentConvId && res.conversationId){
+          currentConvId=res.conversationId;
           convTitleCache[currentConvId] = 'New chat';
           pendingAutoTitle.add(currentConvId);
           await loadConversations(currentConvId);
@@ -464,7 +438,7 @@
           }catch{}
         }
 
-        renderMessage('assistant', res.json.response||''); scrollToBottom();
+        renderMessage('assistant', res.response||''); scrollToBottom();
       }catch{
         renderMessage('assistant','Sorry, something went wrong. Please try again.'); scrollToBottom();
       }finally{
@@ -495,17 +469,8 @@
         const wasNew = !currentConvId;
         const res=await api.photoSolve(fd);
 
-        if(!res.ok && res.status===402){
-          renderUpgrade('photo', res.json.upgradeUrl);
-          return;
-        }
-        if(!res.ok){
-          renderMessage('assistant','Photo solve failed. Please try again.'); 
-          return;
-        }
-
-        if(wasNew && res.json.conversationId){
-          currentConvId=res.json.conversationId;
+        if(wasNew && res.conversationId){
+          currentConvId=res.conversationId;
           convTitleCache[currentConvId] = 'New chat';
           pendingAutoTitle.add(currentConvId);
           await loadConversations(currentConvId);
@@ -521,7 +486,7 @@
           }catch{}
         }
 
-        renderMessage('assistant', res.json.response||'No response text returned.'); scrollToBottom();
+        renderMessage('assistant', res.response||'No response text returned.'); scrollToBottom();
       }catch{
         renderMessage('assistant','Photo solve failed. Please try another image.'); scrollToBottom();
       }finally{
@@ -573,7 +538,7 @@
       }catch{ renderMessage('assistant','Could not load shared conversation.'); }
     }
 
-    /* Name/initials helpers */
+    /* Name/initials + verify helpers */
     function nameFromEmail(email){
       const local = (email||'').split('@')[0];
       const pretty = local.replace(/[._-]+/g,' ').trim().split(' ').map(s=>s ? s[0].toUpperCase()+s.slice(1) : '').join(' ');
@@ -588,10 +553,7 @@
       const val = (a + b).toUpperCase();
       return val || 'U';
     }
-    function planLabelize(plan){
-      const p=(plan||'FREE').toString().toUpperCase();
-      return p[0]+p.slice(1).toLowerCase();
-    }
+    function planLabelize(plan){ const p=(plan||'FREE').toString().toUpperCase(); return p[0]+p.slice(1).toLowerCase(); }
     function setUserUI(email, plan){
       const displayName = email ? nameFromEmail(email) : 'User';
       const initials = initialsFrom(email || displayName);
@@ -609,37 +571,27 @@
       userCard.title = `${displayName} • ${label}`;
     }
 
-    /* Auth + live plan refresh */
-    async function guardAuth(){
-      try{
-        const me = await api.me();
-        if (me.status !== 'ok' || !me.user?.email){
-          const emailLS = localStorage.getItem('userEmail');
-          if (!emailLS) { location.replace('/index.html'); return false; }
-          setUserUI(emailLS, 'FREE');
-          return true;
-        }
-        setUserUI(me.user.email, me.user.plan || 'FREE');
-        return true;
-      }catch{
-        const emailLS = localStorage.getItem('userEmail');
-        if (!emailLS) { location.replace('/index.html'); return false; }
-        setUserUI(emailLS, 'FREE');
-        return true;
-      }
-    }
-
     async function refreshPlan(){
       try{
         const me = await api.me();
         if (me?.user?.email){
-          const newLabel = planLabelize(me.user.plan||'FREE');
-          if (userPlanEl.textContent !== newLabel){
-            setUserUI(me.user.email, me.user.plan||'FREE');
-          }
+          setUserUI(me.user.email, me.user.plan||'FREE');
+          if (me.user.verified === false) verifyBanner.classList.add('show');
+          else verifyBanner.classList.remove('show');
         }
-      }catch{}
+      }catch{/* ignore */}
     }
+
+    resendBtn.addEventListener('click', async ()=>{
+      resendBtn.disabled = true;
+      try{
+        const r = await api.resendVerify();
+        if(!r || r.status!=='ok'){ showToast('Could not send.'); }
+        else showToast('Verification email sent.');
+      }catch{ showToast('Network error'); }
+      finally{ resendBtn.disabled = false; }
+    });
+    dismissVB.addEventListener('click', ()=> verifyBanner.classList.remove('show'));
 
     /* Init */
     (async function init(){
@@ -647,16 +599,30 @@
       const shareToken=p.get('share');
       if(shareToken){ await enterReadOnlyView(shareToken); return; }
 
-      const ok=await guardAuth(); if(!ok) return;
+      // auth
+      try{
+        const me = await api.me();
+        if (me.status !== 'ok' || !me.user?.email){
+          const emailLS = localStorage.getItem('userEmail');
+          if (!emailLS) { location.replace('/index.html'); return; }
+          setUserUI(emailLS, 'FREE');
+          verifyBanner.classList.add('show'); // likely unverified if LS path
+        }else{
+          setUserUI(me.user.email, me.user.plan||'FREE');
+          if (me.user.verified === false) verifyBanner.classList.add('show');
+        }
+      }catch{
+        const emailLS = localStorage.getItem('userEmail');
+        if (!emailLS) { location.replace('/index.html'); return; }
+        setUserUI(emailLS, 'FREE');
+      }
 
+      // Keep the plan fresh after upgrades + verification
       document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refreshPlan(); });
       window.addEventListener('focus', refreshPlan);
       setInterval(refreshPlan, 15000);
 
-      const fromUrl = p.get('c');
-      await loadConversations(fromUrl?Number(fromUrl):null);
-      if(fromUrl){ currentConvId=Number(fromUrl); await showConversation(currentConvId); }
-      updatePlaceholder();
+      await loadConversations(null);
       (function autoresizeInit(){ const e = document.getElementById('prompt'); e.style.height='auto'; e.style.height=Math.min(120,e.scrollHeight)+'px'; })();
       updateComposerPad();
       document.getElementById('prompt').focus();
