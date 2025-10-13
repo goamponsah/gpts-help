@@ -1,8 +1,6 @@
-// server.js  (ESM)
-// package.json must include:  "type": "module"
+// server.js (ESM)
 // Node 18+
-//
-// npm i express cookie-parser cors jsonwebtoken multer pg
+// pkg deps: express cookie-parser cors jsonwebtoken multer pg
 
 import express from "express";
 import cookieParser from "cookie-parser";
@@ -17,11 +15,11 @@ import pg from "pg";
 
 const { Pool } = pg;
 
-// ---------------- paths ----------------
+// --------------- paths ---------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// ---------------- app & env ----------------
+// --------------- app & env ---------------
 const app = express();
 
 const {
@@ -32,44 +30,41 @@ const {
 
   PAYSTACK_PUBLIC_KEY,
   PAYSTACK_SECRET_KEY,
-  PLAN_CODE_PLUS_MONTHLY,   // optional mapping convenience
-  PLAN_CODE_PRO_ANNUAL,     // optional mapping convenience
-  FRONTEND_ORIGIN,          // if frontend hosted elsewhere, enables CORS+SameSite=None
+  PLAN_CODE_PLUS_MONTHLY,
+  PLAN_CODE_PRO_ANNUAL,
+  FRONTEND_ORIGIN,
 
-  // Resend (preferred if present)
-  RESEND_API_KEY,
-
-  // Mailgun HTTP API (fallback if RESEND not set)
-  MAILGUN_API_KEY,
-  MAILGUN_DOMAIN,           // e.g. mg.gptshelp.online
-  MAIL_FROM,                // e.g. 'GPTs Help <no-reply@mg.gptshelp.online>'
-  MAILGUN_REGION            // 'us' (default) or 'eu'
+  RESEND_API_KEY,         // preferred if present
+  MAILGUN_API_KEY,        // fallback
+  MAILGUN_DOMAIN,
+  MAIL_FROM,
+  MAILGUN_REGION
 } = process.env;
-
-if (!DATABASE_URL) console.error("[ERROR] DATABASE_URL not set");
-if (!JWT_SECRET) console.warn("[WARN] JWT_SECRET not set; using ephemeral secret (sessions reset on restart).");
-if (!OPENAI_API_KEY) console.warn("[WARN] OPENAI_API_KEY not set (chat will fail until provided).");
 
 const OPENAI_DEFAULT_MODEL = OPENAI_MODEL || "gpt-4o-mini";
 
-// ---------------- middlewares ----------------
-if (FRONTEND_ORIGIN) {
-  app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
-}
+if (!DATABASE_URL) console.error("[ERROR] DATABASE_URL not set");
+if (!OPENAI_API_KEY) console.warn("[WARN] OPENAI_API_KEY not set");
+if (!JWT_SECRET) console.warn("[WARN] JWT_SECRET not set; using ephemeral secret");
+if (!RESEND_API_KEY && !(MAILGUN_API_KEY && MAILGUN_DOMAIN))
+  console.warn("[MAIL] No email provider configured (set RESEND_API_KEY or MAILGUN_* envs)");
+
+// --------------- middleware ---------------
+if (FRONTEND_ORIGIN) app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, "public")));
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-// ---------------- db ----------------
+// --------------- db ---------------
 const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
-// Create / migrate schema (idempotent)
 async function ensureSchema() {
+  // base schema (idempotent)
   await pool.query(`
     create table if not exists users (
       id              bigserial primary key,
@@ -119,7 +114,7 @@ async function ensureSchema() {
       created_at  timestamptz not null default now()
     );
 
-    -- Free-tier usage per device (per natural day)
+    -- new shape we want for quotas
     create table if not exists device_quotas (
       device_id   text not null,
       day         date not null,
@@ -132,30 +127,45 @@ async function ensureSchema() {
     create index if not exists messages_conv_idx on messages(conversation_id, id);
   `);
 
-  // Backfill columns on users if older installs (safe ALTERs)
-  const cols = await pool.query(`
+  // --- Backfill "users" columns if legacy installs
+  const ucols = await pool.query(`
     select column_name from information_schema.columns
     where table_name='users'
   `);
-  const have = new Set(cols.rows.map(r => r.column_name));
-  async function add(colSql) { try { await pool.query(colSql); } catch {} }
-  if (!have.has("verified"))       await add(`alter table users add column verified boolean not null default false`);
-  if (!have.has("verify_token"))   await add(`alter table users add column verify_token text`);
-  if (!have.has("verify_expires")) await add(`alter table users add column verify_expires timestamptz`);
+  const uhave = new Set(ucols.rows.map(r => r.column_name));
+  async function alt(sql) { try { await pool.query(sql); } catch {} }
+  if (!uhave.has("verified"))       await alt(`alter table users add column verified boolean not null default false`);
+  if (!uhave.has("verify_token"))   await alt(`alter table users add column verify_token text`);
+  if (!uhave.has("verify_expires")) await alt(`alter table users add column verify_expires timestamptz`);
+
+  // --- Migrate legacy device_quotas (your error shows "day" missing)
+  const qcols = await pool.query(`
+    select column_name from information_schema.columns
+    where table_name='device_quotas'
+  `);
+  const qhave = new Set(qcols.rows.map(r => r.column_name));
+
+  if (!qhave.has("day")) {
+    // add missing columns
+    await alt(`alter table device_quotas add column day date`);
+    await alt(`update device_quotas set day = current_date where day is null`);
+    await alt(`alter table device_quotas alter column day set not null`);
+  }
+  if (!qhave.has("text_count"))  await alt(`alter table device_quotas add column text_count integer not null default 0`);
+  if (!qhave.has("photo_count")) await alt(`alter table device_quotas add column photo_count integer not null default 0`);
+
+  // ensure composite PK (device_id, day)
+  // drop old PK (best effort), then add the intended one
+  try { await pool.query(`alter table device_quotas drop constraint if exists device_quotas_pkey`); } catch {}
+  try { await pool.query(`alter table device_quotas add primary key (device_id, day)`); } catch {}
 }
 await ensureSchema();
 
-// ---------------- auth helpers ----------------
+// --------------- auth helpers ---------------
 const SJWT = JWT_SECRET || crypto.randomBytes(48).toString("hex");
 function cookieOptions() {
   const cross = Boolean(FRONTEND_ORIGIN);
-  return {
-    httpOnly: true,
-    secure: true,
-    sameSite: cross ? "None" : "Lax",
-    path: "/",
-    maxAge: 30 * 24 * 60 * 60 * 1000
-  };
+  return { httpOnly: true, secure: true, sameSite: cross ? "None" : "Lax", path: "/", maxAge: 30*24*60*60*1000 };
 }
 function setSessionCookie(res, payload) {
   const token = jwt.sign(payload, SJWT, { expiresIn: "30d" });
@@ -175,12 +185,12 @@ function needEmail(req, res) {
   return s.email;
 }
 
-// Ensure device cookie for per-device quotas
+// per-device cookie for quotas
 function ensureDevice(req, res) {
   let { did } = req.cookies || {};
   if (!did) {
     did = crypto.randomUUID();
-    res.cookie("did", did, { ...cookieOptions(), httpOnly: false }); // readable by frontend if needed
+    res.cookie("did", did, { ...cookieOptions(), httpOnly: false });
   }
   return did;
 }
@@ -223,17 +233,13 @@ async function setUserPassword(email, pass) {
   );
 }
 
-// ---------------- Email sender (Resend -> Mailgun fallback) ----------------
+// --------------- Email (Resend -> Mailgun fallback) ---------------
 async function sendEmail({ to, subject, html, text }) {
-  // Prefer Resend if key present
   if (RESEND_API_KEY) {
     try {
       const r = await fetch("https://api.resend.com/emails", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${RESEND_API_KEY}`,
-          "Content-Type": "application/json"
-        },
+        headers: { Authorization: `Bearer ${RESEND_API_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           from: MAIL_FROM || "GPTs Help <no-reply@gptshelp.online>",
           to: [to],
@@ -243,18 +249,12 @@ async function sendEmail({ to, subject, html, text }) {
         })
       });
       const data = await r.json().catch(() => ({}));
-      if (!r.ok) {
-        console.error("[MAIL] Resend failed:", r.status, data);
-      } else {
-        return { ok: true, provider: "resend", data };
-      }
-    } catch (e) {
-      console.error("[MAIL] Resend error:", e);
-    }
+      if (r.ok) return { ok: true, provider: "resend", data };
+      console.error("[MAIL] Resend failed:", r.status, data);
+    } catch (e) { console.error("[MAIL] Resend error:", e); }
   }
 
-  // Fallback to Mailgun if configured
-  if (MAILGUN_API_KEY && MAILGUN_DOMAIN && (MAIL_FROM || true)) {
+  if (MAILGUN_API_KEY && MAILGUN_DOMAIN) {
     try {
       const region = (MAILGUN_REGION || "us").toLowerCase() === "eu" ? "api.eu.mailgun.net" : "api.mailgun.net";
       const url = `https://${region}/v3/${encodeURIComponent(MAILGUN_DOMAIN)}/messages`;
@@ -274,11 +274,9 @@ async function sendEmail({ to, subject, html, text }) {
         body: form
       });
       const data = await r.json().catch(() => ({}));
-      if (!r.ok) {
-        console.error("[MAIL] Mailgun send failed:", r.status, data);
-        return { ok: false, provider: "mailgun", statusCode: r.status, data };
-      }
-      return { ok: true, provider: "mailgun", data };
+      if (r.ok) return { ok: true, provider: "mailgun", data };
+      console.error("[MAIL] Mailgun send failed:", r.status, data);
+      return { ok: false, provider: "mailgun", statusCode: r.status, data };
     } catch (e) {
       console.error("[MAIL] Mailgun error:", e);
       return { ok: false, provider: "mailgun", error: String(e) };
@@ -299,7 +297,7 @@ function verificationEmailHtml(link) {
   </div>`;
 }
 
-// ---------------- small utils for Paystack ----------------
+// --------------- Paystack helpers ---------------
 function extractPlanCode(ps) {
   return (
     ps?.data?.plan?.plan_code ||
@@ -321,7 +319,7 @@ function mapPlanCodeToLabel(code) {
   return "ONE_TIME";
 }
 
-// ---------------- health & public config ----------------
+// --------------- public ---------------
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 app.get("/api/public-config", (_req, res) => {
   res.json({
@@ -332,7 +330,7 @@ app.get("/api/public-config", (_req, res) => {
   });
 });
 
-// ---------------- auth ----------------
+// --------------- auth ---------------
 app.post("/api/signup-free", async (req, res) => {
   try {
     const { email, password } = req.body || {};
@@ -342,12 +340,11 @@ app.post("/api/signup-free", async (req, res) => {
     const u = await upsertUser(email, "FREE");
     if (password && password.length >= 8) await setUserPassword(email, password);
 
-    // create verify token (24h)
     const token = crypto.randomBytes(24).toString("hex");
     const until = new Date(Date.now() + 24*60*60*1000);
     await pool.query(
       `update users set verify_token=$2, verify_expires=$3, verified=false, updated_at=now()
-        where email=$1`,
+       where email=$1`,
       [email, token, until.toISOString()]
     );
 
@@ -355,14 +352,12 @@ app.post("/api/signup-free", async (req, res) => {
     const host = base || `${req.protocol}://${req.get("host")}`;
     const link = `${host}/api/verify-email?token=${encodeURIComponent(token)}`;
 
-    // send email (best-effort)
-    const mail = await sendEmail({
+    await sendEmail({
       to: email,
       subject: "Verify your email — GPTs Help",
       html: verificationEmailHtml(link),
       text: `Verify your email: ${link}`
     });
-    if (!mail.ok) console.warn("[MAIL] verification send did not complete; user can click 'Resend' later.", mail);
 
     setSessionCookie(res, { email: u.email, plan: u.plan });
     res.json({ status: "success", user: { email: u.email }, verifySent: true });
@@ -402,7 +397,7 @@ app.post("/api/login", async (req, res) => {
 
     if (!u.pass_hash) {
       if (password.length < 8) return res.status(400).json({ status: "error", message: "Password must be at least 8 characters." });
-      await setUserPassword(email, password); // first-time password set
+      await setUserPassword(email, password);
     } else {
       const ok = await verifyPassword(password, u.pass_salt, u.pass_hash);
       if (!ok) return res.status(401).json({ status: "error", message: "Invalid email or password." });
@@ -428,7 +423,7 @@ app.post("/api/logout", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-// ---------------- paystack verify ----------------
+// --------------- Paystack ---------------
 app.post("/api/paystack/verify", async (req, res) => {
   try {
     const { reference } = req.body || {};
@@ -466,7 +461,7 @@ app.post("/api/paystack/verify", async (req, res) => {
   }
 });
 
-// ---------------- auth-required helper ----------------
+// --------------- helpers ---------------
 async function requireUser(req, res) {
   const email = needEmail(req, res);
   if (!email) return null;
@@ -475,7 +470,7 @@ async function requireUser(req, res) {
   return u;
 }
 
-// ---------------- quotas ----------------
+// quotas
 const FREE_TEXT_LIMIT = 10;
 const FREE_PHOTO_LIMIT = 2;
 
@@ -492,19 +487,13 @@ async function getQuota(deviceId) {
 async function bumpQuota(deviceId, kind) {
   const day = new Date().toISOString().slice(0,10);
   if (kind === "text") {
-    await pool.query(
-      `update device_quotas set text_count=text_count+1 where device_id=$1 and day=$2`,
-      [deviceId, day]
-    );
+    await pool.query(`update device_quotas set text_count=text_count+1 where device_id=$1 and day=$2`, [deviceId, day]);
   } else {
-    await pool.query(
-      `update device_quotas set photo_count=photo_count+1 where device_id=$1 and day=$2`,
-      [deviceId, day]
-    );
+    await pool.query(`update device_quotas set photo_count=photo_count+1 where device_id=$1 and day=$2`, [deviceId, day]);
   }
 }
 
-// ---------------- conversations ----------------
+// --------------- conversations ---------------
 app.get("/api/conversations", async (req, res) => {
   const u = await requireUser(req, res); if (!u) return;
   const r = await pool.query(
@@ -530,11 +519,11 @@ app.post("/api/conversations", async (req, res) => {
 app.patch("/api/conversations/:id", async (req, res) => {
   const u = await requireUser(req, res); if (!u) return;
   const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "invalid id" });
   const { title, archived } = req.body || {};
   const fields = [];
   const values = [];
   let idx = 1;
-
   if (typeof title === "string") { fields.push(`title=$${++idx}`); values.push(title.trim() || "Untitled"); }
   if (typeof archived === "boolean") { fields.push(`archived=$${++idx}`); values.push(!!archived); }
   if (!fields.length) return res.json({ ok: true });
@@ -551,6 +540,7 @@ app.patch("/api/conversations/:id", async (req, res) => {
 app.delete("/api/conversations/:id", async (req, res) => {
   const u = await requireUser(req, res); if (!u) return;
   const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "invalid id" });
   await pool.query(`delete from conversations where id=$1 and user_id=$2`, [id, u.id]);
   res.json({ ok: true });
 });
@@ -558,6 +548,7 @@ app.delete("/api/conversations/:id", async (req, res) => {
 app.get("/api/conversations/:id", async (req, res) => {
   const u = await requireUser(req, res); if (!u) return;
   const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "invalid id" });
   const conv = await pool.query(`select id, title from conversations where id=$1 and user_id=$2`, [id, u.id]);
   if (!conv.rowCount) return res.status(404).json({ error: "not found" });
   const msgs = await pool.query(
@@ -570,10 +561,12 @@ app.get("/api/conversations/:id", async (req, res) => {
   res.json({ id, title: conv.rows[0].title, messages: msgs.rows });
 });
 
-// ---------------- share links ----------------
+// --------------- share links ---------------
 app.post("/api/conversations/:id/share", async (req, res) => {
   const u = await requireUser(req, res); if (!u) return;
   const id = Number(req.params.id);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "invalid id" });
+
   const own = await pool.query(`select id from conversations where id=$1 and user_id=$2`, [id, u.id]);
   if (!own.rowCount) return res.status(404).json({ error: "not found" });
 
@@ -611,32 +604,25 @@ app.get("/api/share/:token", async (req, res) => {
   res.json({ title: s.rows[0].title, messages: msgs.rows });
 });
 
-// ---------------- chat (text) ----------------
+// --------------- chat (text) ---------------
 app.post("/api/chat", async (req, res) => {
   try {
     const u = await requireUser(req, res); if (!u) return;
     const deviceId = ensureDevice(req, res);
     const { message, gptType, conversationId } = req.body || {};
     if (!message) return res.status(400).json({ error: "message required" });
+    if (!OPENAI_API_KEY) return res.status(500).json({ error: "MISSING_OPENAI_KEY" });
 
-    if (!OPENAI_API_KEY) {
-      return res.status(500).json({ error: "MISSING_OPENAI_KEY" });
-    }
-
-    // free-tier quota (device-based)
+    // free tier check
     if ((u.plan || "FREE") === "FREE") {
       const q = await getQuota(deviceId);
       if (q.text_count >= FREE_TEXT_LIMIT) {
-        return res.status(402).json({
-          status: "limit",
-          kind: "text",
-          message: "You’ve reached the free text limit.",
-          upgradeUrl: "/index.html#pricing"
-        });
+        return res.status(402).json({ status: "limit", kind: "text", message: "You’ve reached the free text limit.", upgradeUrl: "/index.html#pricing" });
       }
     }
 
-    let convId = conversationId ? Number(conversationId) : null;
+    let convId = Number(conversationId);
+    if (!Number.isFinite(convId)) convId = null;
     if (convId) {
       const own = await pool.query(`select id from conversations where id=$1 and user_id=$2`, [convId, u.id]);
       if (!own.rowCount) convId = null;
@@ -649,10 +635,7 @@ app.post("/api/chat", async (req, res) => {
       convId = r.rows[0].id;
     }
 
-    const hist = await pool.query(
-      `select role, content from messages where conversation_id=$1 order by id`,
-      [convId]
-    );
+    const hist = await pool.query(`select role, content from messages where conversation_id=$1 order by id`, [convId]);
 
     const system =
       gptType === "math"
@@ -661,22 +644,12 @@ app.post("/api/chat", async (req, res) => {
 
     const msgs = [{ role: "system", content: system }, ...hist.rows, { role: "user", content: message }];
 
-    await pool.query(
-      `insert into messages(conversation_id, role, content) values($1,$2,$3)`,
-      [convId, "user", message]
-    );
+    await pool.query(`insert into messages(conversation_id, role, content) values($1,$2,$3)`, [convId, "user", message]);
 
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: OPENAI_DEFAULT_MODEL,
-        messages: msgs,
-        temperature: 0.2
-      })
+      headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: OPENAI_DEFAULT_MODEL, messages: msgs, temperature: 0.2 })
     });
 
     if (!r.ok) {
@@ -688,10 +661,7 @@ app.post("/api/chat", async (req, res) => {
     const data = await r.json();
     const answer = data?.choices?.[0]?.message?.content || "";
 
-    await pool.query(
-      `insert into messages(conversation_id, role, content) values($1,$2,$3)`,
-      [convId, "assistant", answer]
-    );
+    await pool.query(`insert into messages(conversation_id, role, content) values($1,$2,$3)`, [convId, "assistant", answer]);
 
     if ((u.plan || "FREE") === "FREE") await bumpQuota(deviceId, "text");
 
@@ -702,41 +672,30 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-// ---------------- photo solve ----------------
+// --------------- photo solve ---------------
 app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
   try {
     const u = await requireUser(req, res); if (!u) return;
     const deviceId = ensureDevice(req, res);
     const { gptType, conversationId, attempt } = req.body || {};
     if (!req.file) return res.status(400).json({ error: "image required" });
+    if (!OPENAI_API_KEY) return res.status(500).json({ error: "MISSING_OPENAI_KEY" });
 
-    if (!OPENAI_API_KEY) {
-      return res.status(500).json({ error: "MISSING_OPENAI_KEY" });
-    }
-
-    // free-tier quota (device-based)
     if ((u.plan || "FREE") === "FREE") {
       const q = await getQuota(deviceId);
       if (q.photo_count >= FREE_PHOTO_LIMIT) {
-        return res.status(402).json({
-          status: "limit",
-          kind: "photo",
-          message: "You’ve reached the free photo-solve limit.",
-          upgradeUrl: "/index.html#pricing"
-        });
+        return res.status(402).json({ status: "limit", kind: "photo", message: "You’ve reached the free photo-solve limit.", upgradeUrl: "/index.html#pricing" });
       }
     }
 
-    let convId = conversationId ? Number(conversationId) : null;
+    let convId = Number(conversationId);
+    if (!Number.isFinite(convId)) convId = null;
     if (convId) {
       const own = await pool.query(`select id from conversations where id=$1 and user_id=$2`, [convId, u.id]);
       if (!own.rowCount) convId = null;
     }
     if (!convId) {
-      const r = await pool.query(
-        `insert into conversations(user_id, title) values($1,$2) returning id`,
-        [u.id, "Photo solve"]
-      );
+      const r = await pool.query(`insert into conversations(user_id, title) values($1,$2) returning id`, [u.id, "Photo solve"]);
       convId = r.rows[0].id;
     }
 
@@ -749,28 +708,16 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
         ? "You are Math GPT. Read the problem from the image and solve it step-by-step. Explain clearly."
         : "You are a helpful assistant. Describe and analyze the content of the image, then answer the user's request.";
 
-    await pool.query(
-      `insert into messages(conversation_id, role, content) values($1,$2,$3)`,
-      [convId, "user", attempt ? `(Photo) ${attempt}` : "(Photo uploaded)"]
-    );
+    await pool.query(`insert into messages(conversation_id, role, content) values($1,$2,$3)`, [convId, "user", attempt ? `(Photo) ${attempt}` : "(Photo uploaded)"]);
 
     const r = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
+      headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         model: OPENAI_DEFAULT_MODEL,
         messages: [
           { role: "system", content: system },
-          {
-            role: "user",
-            content: [
-              { type: "text", text: attempt ? `Note from user: ${attempt}\nSolve:` : "Solve this problem step-by-step:" },
-              { type: "image_url", image_url: { url: dataUrl } }
-            ]
-          }
+          { role: "user", content: [ { type: "text", text: attempt ? `Note from user: ${attempt}\nSolve:` : "Solve this problem step-by-step:" }, { type: "image_url", image_url: { url: dataUrl } } ] }
         ],
         temperature: 0.2
       })
@@ -785,10 +732,7 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
     const data = await r.json();
     const answer = data?.choices?.[0]?.message?.content || "No result";
 
-    await pool.query(
-      `insert into messages(conversation_id, role, content) values($1,$2,$3)`,
-      [convId, "assistant", answer]
-    );
+    await pool.query(`insert into messages(conversation_id, role, content) values($1,$2,$3)`, [convId, "assistant", answer]);
 
     if ((u.plan || "FREE") === "FREE") await bumpQuota(deviceId, "photo");
 
@@ -799,11 +743,6 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
   }
 });
 
-// ---------------- start ----------------
+// --------------- start ---------------
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`GPTs Help server running on :${PORT}`);
-  if (!RESEND_API_KEY && !(MAILGUN_API_KEY && MAILGUN_DOMAIN)) {
-    console.warn("[MAIL] No email provider configured (set RESEND_API_KEY or MAILGUN_* envs)");
-  }
-});
+app.listen(PORT, () => console.log(`GPTs Help server running on :${PORT}`));
