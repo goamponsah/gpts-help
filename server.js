@@ -1,8 +1,8 @@
 // server.js  (ESM)
-// package.json must include: "type": "module"
+// package.json must include:  "type": "module"
 // Node 18+
 //
-// npm i express cookie-parser cors jsonwebtoken multer pg nodemailer
+// npm i express cookie-parser cors jsonwebtoken multer pg
 
 import express from "express";
 import cookieParser from "cookie-parser";
@@ -14,15 +14,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import multer from "multer";
 import pg from "pg";
-import nodemailer from "nodemailer";
 
 const { Pool } = pg;
 
-/* ---------------- paths ---------------- */
+// ---------------- paths ----------------
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-/* ---------------- app & env ---------------- */
+// ---------------- app & env ----------------
 const app = express();
 
 const {
@@ -32,33 +31,26 @@ const {
   OPENAI_MODEL,
   PAYSTACK_PUBLIC_KEY,
   PAYSTACK_SECRET_KEY,
-  PLAN_CODE_PLUS_MONTHLY,   // optional
+  PLAN_CODE_PLUS_MONTHLY,   // optional, used if you configured explicit plan codes
   PLAN_CODE_PRO_ANNUAL,     // optional
-  FRONTEND_ORIGIN,          // optional CORS origin
-  APP_BASE_URL,             // e.g., https://gptshelp.online
+  FRONTEND_ORIGIN,          // optional, if you host frontend elsewhere
 
-  // SMTP (Mailgun)
-  SMTP_HOST,
-  SMTP_PORT,
-  SMTP_USER,
-  SMTP_PASS,
-  SMTP_FROM
+  // Mailgun HTTP API
+  MAILGUN_API_KEY,
+  MAILGUN_DOMAIN,           // e.g. mg.gptshelp.online
+  MAIL_FROM,                // e.g. 'GPTs Help <no-reply@mg.gptshelp.online>'
+  MAILGUN_REGION            // 'us' (default) or 'eu'
 } = process.env;
 
 if (!DATABASE_URL) console.error("[ERROR] DATABASE_URL not set");
 if (!JWT_SECRET) console.warn("[WARN] JWT_SECRET not set; a random one will be used (sessions reset on restart).");
 if (!OPENAI_API_KEY) console.warn("[WARN] OPENAI_API_KEY not set.");
-if (!(SMTP_HOST && SMTP_PORT && SMTP_USER && SMTP_PASS && SMTP_FROM)) {
-  console.warn("[WARN] SMTP_* env not fully set; email verification will not send.");
+if (!MAILGUN_API_KEY || !MAILGUN_DOMAIN || !MAIL_FROM) {
+  console.warn("[WARN] Mailgun env not fully set; verification emails will be skipped.");
 }
-const BASE_URL = APP_BASE_URL || "http://localhost:3000";
 const OPENAI_DEFAULT_MODEL = OPENAI_MODEL || "gpt-4o-mini";
 
-// Free tier limits (per account)
-const MAX_TEXT_FREE  = 10;
-const MAX_PHOTO_FREE = 2;
-
-/* ---------------- middlewares ---------------- */
+// ---------------- middlewares ----------------
 if (FRONTEND_ORIGIN) {
   app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
 }
@@ -68,13 +60,14 @@ app.use(express.static(path.join(__dirname, "public")));
 
 const upload = multer({ storage: multer.memoryStorage() });
 
-/* ---------------- db ---------------- */
+// ---------------- db ----------------
 const pool = new Pool({
   connectionString: DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
 
-async function createBaseSchema() {
+// Create / migrate schema (idempotent)
+async function ensureSchema() {
   await pool.query(`
     create table if not exists users (
       id              bigserial primary key,
@@ -91,7 +84,7 @@ async function createBaseSchema() {
 
     create table if not exists conversations (
       id            bigserial primary key,
-      user_id       bigint,
+      user_id       bigint not null references users(id) on delete cascade,
       title         text not null,
       archived      boolean not null default false,
       created_at    timestamptz not null default now(),
@@ -124,71 +117,33 @@ async function createBaseSchema() {
       created_at  timestamptz not null default now()
     );
 
+    -- Free-tier usage per device (per natural day)
+    create table if not exists device_quotas (
+      device_id   text not null,
+      day         date not null,
+      text_count  integer not null default 0,
+      photo_count integer not null default 0,
+      primary key (device_id, day)
+    );
+
     create index if not exists conversations_user_idx on conversations(user_id, created_at desc);
     create index if not exists messages_conv_idx on messages(conversation_id, id);
   `);
 
-  // Ensure new columns exist if DB was created earlier
-  await pool.query(`alter table users add column if not exists verified boolean not null default false;`);
-  await pool.query(`alter table users add column if not exists verify_token text;`);
-  await pool.query(`alter table users add column if not exists verify_expires timestamptz;`);
-}
-
-async function migrateLegacyConversations() {
-  const colCheck = await pool.query(`
-    select column_name
-      from information_schema.columns
-     where table_name='conversations'
-       and column_name in ('user_email','user_id')
+  // Backfill columns on users if older installs (safe ALTERs)
+  const cols = await pool.query(`
+    select column_name from information_schema.columns
+    where table_name='users'
   `);
-  const hasUserEmail = colCheck.rows.some(r => r.column_name === "user_email");
-  const hasUserId    = colCheck.rows.some(r => r.column_name === "user_id");
-  if (!hasUserEmail) return;
-
-  console.log("[MIGRATE] conversations.user_email -> user_id …");
-  await pool.query("begin");
-  try {
-    if (!hasUserId) {
-      await pool.query(`alter table conversations add column user_id bigint`);
-    }
-    await pool.query(`
-      insert into users (email, plan)
-      select distinct coalesce(user_email,'') as email, 'FREE'
-        from conversations
-       where user_email is not null and user_email <> ''
-      on conflict (email) do nothing
-    `);
-    await pool.query(`
-      update conversations c
-         set user_id = u.id
-        from users u
-       where c.user_id is null
-         and c.user_email = u.email
-    `);
-    const placeholderEmail = `legacy_${crypto.randomBytes(6).toString("hex")}@gptshelp.local`;
-    const u = await pool.query(
-      `insert into users(email, plan) values ($1, 'FREE')
-       on conflict(email) do update set email=excluded.email
-       returning id`,
-      [placeholderEmail]
-    );
-    await pool.query(`update conversations set user_id=$1 where user_id is null`, [u.rows[0].id]);
-    await pool.query(`alter table conversations drop column user_email`);
-    await pool.query("commit");
-    console.log("[MIGRATE] done.");
-  } catch (e) {
-    await pool.query("rollback");
-    console.error("[MIGRATE] failed:", e);
-  }
-}
-
-async function ensureSchema() {
-  await createBaseSchema();
-  await migrateLegacyConversations();
+  const have = new Set(cols.rows.map(r => r.column_name));
+  async function add(colSql) { try { await pool.query(colSql); } catch {} }
+  if (!have.has("verified"))       await add(`alter table users add column verified boolean not null default false`);
+  if (!have.has("verify_token"))   await add(`alter table users add column verify_token text`);
+  if (!have.has("verify_expires")) await add(`alter table users add column verify_expires timestamptz`);
 }
 await ensureSchema();
 
-/* ---------------- auth helpers ---------------- */
+// ---------------- auth helpers ----------------
 const SJWT = JWT_SECRET || crypto.randomBytes(48).toString("hex");
 function cookieOptions() {
   const cross = Boolean(FRONTEND_ORIGIN);
@@ -217,6 +172,17 @@ function needEmail(req, res) {
   if (!s?.email) { res.status(401).json({ status: "unauthenticated" }); return null; }
   return s.email;
 }
+
+// Ensure device cookie for per-device quotas
+function ensureDevice(req, res) {
+  let { did } = req.cookies || {};
+  if (!did) {
+    did = crypto.randomUUID();
+    res.cookie("did", did, { ...cookieOptions(), httpOnly: false }); // readable by frontend if needed
+  }
+  return did;
+}
+app.use((req, res, next) => { ensureDevice(req, res); next(); });
 
 // password hashing (scrypt)
 const scrypt = util.promisify(crypto.scrypt);
@@ -255,62 +221,50 @@ async function setUserPassword(email, pass) {
   );
 }
 
-/* ---------------- nodemailer (Mailgun SMTP) ---------------- */
-const mailer =
-  SMTP_HOST && SMTP_PORT && SMTP_USER && SMTP_PASS && SMTP_FROM
-    ? nodemailer.createTransport({
-        host: SMTP_HOST,
-        port: Number(SMTP_PORT),
-        auth: { user: SMTP_USER, pass: SMTP_PASS },
-        secure: Number(SMTP_PORT) === 465 // SSL if 465
-      })
-    : null;
-
-async function sendVerificationEmail(email, token) {
-  if (!mailer) {
-    console.warn("[MAIL] transporter not configured; skipping send for", email);
-    return;
+// ---------------- Mailgun (HTTP API) ----------------
+async function mailgunSend({ to, subject, html, text }) {
+  if (!MAILGUN_API_KEY || !MAILGUN_DOMAIN || !MAIL_FROM) {
+    console.warn("[MAIL] Skipped (env incomplete)");
+    return { ok: false, skipped: true };
   }
-  const link = `${BASE_URL.replace(/\/+$/,'')}/verify-email?token=${encodeURIComponent(token)}`;
-  try {
-    await mailer.sendMail({
-      from: SMTP_FROM,
-      to: email,
-      subject: "Verify your GPTs Help email",
-      html: `
-        <div style="font-family:Inter,Arial,sans-serif;padding:20px">
-          <h2>Welcome to GPTs Help 👋</h2>
-          <p>Please verify your email to start using Math GPT.</p>
-          <p><a href="${link}" style="display:inline-block;background:#5865f2;color:#fff;padding:10px 16px;border-radius:8px;text-decoration:none">Verify my email</a></p>
-          <p style="font-size:12px;color:#777">Link: ${link}</p>
-        </div>`
-    });
-    console.log(`[MAIL] Verification email sent to ${email}`);
-  } catch (e) {
-    console.error("[MAIL] send failed:", e.message);
-  }
-}
+  const region = (MAILGUN_REGION || "us").toLowerCase() === "eu" ? "api.eu.mailgun.net" : "api.mailgun.net";
+  const url = `https://${region}/v3/${encodeURIComponent(MAILGUN_DOMAIN)}/messages`;
 
-/* ---------------- OpenAI ---------------- */
-async function openaiChat(messages) {
-  const r = await fetch("https://api.openai.com/v1/chat/completions", {
+  const form = new URLSearchParams();
+  form.set("from", MAIL_FROM);
+  form.set("to", to);
+  form.set("subject", subject);
+  if (text) form.set("text", text);
+  if (html) form.set("html", html);
+
+  const r = await fetch(url, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
-      "Content-Type": "application/json"
+      Authorization: "Basic " + Buffer.from(`api:${MAILGUN_API_KEY}`).toString("base64"),
+      "Content-Type": "application/x-www-form-urlencoded"
     },
-    body: JSON.stringify({
-      model: OPENAI_DEFAULT_MODEL,
-      messages,
-      temperature: 0.2
-    })
+    body: form
   });
-  if (!r.ok) throw new Error(`OpenAI ${r.status}: ${await r.text()}`);
-  const data = await r.json();
-  return data?.choices?.[0]?.message?.content || "";
+
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) {
+    console.error("[MAIL] send failed:", r.status, data);
+    return { ok: false, status: r.status, data };
+  }
+  return { ok: true, data };
 }
 
-/* ---------------- Paystack helpers ---------------- */
+function verificationEmailHtml(link) {
+  return `
+  <div style="font-family:system-ui,Segoe UI,Arial,sans-serif;line-height:1.5;">
+    <h2>Verify your email</h2>
+    <p>Thanks for signing up for <strong>GPTs Help</strong>. Please confirm your email by clicking the button below.</p>
+    <p><a href="${link}" style="display:inline-block;background:#5865f2;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;">Verify email</a></p>
+    <p style="color:#777">If the button doesn’t work, copy and paste this link:<br>${link}</p>
+  </div>`;
+}
+
+// ---------------- small utils for Paystack ----------------
 function extractPlanCode(ps) {
   return (
     ps?.data?.plan?.plan_code ||
@@ -323,14 +277,16 @@ function extractPlanCode(ps) {
 function mapPlanCodeToLabel(code) {
   if (!code) return "ONE_TIME";
   const c = String(code).toLowerCase();
+
   if (PLAN_CODE_PLUS_MONTHLY && code === PLAN_CODE_PLUS_MONTHLY) return "PLUS";
   if (PLAN_CODE_PRO_ANNUAL  && code === PLAN_CODE_PRO_ANNUAL)  return "PRO";
+
   if (c.includes("plus")) return "PLUS";
   if (c.includes("pro"))  return "PRO";
   return "ONE_TIME";
 }
 
-/* ---------------- health & public config ---------------- */
+// ---------------- health & public config ----------------
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 app.get("/api/public-config", (_req, res) => {
   res.json({
@@ -341,60 +297,63 @@ app.get("/api/public-config", (_req, res) => {
   });
 });
 
-/* ---------------- auth ---------------- */
+// ---------------- auth ----------------
 app.post("/api/signup-free", async (req, res) => {
   try {
     const { email, password } = req.body || {};
     if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
       return res.status(400).json({ status: "error", message: "Valid email required" });
     }
-
-    // create/update user
     const u = await upsertUser(email, "FREE");
     if (password && password.length >= 8) await setUserPassword(email, password);
 
-    // set verification token
+    // create verify token (24h)
     const token = crypto.randomBytes(24).toString("hex");
-    const expires = new Date(Date.now() + 1000 * 60 * 60 * 24); // 24h
+    const until = new Date(Date.now() + 24*60*60*1000);
     await pool.query(
-      `update users set verify_token=$2, verify_expires=$3, verified=false, updated_at=now() where email=$1`,
-      [email, token, expires]
+      `update users set verify_token=$2, verify_expires=$3, verified=false, updated_at=now()
+        where email=$1`,
+      [email, token, until.toISOString()]
     );
 
-    // send email (best-effort)
-    await sendVerificationEmail(email, token);
+    const base = req.headers.origin || (FRONTEND_ORIGIN || "");
+    const host = base || `${req.protocol}://${req.get("host")}`;
+    const link = `${host}/api/verify-email?token=${encodeURIComponent(token)}`;
 
-    // set session
-    setSessionCookie(res, { email: u.email, plan: u.plan, verified: false });
-    res.json({ status: "success", user: { email: u.email, verified: false } });
+    // send email (best-effort)
+    await mailgunSend({
+      to: email,
+      subject: "Verify your email — GPTs Help",
+      html: verificationEmailHtml(link),
+      text: `Verify your email: ${link}`
+    });
+
+    setSessionCookie(res, { email: u.email, plan: u.plan });
+    res.json({ status: "success", user: { email: u.email }, verifySent: true });
   } catch (e) {
-    console.error("signup-free error:", e);
+    console.error("signup-free", e);
     res.status(500).json({ status: "error", message: "Could not create user" });
   }
 });
 
 app.get("/api/verify-email", async (req, res) => {
   try {
-    const token = (req.query.token || "").toString();
-    if (!token) return res.status(400).json({ status: "error", message: "Missing token" });
-
+    const { token } = req.query || {};
+    if (!token) return res.status(400).send("Missing token");
     const r = await pool.query(
       `update users
           set verified=true, verify_token=null, verify_expires=null, updated_at=now()
-        where verify_token=$1 and (verify_expires is null or verify_expires>now())
-      returning email, plan, verified`,
+        where verify_token=$1 and (verify_expires is null or now() <= verify_expires)
+        returning email`,
       [token]
     );
-    if (!r.rowCount) return res.status(400).json({ status: "error", message: "Invalid or expired token" });
-
-    // auto-login after verify
-    setSessionCookie(res, { email: r.rows[0].email, plan: r.rows[0].plan, verified: true });
-
-    // redirect to chat
+    if (!r.rowCount) return res.status(400).send("Invalid or expired token");
+    const email = r.rows[0].email;
+    // Keep UX simple: land them in chat after verify
     res.redirect("/chat.html");
   } catch (e) {
     console.error("verify-email", e);
-    res.status(500).json({ status: "error", message: "Verification failed" });
+    res.status(500).send("Verification failed");
   }
 });
 
@@ -409,13 +368,13 @@ app.post("/api/login", async (req, res) => {
 
     if (!u.pass_hash) {
       if (password.length < 8) return res.status(400).json({ status: "error", message: "Password must be at least 8 characters." });
-      await setUserPassword(email, password); // first-time set
+      await setUserPassword(email, password); // first-time password set
     } else {
       const ok = await verifyPassword(password, u.pass_salt, u.pass_hash);
       if (!ok) return res.status(401).json({ status: "error", message: "Invalid email or password." });
     }
-    setSessionCookie(res, { email: u.email, plan: u.plan || "FREE", verified: !!u.verified });
-    res.json({ status: "ok", user: { email: u.email, verified: !!u.verified } });
+    setSessionCookie(res, { email: u.email, plan: u.plan || "FREE" });
+    res.json({ status: "ok", user: { email: u.email } });
   } catch (e) {
     console.error("login", e);
     res.status(500).json({ status: "error", message: "Login failed" });
@@ -435,7 +394,7 @@ app.post("/api/logout", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-/* ---------------- paystack verify ---------------- */
+// ---------------- paystack verify ----------------
 app.post("/api/paystack/verify", async (req, res) => {
   try {
     const { reference } = req.body || {};
@@ -463,7 +422,7 @@ app.post("/api/paystack/verify", async (req, res) => {
       if (label !== "ONE_TIME") {
         await pool.query(`update users set plan=$2, updated_at=now() where email=$1`, [email, label]);
       }
-      setSessionCookie(res, { email, plan: label === "ONE_TIME" ? "FREE" : label, verified: true });
+      setSessionCookie(res, { email, plan: label === "ONE_TIME" ? "FREE" : label });
       return res.json({ status: "success", email, plan: label, reference });
     }
     res.json({ status: "pending", data });
@@ -473,7 +432,7 @@ app.post("/api/paystack/verify", async (req, res) => {
   }
 });
 
-/* ---------------- helpers (auth-required) ---------------- */
+// ---------------- auth-required helper ----------------
 async function requireUser(req, res) {
   const email = needEmail(req, res);
   if (!email) return null;
@@ -482,31 +441,36 @@ async function requireUser(req, res) {
   return u;
 }
 
-// count helpers for soft free limits
-async function countTextForUser(userId) {
+// ---------------- quotas ----------------
+const FREE_TEXT_LIMIT = 10;
+const FREE_PHOTO_LIMIT = 2;
+
+async function getQuota(deviceId) {
+  const day = new Date().toISOString().slice(0,10);
   const r = await pool.query(
-    `select count(*)::int as n
-       from messages m
-      join conversations c on c.id=m.conversation_id
-      where c.user_id=$1 and m.role='user'
-        and m.content not like '(Photo%'`,
-    [userId]
+    `insert into device_quotas(device_id, day) values($1,$2)
+       on conflict (device_id, day) do update set device_id=excluded.device_id
+     returning text_count, photo_count`,
+    [deviceId, day]
   );
-  return r.rows[0].n || 0;
+  return { day, ...r.rows[0] };
 }
-async function countPhotoForUser(userId) {
-  const r = await pool.query(
-    `select count(*)::int as n
-       from messages m
-      join conversations c on c.id=m.conversation_id
-      where c.user_id=$1 and m.role='user'
-        and m.content like '(Photo%'`,
-    [userId]
-  );
-  return r.rows[0].n || 0;
+async function bumpQuota(deviceId, kind) {
+  const day = new Date().toISOString().slice(0,10);
+  if (kind === "text") {
+    await pool.query(
+      `update device_quotas set text_count=text_count+1 where device_id=$1 and day=$2`,
+      [deviceId, day]
+    );
+  } else {
+    await pool.query(
+      `update device_quotas set photo_count=photo_count+1 where device_id=$1 and day=$2`,
+      [deviceId, day]
+    );
+  }
 }
 
-/* ---------------- conversations ---------------- */
+// ---------------- conversations ----------------
 app.get("/api/conversations", async (req, res) => {
   const u = await requireUser(req, res); if (!u) return;
   const r = await pool.query(
@@ -572,7 +536,7 @@ app.get("/api/conversations/:id", async (req, res) => {
   res.json({ id, title: conv.rows[0].title, messages: msgs.rows });
 });
 
-/* ---------------- share links ---------------- */
+// ---------------- share links ----------------
 app.post("/api/conversations/:id/share", async (req, res) => {
   const u = await requireUser(req, res); if (!u) return;
   const id = Number(req.params.id);
@@ -613,32 +577,26 @@ app.get("/api/share/:token", async (req, res) => {
   res.json({ title: s.rows[0].title, messages: msgs.rows });
 });
 
-/* ---------------- chat ---------------- */
+// ---------------- chat (text) ----------------
 app.post("/api/chat", async (req, res) => {
   try {
     const u = await requireUser(req, res); if (!u) return;
+    const deviceId = ensureDevice(req, res);
+    const { message, gptType, conversationId } = req.body || {};
+    if (!message) return res.status(400).json({ error: "message required" });
 
-    if (!u.verified) {
-      return res.status(403).json({
-        error: "email_not_verified",
-        message: "Please verify your email to start chatting. Check your inbox for the verification link."
-      });
-    }
-
-    // free-tier soft limits
+    // free-tier quota (device-based)
     if ((u.plan || "FREE") === "FREE") {
-      const usedText = await countTextForUser(u.id);
-      if (usedText >= MAX_TEXT_FREE) {
+      const q = await getQuota(deviceId);
+      if (q.text_count >= FREE_TEXT_LIMIT) {
         return res.status(402).json({
-          error: "limit_reached",
-          message: `You've used all ${MAX_TEXT_FREE} free text messages. Upgrade to continue.`,
+          status: "limit",
+          kind: "text",
+          message: "You’ve reached the free text limit.",
           upgradeUrl: "/index.html#pricing"
         });
       }
     }
-
-    const { message, gptType, conversationId } = req.body || {};
-    if (!message) return res.status(400).json({ error: "message required" });
 
     let convId = conversationId ? Number(conversationId) : null;
     if (convId) {
@@ -659,9 +617,9 @@ app.post("/api/chat", async (req, res) => {
     );
 
     const system =
-      gptType === "math" || !gptType
+      gptType === "math"
         ? "You are Math GPT. Solve math problems step-by-step with clear reasoning, and show workings. Be accurate and concise."
-        : "You are a helpful assistant.";
+        : "You are a helpful writing assistant. Be clear, structured, and helpful.";
 
     const msgs = [{ role: "system", content: system }, ...hist.rows, { role: "user", content: message }];
 
@@ -670,12 +628,29 @@ app.post("/api/chat", async (req, res) => {
       [convId, "user", message]
     );
 
-    const answer = await openaiChat(msgs);
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: OPENAI_DEFAULT_MODEL,
+        messages: msgs,
+        temperature: 0.2
+      })
+    });
+    if (!r.ok) throw new Error(`OpenAI ${r.status}: ${await r.text()}`);
+    const data = await r.json();
+    const answer = data?.choices?.[0]?.message?.content || "";
 
     await pool.query(
       `insert into messages(conversation_id, role, content) values($1,$2,$3)`,
       [convId, "assistant", answer]
     );
+
+    // bump quota on success for FREE
+    if ((u.plan || "FREE") === "FREE") await bumpQuota(deviceId, "text");
 
     res.json({ response: answer, conversationId: convId });
   } catch (e) {
@@ -684,32 +659,26 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-/* ---------------- photo solve ---------------- */
+// ---------------- photo solve ----------------
 app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
   try {
     const u = await requireUser(req, res); if (!u) return;
+    const deviceId = ensureDevice(req, res);
+    const { gptType, conversationId, attempt } = req.body || {};
+    if (!req.file) return res.status(400).json({ error: "image required" });
 
-    if (!u.verified) {
-      return res.status(403).json({
-        error: "email_not_verified",
-        message: "Please verify your email to use Photo Solve. Check your inbox.",
-      });
-    }
-
-    // free-tier soft limits
+    // free-tier quota (device-based)
     if ((u.plan || "FREE") === "FREE") {
-      const usedPhoto = await countPhotoForUser(u.id);
-      if (usedPhoto >= MAX_PHOTO_FREE) {
+      const q = await getQuota(deviceId);
+      if (q.photo_count >= FREE_PHOTO_LIMIT) {
         return res.status(402).json({
-          error: "limit_reached",
-          message: `You've used all ${MAX_PHOTO_FREE} free photo solves. Upgrade to continue.`,
+          status: "limit",
+          kind: "photo",
+          message: "You’ve reached the free photo-solve limit.",
           upgradeUrl: "/index.html#pricing"
         });
       }
     }
-
-    const { gptType, conversationId, attempt } = req.body || {};
-    if (!req.file) return res.status(400).json({ error: "image required" });
 
     let convId = conversationId ? Number(conversationId) : null;
     if (convId) {
@@ -729,9 +698,9 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
     const dataUrl = `data:${mime};base64,${b64}`;
 
     const system =
-      gptType === "math" || !gptType
+      gptType === "math"
         ? "You are Math GPT. Read the problem from the image and solve it step-by-step. Explain clearly."
-        : "You are a helpful assistant.";
+        : "You are a helpful assistant. Describe and analyze the content of the image, then answer the user's request.";
 
     await pool.query(
       `insert into messages(conversation_id, role, content) values($1,$2,$3)`,
@@ -767,6 +736,10 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
       `insert into messages(conversation_id, role, content) values($1,$2,$3)`,
       [convId, "assistant", answer]
     );
+
+    // bump quota on success for FREE
+    if ((u.plan || "FREE") === "FREE") await bumpQuota(deviceId, "photo");
+
     res.json({ response: answer, conversationId: convId });
   } catch (e) {
     console.error("photo-solve", e);
@@ -774,7 +747,7 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
   }
 });
 
-/* ---------------- start ---------------- */
+// ---------------- start ----------------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`GPTs Help server running on :${PORT}`);
