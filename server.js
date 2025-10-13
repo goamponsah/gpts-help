@@ -27,23 +27,20 @@ const {
   JWT_SECRET,
   OPENAI_API_KEY,
   OPENAI_MODEL,
-
-  // Paystack
   PAYSTACK_PUBLIC_KEY,
   PAYSTACK_SECRET_KEY,
-  PLAN_CODE_PLUS_MONTHLY,   // optional explicit plan codes
+  PLAN_CODE_PLUS_MONTHLY,   // optional, used if you configured explicit plan codes
   PLAN_CODE_PRO_ANNUAL,     // optional
+  FRONTEND_ORIGIN,          // optional, if you host frontend elsewhere
 
-  FRONTEND_ORIGIN,          // optional (if frontend hosted elsewhere)
-
-  // Resend
+  // Resend HTTP API
   RESEND_API_KEY,
-  RESEND_FROM               // e.g. 'GPTs Help <no-reply@updates.gptshelp.online>'
+  RESEND_FROM,              // e.g. 'GPTs Help <no-reply@updates.gptshelp.online>'
 } = process.env;
 
 if (!DATABASE_URL) console.error("[ERROR] DATABASE_URL not set");
 if (!JWT_SECRET) console.warn("[WARN] JWT_SECRET not set; a random one will be used (sessions reset on restart).");
-if (!OPENAI_API_KEY) console.warn("[WARN] OPENAI_API_KEY not set (chat will fail).");
+if (!OPENAI_API_KEY) console.warn("[WARN] OPENAI_API_KEY not set.");
 if (!RESEND_API_KEY || !RESEND_FROM) {
   console.warn("[WARN] RESEND_* env not fully set; emails will be skipped.");
 }
@@ -65,7 +62,8 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// Create / migrate schema (idempotent)
+// Create / migrate schema (idempotent) -------------
+// Includes Option B: auto-migration for device_quotas.day -> period_start
 async function ensureSchema() {
   await pool.query(`
     create table if not exists users (
@@ -118,12 +116,14 @@ async function ensureSchema() {
       created_at  timestamptz not null default now()
     );
 
-    -- Free-tier usage per device (per natural day)
+    -- New shape for quotas (period_start)
     create table if not exists device_quotas (
       device_id     text not null,
       period_start  date not null,
       text_count    integer not null default 0,
       photo_count   integer not null default 0,
+      created_at    timestamptz not null default now(),
+      updated_at    timestamptz not null default now(),
       primary key (device_id, period_start)
     );
 
@@ -131,18 +131,56 @@ async function ensureSchema() {
     create index if not exists messages_conv_idx on messages(conversation_id, id);
   `);
 
-  // Backfill columns on users if older installs (safe ALTERs)
-  const cols = await pool.query(`
+  // ---- backfill user columns for older installs
+  const ucols = await pool.query(`
     select column_name from information_schema.columns
     where table_name='users'
   `);
-  const have = new Set(cols.rows.map(r => r.column_name));
+  const haveU = new Set(ucols.rows.map(r => r.column_name));
   async function add(colSql) { try { await pool.query(colSql); } catch {} }
-  if (!have.has("verified"))       await add(`alter table users add column verified boolean not null default false`);
-  if (!have.has("verify_token"))   await add(`alter table users add column verify_token text`);
-  if (!have.has("verify_expires")) await add(`alter table users add column verify_expires timestamptz`);
-  if (!have.has("reset_token"))    await add(`alter table users add column reset_token text`);
-  if (!have.has("reset_expires"))  await add(`alter table users add column reset_expires timestamptz`);
+  if (!haveU.has("verified"))        await add(`alter table users add column verified boolean not null default false`);
+  if (!haveU.has("verify_token"))    await add(`alter table users add column verify_token text`);
+  if (!haveU.has("verify_expires"))  await add(`alter table users add column verify_expires timestamptz`);
+  if (!haveU.has("reset_token"))     await add(`alter table users add column reset_token text`);
+  if (!haveU.has("reset_expires"))   await add(`alter table users add column reset_expires timestamptz`);
+
+  // ---- device_quotas migration: rename old "day" -> "period_start"
+  const dcols = await pool.query(`
+    select column_name from information_schema.columns
+    where table_name='device_quotas'
+  `);
+  const haveD = new Set(dcols.rows.map(r => r.column_name));
+
+  if (haveD.has("day") && !haveD.has("period_start")) {
+    try {
+      await pool.query(`alter table device_quotas rename column day to period_start`);
+      console.log("[migrate] device_quotas.day -> period_start (renamed)");
+    } catch (e) {
+      console.warn("[migrate] rename day -> period_start failed:", e.message);
+    }
+  }
+
+  // Ensure type & nullability on period_start
+  try {
+    await pool.query(`
+      alter table device_quotas
+        alter column period_start type date using period_start::date,
+        alter column period_start set not null
+    `);
+  } catch {}
+
+  // Ensure PK (device_id, period_start)
+  try {
+    // Create PK only if none exists
+    const pk = await pool.query(`
+      select tc.constraint_name
+      from information_schema.table_constraints tc
+      where tc.table_name='device_quotas' and tc.constraint_type='PRIMARY KEY'
+    `);
+    if (pk.rowCount === 0) {
+      await pool.query(`alter table device_quotas add primary key (device_id, period_start)`);
+    }
+  } catch {}
 }
 await ensureSchema();
 
@@ -227,25 +265,27 @@ async function setUserPassword(email, pass) {
 // ---------------- Resend (HTTP API) ----------------
 async function resendSend({ to, subject, html, text }) {
   if (!RESEND_API_KEY || !RESEND_FROM) {
-    console.warn("[MAIL] Skipped (RESEND env incomplete)");
+    console.warn("[MAIL] Skipped (env incomplete)");
     return { ok: false, skipped: true };
   }
-  const url = `https://api.resend.com/emails`;
+  const url = "https://api.resend.com/emails";
+  const body = {
+    from: RESEND_FROM,
+    to: [to],
+    subject,
+    html,
+    text
+  };
   const r = await fetch(url, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${RESEND_API_KEY}`,
       "Content-Type": "application/json"
     },
-    body: JSON.stringify({
-      from: RESEND_FROM,
-      to: [to],
-      subject,
-      html,
-      text
-    })
+    body: JSON.stringify(body)
   });
-  const data = await r.json().catch(() => ({}));
+  let data = {};
+  try { data = await r.json(); } catch {}
   if (!r.ok) {
     console.error("[MAIL] send failed:", r.status, data);
     return { ok: false, status: r.status, data };
@@ -266,9 +306,9 @@ function resetEmailHtml(link) {
   return `
   <div style="font-family:system-ui,Segoe UI,Arial,sans-serif;line-height:1.5;">
     <h2>Reset your password</h2>
-    <p>We received a request to reset your password for <strong>GPTs Help</strong>.</p>
-    <p><a href="${link}" style="display:inline-block;background:#0d6efd;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;">Reset password</a></p>
-    <p style="color:#777">This link expires in 60 minutes. If you didn’t request a reset, you can ignore this email.</p>
+    <p>Click the button below to create a new password for your GPTs Help account.</p>
+    <p><a href="${link}" style="display:inline-block;background:#111827;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;">Reset password</a></p>
+    <p style="color:#777">This link expires in 60 minutes.<br>${link}</p>
   </div>`;
 }
 
@@ -321,12 +361,6 @@ app.post("/api/signup-free", async (req, res) => {
     await pool.query(
       `update users set verify_token=$2, verify_expires=$3, verified=false, updated_at=now()
         where email=$1`,
-      [email, until.toISOString() ? email : email, until.toISOString()] // placeholder to keep array length; will be replaced below
-    );
-    // Fix parameter order (avoid mistakes if edited): 
-    await pool.query(
-      `update users set verify_token=$2, verify_expires=$3, verified=false, updated_at=now()
-        where email=$1`,
       [email, token, until.toISOString()]
     );
 
@@ -362,70 +396,10 @@ app.get("/api/verify-email", async (req, res) => {
       [token]
     );
     if (!r.rowCount) return res.status(400).send("Invalid or expired token");
-    // Land them in chat after verify
     res.redirect("/chat.html");
   } catch (e) {
     console.error("verify-email", e);
     res.status(500).send("Verification failed");
-  }
-});
-
-// Password reset (request)
-app.post("/api/request-password-reset", async (req, res) => {
-  try {
-    const email = (req.body?.email || "").trim().toLowerCase();
-    if (!/^\S+@\S+\.\S+$/.test(email)) {
-      return res.status(400).json({ status: "error", message: "Valid email required" });
-    }
-    const u = await getUserByEmail(email);
-    // Respond success even if not found (don’t leak users)
-    const token = crypto.randomBytes(24).toString("hex");
-    const until = new Date(Date.now() + 60*60*1000); // 60 mins
-    if (u) {
-      await pool.query(
-        `update users set reset_token=$2, reset_expires=$3, updated_at=now() where email=$1`,
-        [email, token, until.toISOString()]
-      );
-      const base = req.headers.origin || (FRONTEND_ORIGIN || "");
-      const host = base || `${req.protocol}://${req.get("host")}`;
-      const link = `${host}/reset.html?token=${encodeURIComponent(token)}`;
-      await resendSend({
-        to: email,
-        subject: "Reset your password — GPTs Help",
-        html: resetEmailHtml(link),
-        text: `Reset your password (expires in 60 minutes): ${link}`
-      });
-    }
-    res.json({ status: "ok" });
-  } catch (e) {
-    console.error("request-password-reset", e);
-    res.status(500).json({ status: "error", message: "Could not send reset link" });
-  }
-});
-
-// Password reset (apply)
-app.post("/api/reset-password", async (req, res) => {
-  try {
-    const { token, password } = req.body || {};
-    if (!token || !password || password.length < 8) {
-      return res.status(400).json({ status: "error", message: "Invalid request" });
-    }
-    const r = await pool.query(
-      `select email from users where reset_token=$1 and now() <= coalesce(reset_expires, now())`,
-      [token]
-    );
-    if (!r.rowCount) return res.status(400).json({ status: "error", message: "Invalid or expired token" });
-    const email = r.rows[0].email;
-
-    await setUserPassword(email, password);
-    await pool.query(
-      `update users set reset_token=null, reset_expires=null, updated_at=now() where email=$1`,
-      [email]
-    );
-    res.json({ status: "ok" });
-  } catch (e) {
-    console.error("reset-password", e);
-    res.status(500).json({ status: "error", message: "Could not reset password" });
   }
 });
 
@@ -464,6 +438,63 @@ app.get("/api/me", async (req, res) => {
 app.post("/api/logout", (_req, res) => {
   clearSessionCookie(res);
   res.json({ status: "ok" });
+});
+
+// Password reset (forgot / complete)
+app.post("/api/password/forgot", async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+      return res.status(200).json({ ok: true }); // avoid user enumeration
+    }
+    const u = await getUserByEmail(email);
+    if (!u) return res.status(200).json({ ok: true });
+
+    const token = crypto.randomBytes(24).toString("hex");
+    const until = new Date(Date.now() + 60*60*1000);
+    await pool.query(
+      `update users set reset_token=$2, reset_expires=$3, updated_at=now() where email=$1`,
+      [email, token, until.toISOString()]
+    );
+
+    const base = req.headers.origin || (FRONTEND_ORIGIN || "");
+    const host = base || `${req.protocol}://${req.get("host")}`;
+    const link = `${host}/reset.html?token=${encodeURIComponent(token)}`;
+
+    await resendSend({
+      to: email,
+      subject: "Reset your GPTs Help password",
+      html: resetEmailHtml(link),
+      text: `Reset password: ${link}`
+    });
+
+    res.json({ ok: true, sent: true });
+  } catch (e) {
+    console.error("password/forgot", e);
+    res.json({ ok: true }); // do not reveal internal state
+  }
+});
+
+app.post("/api/password/reset", async (req, res) => {
+  try {
+    const { token, password } = req.body || {};
+    if (!token || !password || password.length < 8) {
+      return res.status(400).json({ status: "error", message: "Invalid request" });
+    }
+    const r = await pool.query(
+      `update users
+         set reset_token=null, reset_expires=null, updated_at=now()
+       where reset_token=$1 and (reset_expires is null or now() <= reset_expires)
+       returning email`,
+      [token]
+    );
+    if (!r.rowCount) return res.status(400).json({ status: "error", message: "Invalid or expired link" });
+    await setUserPassword(r.rows[0].email, password);
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("password/reset", e);
+    res.status(500).json({ status: "error", message: "Reset failed" });
+  }
 });
 
 // ---------------- paystack verify ----------------
@@ -510,6 +541,7 @@ async function requireUser(req, res) {
   if (!email) return null;
   const u = await getUserByEmail(email);
   if (!u) { res.status(401).json({ status: "unauthenticated" }); return null; }
+  if (!u.verified) { res.status(403).json({ status: "verify_required" }); return null; } // gate API until verified
   return u;
 }
 
@@ -518,91 +550,31 @@ const FREE_TEXT_LIMIT = 10;
 const FREE_PHOTO_LIMIT = 2;
 
 async function getQuota(deviceId) {
-  const period = new Date().toISOString().slice(0,10); // yyyy-mm-dd
+  const day = new Date().toISOString().slice(0,10); // YYYY-MM-DD
   const r = await pool.query(
     `insert into device_quotas(device_id, period_start)
        values($1,$2)
-       on conflict (device_id, period_start) do update set device_id=excluded.device_id
+       on conflict (device_id, period_start)
+       do update set updated_at=now()
      returning text_count, photo_count`,
-    [deviceId, period]
+    [deviceId, day]
   );
-  return { period, ...r.rows[0] };
+  return { day, ...r.rows[0] };
 }
 async function bumpQuota(deviceId, kind) {
-  const period = new Date().toISOString().slice(0,10);
+  const day = new Date().toISOString().slice(0,10);
   if (kind === "text") {
     await pool.query(
-      `update device_quotas set text_count=text_count+1 where device_id=$1 and period_start=$2`,
-      [deviceId, period]
+      `update device_quotas set text_count=text_count+1, updated_at=now()
+         where device_id=$1 and period_start=$2`,
+      [deviceId, day]
     );
   } else {
     await pool.query(
-      `update device_quotas set photo_count=photo_count+1 where device_id=$1 and period_start=$2`,
-      [deviceId, period]
+      `update device_quotas set photo_count=photo_count+1, updated_at=now()
+         where device_id=$1 and period_start=$2`,
+      [deviceId, day]
     );
-  }
-}
-
-// ---------------- auto-title helper ----------------
-async function retitleConversation(convId, userMsg, assistantMsg) {
-  try {
-    if (!OPENAI_API_KEY) return;
-
-    const { rows } = await pool.query(
-      `select title from conversations where id=$1`,
-      [convId]
-    );
-    if (!rows.length) return;
-    const current = (rows[0].title || "").trim();
-
-    const looksFinal =
-      current !== "New chat" &&
-      current.length <= 60 &&
-      /^[A-Z].+/.test(current);
-
-    if (looksFinal) return;
-
-    const prompt = [
-      {
-        role: "system",
-        content:
-          "Create a short, clear chat title (max 6 words). No quotes. Title case. Avoid punctuation unless needed."
-      },
-      {
-        role: "user",
-        content:
-          `User message:\n${userMsg}\n\nAssistant reply:\n${assistantMsg}\n\nReturn only the title.`
-      }
-    ];
-
-    const r = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model: OPENAI_DEFAULT_MODEL,
-        messages: prompt,
-        temperature: 0.2
-      })
-    });
-
-    if (!r.ok) return;
-    const j = await r.json();
-    const title = (j?.choices?.[0]?.message?.content || "")
-      .replace(/["“”]/g, "")
-      .trim()
-      .slice(0, 60);
-
-    if (!title) return;
-
-    await pool.query(
-      `update conversations set title=$2, updated_at=now() where id=$1`,
-      [convId, title]
-    );
-  } catch {
-    // best-effort
   }
 }
 
@@ -621,10 +593,10 @@ app.get("/api/conversations", async (req, res) => {
 
 app.post("/api/conversations", async (req, res) => {
   const u = await requireUser(req, res); if (!u) return;
-  const title = (req.body?.title || "New chat").trim();
+  const titleSeed = (req.body?.title || "New chat").trim();
   const r = await pool.query(
     `insert into conversations(user_id, title) values($1,$2) returning id, title`,
-    [u.id, title]
+    [u.id, titleSeed]
   );
   res.json(r.rows[0]);
 });
@@ -632,12 +604,11 @@ app.post("/api/conversations", async (req, res) => {
 app.patch("/api/conversations/:id", async (req, res) => {
   const u = await requireUser(req, res); if (!u) return;
   const id = Number(req.params.id);
-  if (!Number.isFinite(id)) return res.status(400).json({ error: "invalid id" });
-
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "bad id" });
   const { title, archived } = req.body || {};
   const fields = [];
-  const values = [id, u.id];
-  let idx = 2;
+  const values = [];
+  let idx = 1;
 
   if (typeof title === "string") { fields.push(`title=$${++idx}`); values.push(title.trim() || "Untitled"); }
   if (typeof archived === "boolean") { fields.push(`archived=$${++idx}`); values.push(!!archived); }
@@ -646,8 +617,8 @@ app.patch("/api/conversations/:id", async (req, res) => {
   await pool.query(
     `update conversations
         set ${fields.join(", ")}, updated_at=now()
-      where id=$1 and user_id=$2`,
-    values
+      where id=$1 and user_id=$${++idx}`,
+    [id, ...values, u.id]
   );
   res.json({ ok: true });
 });
@@ -655,7 +626,7 @@ app.patch("/api/conversations/:id", async (req, res) => {
 app.delete("/api/conversations/:id", async (req, res) => {
   const u = await requireUser(req, res); if (!u) return;
   const id = Number(req.params.id);
-  if (!Number.isFinite(id)) return res.status(400).json({ error: "invalid id" });
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "bad id" });
   await pool.query(`delete from conversations where id=$1 and user_id=$2`, [id, u.id]);
   res.json({ ok: true });
 });
@@ -663,7 +634,7 @@ app.delete("/api/conversations/:id", async (req, res) => {
 app.get("/api/conversations/:id", async (req, res) => {
   const u = await requireUser(req, res); if (!u) return;
   const id = Number(req.params.id);
-  if (!Number.isFinite(id)) return res.status(400).json({ error: "invalid id" });
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "bad id" });
   const conv = await pool.query(`select id, title from conversations where id=$1 and user_id=$2`, [id, u.id]);
   if (!conv.rowCount) return res.status(404).json({ error: "not found" });
   const msgs = await pool.query(
@@ -680,7 +651,7 @@ app.get("/api/conversations/:id", async (req, res) => {
 app.post("/api/conversations/:id/share", async (req, res) => {
   const u = await requireUser(req, res); if (!u) return;
   const id = Number(req.params.id);
-  if (!Number.isFinite(id)) return res.status(400).json({ error: "invalid id" });
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "bad id" });
   const own = await pool.query(`select id from conversations where id=$1 and user_id=$2`, [id, u.id]);
   if (!own.rowCount) return res.status(404).json({ error: "not found" });
 
@@ -722,12 +693,6 @@ app.get("/api/share/:token", async (req, res) => {
 app.post("/api/chat", async (req, res) => {
   try {
     const u = await requireUser(req, res); if (!u) return;
-
-    // Require verified email
-    if (!u.verified) {
-      return res.status(403).json({ status: "verify_required", message: "Please verify your email to use chat." });
-    }
-
     const deviceId = ensureDevice(req, res);
     const { message, gptType, conversationId } = req.body || {};
     if (!message) return res.status(400).json({ error: "message required" });
@@ -745,14 +710,12 @@ app.post("/api/chat", async (req, res) => {
       }
     }
 
-    let convId = Number(conversationId);
-    if (!Number.isFinite(convId)) convId = null;
-
-    if (convId) {
+    let convId = conversationId ? Number(conversationId) : null;
+    if (Number.isFinite(convId)) {
       const own = await pool.query(`select id from conversations where id=$1 and user_id=$2`, [convId, u.id]);
       if (!own.rowCount) convId = null;
     }
-    if (!convId) {
+    if (!Number.isFinite(convId)) {
       const r = await pool.query(
         `insert into conversations(user_id, title) values($1,$2) returning id`,
         [u.id, (message.slice(0, 40) || "New chat")]
@@ -801,8 +764,12 @@ app.post("/api/chat", async (req, res) => {
     // bump quota on success for FREE
     if ((u.plan || "FREE") === "FREE") await bumpQuota(deviceId, "text");
 
-    // auto-title (best-effort)
-    retitleConversation(convId, message, answer).catch(()=>{});
+    // auto-title fallback: first user message snippet (only if generic title)
+    await pool.query(
+      `update conversations set title=$2, updated_at=now()
+         where id=$1 and (title is null or title='' or title='New chat')`,
+      [convId, message.slice(0, 40)]
+    );
 
     res.json({ response: answer, conversationId: convId });
   } catch (e) {
@@ -815,12 +782,6 @@ app.post("/api/chat", async (req, res) => {
 app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
   try {
     const u = await requireUser(req, res); if (!u) return;
-
-    // Require verified email
-    if (!u.verified) {
-      return res.status(403).json({ status: "verify_required", message: "Please verify your email to use photo solve." });
-    }
-
     const deviceId = ensureDevice(req, res);
     const { gptType, conversationId, attempt } = req.body || {};
     if (!req.file) return res.status(400).json({ error: "image required" });
@@ -838,13 +799,12 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
       }
     }
 
-    let convId = Number(conversationId);
-    if (!Number.isFinite(convId)) convId = null;
-    if (convId) {
+    let convId = conversationId ? Number(conversationId) : null;
+    if (Number.isFinite(convId)) {
       const own = await pool.query(`select id from conversations where id=$1 and user_id=$2`, [convId, u.id]);
       if (!own.rowCount) convId = null;
     }
-    if (!convId) {
+    if (!Number.isFinite(convId)) {
       const r = await pool.query(
         `insert into conversations(user_id, title) values($1,$2) returning id`,
         [u.id, "Photo solve"]
@@ -898,9 +858,6 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
 
     // bump quota on success for FREE
     if ((u.plan || "FREE") === "FREE") await bumpQuota(deviceId, "photo");
-
-    // auto-title (best-effort)
-    retitleConversation(convId, attempt || "Photo solve", answer).catch(()=>{});
 
     res.json({ response: answer, conversationId: convId });
   } catch (e) {
