@@ -187,3 +187,232 @@ app.post("/api/login", async (req, res) => {
   setSession(res, { email, plan: u.plan });
   res.json({ ok: true });
 });
+// ---------- more schema (conversations, messages, sharing, receipts) ----------
+await pool.query(`
+  create table if not exists conversations (
+    id bigserial primary key,
+    user_id bigint not null,
+    title text not null,
+    archived boolean default false,
+    created_at timestamptz default now(),
+    updated_at timestamptz default now()
+  );
+
+  create table if not exists messages (
+    id bigserial primary key,
+    conversation_id bigint not null,
+    role text not null,
+    content text not null,
+    created_at timestamptz default now()
+  );
+
+  create table if not exists share_links (
+    id bigserial primary key,
+    conversation_id bigint not null,
+    token text unique not null,
+    created_at timestamptz default now(),
+    revoked boolean default false
+  );
+
+  create table if not exists paystack_receipts (
+    id bigserial primary key,
+    email text not null,
+    reference text unique not null,
+    plan_code text,
+    status text,
+    raw jsonb,
+    created_at timestamptz default now()
+  );
+`);
+
+// ---------- small utils ----------
+function deviceCookieOptions() {
+  return { ...cookieOpt(), httpOnly: false }; // readable by frontend
+}
+function ensureDevice(req, res) {
+  let { did } = req.cookies || {};
+  if (!did) {
+    did = crypto.randomUUID();
+    res.cookie("did", did, deviceCookieOptions());
+  }
+  return did;
+}
+
+async function upsertUser(email, plan = "FREE") {
+  const r = await pool.query(
+    `insert into users(email, plan) values($1,$2)
+       on conflict(email) do update set email=excluded.email
+     returning *`,
+    [email, plan]
+  );
+  return r.rows[0];
+}
+
+// ---------- public config / health ----------
+app.get("/api/health", (_req, res) => res.json({ ok: true }));
+app.get("/api/public-config", (_req, res) => {
+  res.json({
+    paystackPublicKey: PAYSTACK_PUBLIC_KEY || null,
+    currency: "GHS",
+    planPlusMonthly: PLAN_CODE_PLUS_MONTHLY || null,
+    planProAnnual: PLAN_CODE_PRO_ANNUAL || null
+  });
+});
+
+// ---------- me / logout ----------
+app.get("/api/me", async (req, res) => {
+  const s = readSession(req);
+  if (!s?.email) return res.status(401).json({ status: "unauthenticated" });
+  const u = await getUser(s.email);
+  if (!u) return res.status(401).json({ status: "unauthenticated" });
+  res.json({ status: "ok", user: { email: u.email, plan: u.plan || "FREE", verified: !!u.verified } });
+});
+app.post("/api/logout", (_req, res) => { res.clearCookie("sid", cookieOpt()); res.json({ ok: true }); });
+
+// ---------- password reset (Resend) ----------
+app.post("/api/password/forgot", async (req, res) => {
+  const { email } = req.body || {};
+  if (!email) return res.status(400).json({ error: "email required" });
+  const u = await getUser(email);
+  if (!u) return res.json({ ok: true }); // do not reveal account existence
+  const token = crypto.randomBytes(24).toString("hex");
+  const until = new Date(Date.now() + 2 * 3600 * 1000);
+  await pool.query(`update users set reset_token=$2, reset_expires=$3 where email=$1`, [email, token, until]);
+  const link = `${req.protocol}://${req.get("host")}/reset.html?token=${token}`;
+  await resendSend({ to: email, subject: "Reset your password — GPTs Help", html: resetHtml(link), text: link });
+  res.json({ ok: true });
+});
+
+app.post("/api/password/reset", async (req, res) => {
+  const { token, password } = req.body || {};
+  if (!token || !password || password.length < 8) return res.status(400).json({ error: "bad input" });
+  const r = await pool.query(
+    `select email from users where reset_token=$1 and (reset_expires is null or now()<=reset_expires)`,
+    [token]
+  );
+  if (!r.rowCount) return res.status(400).json({ error: "invalid or expired" });
+  const email = r.rows[0].email;
+  await setUserPass(email, password);
+  await pool.query(`update users set reset_token=null, reset_expires=null where email=$1`, [email]);
+  res.json({ ok: true });
+});
+
+// ---------- Paystack verify ----------
+function extractPlanCode(ps) {
+  return (
+    ps?.data?.plan?.plan_code ||
+    ps?.data?.plan_object?.plan_code ||
+    ps?.data?.plan ||
+    ps?.data?.subscription?.plan?.plan_code ||
+    null
+  );
+}
+function mapPlanCodeToLabel(code) {
+  if (!code) return "ONE_TIME";
+  const c = String(code).toLowerCase();
+  if (PLAN_CODE_PLUS_MONTHLY && code === PLAN_CODE_PLUS_MONTHLY) return "PLUS";
+  if (PLAN_CODE_PRO_ANNUAL  && code === PLAN_CODE_PRO_ANNUAL)  return "PRO";
+  if (c.includes("plus")) return "PLUS";
+  if (c.includes("pro"))  return "PRO";
+  return "ONE_TIME";
+}
+
+app.post("/api/paystack/verify", async (req, res) => {
+  try {
+    const { reference } = req.body || {};
+    if (!reference) return res.status(400).json({ error: "missing reference" });
+    const ps = await fetch(`https://api.paystack.co/transaction/verify/${reference}`, {
+      headers: { Authorization: `Bearer ${PAYSTACK_SECRET_KEY}` }
+    }).then(r => r.json());
+
+    const email = ps?.data?.customer?.email || null;
+    const planCode = extractPlanCode(ps);
+    const status = ps?.data?.status || null;
+
+    await pool.query(
+      `insert into paystack_receipts(email, reference, plan_code, status, raw)
+       values($1,$2,$3,$4,$5)
+       on conflict(reference) do nothing`,
+      [email, reference, planCode, status, ps]
+    );
+
+    if (ps?.status && status === "success" && email) {
+      const label = mapPlanCodeToLabel(planCode);
+      await upsertUser(email);
+      if (label !== "ONE_TIME")
+        await pool.query(`update users set plan=$2 where email=$1`, [email, label]);
+      setSession(res, { email, plan: label === "ONE_TIME" ? "FREE" : label });
+      return res.json({ status: "success", email, plan: label, reference });
+    }
+    res.json({ status: "pending", data: ps });
+  } catch (e) {
+    console.error("paystack verify", e);
+    res.status(500).json({ error: "verify failed" });
+  }
+});
+
+// ---------- quotas ----------
+const FREE_TEXT_LIMIT = 10;
+const FREE_PHOTO_LIMIT = 2;
+
+async function getQuota(deviceId) {
+  const day = new Date().toISOString().slice(0,10);
+  const r = await pool.query(
+    `insert into device_quotas(device_id, period_start)
+     values($1,$2)
+     on conflict(device_id, period_start) do update set device_id=excluded.device_id
+     returning text_count, photo_count`,
+    [deviceId, day]
+  );
+  return { day, ...r.rows[0] };
+}
+async function bumpQuota(deviceId, kind) {
+  const day = new Date().toISOString().slice(0,10);
+  if (kind === "text") {
+    await pool.query(
+      `update device_quotas set text_count=text_count+1, updated_at=now()
+       where device_id=$1 and period_start=$2`,
+      [deviceId, day]
+    );
+  } else {
+    await pool.query(
+      `update device_quotas set photo_count=photo_count+1, updated_at=now()
+       where device_id=$1 and period_start=$2`,
+      [deviceId, day]
+    );
+  }
+}
+
+// ---------- auth-required helper (forces verification) ----------
+async function requireVerifiedUser(req, res) {
+  const s = readSession(req);
+  if (!s?.email) { res.status(401).json({ status: "unauthenticated" }); return null; }
+  const u = await getUser(s.email);
+  if (!u) { res.status(401).json({ status: "unauthenticated" }); return null; }
+  if (!u.verified) { res.status(403).json({ status: "verify_required" }); return null; }
+  return u;
+}
+
+// ---------- (optional) title helper ----------
+async function makeTitleFromOpenAI(prompt) {
+  try {
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: OPENAI_DEFAULT_MODEL,
+        temperature: 0.2,
+        messages: [
+          { role: "system", content: "Create a short, 3–6 word title for a chat based on the user's latest message. No quotes." },
+          { role: "user", content: prompt.slice(0, 300) }
+        ]
+      })
+    });
+    if (!r.ok) throw new Error("title api");
+    const j = await r.json();
+    return j?.choices?.[0]?.message?.content?.trim()?.slice(0, 60) || prompt.slice(0, 40);
+  } catch {
+    return prompt.slice(0, 40);
+  }
+}
+
