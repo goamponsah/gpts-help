@@ -79,7 +79,7 @@
 
     footer{text-align:center;padding:2rem;color:var(--muted);margin-top:3rem;border-top:1px solid #eee}
 
-    /* Modals (login/signup/paywall) */
+    /* Modals (login/signup/paywall/reset) */
     .overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);z-index:1000}
     .overlay.open{display:flex}
     .modal{width:min(520px,92vw);background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;box-shadow:var(--shadow)}
@@ -87,10 +87,11 @@
     .modal p.sub{color:var(--muted);margin:0 0 12px;font-size:.95rem}
     .row{display:flex;gap:.6rem}
     label{display:block;font-size:.9rem;color:var(--muted);margin:.35rem 0 .35rem}
-    input[type="email"],input[type="password"]{width:100%;padding:.75rem .9rem;border:1px solid #ddd;border-radius:10px;font-size:1rem}
+    input[type="email"],input[type="password"],input[type="text"]{width:100%;padding:.75rem .9rem;border:1px solid #ddd;border-radius:10px;font-size:1rem}
     .modal .btn{width:100%}
     .close-x{border:0;background:transparent;color:#999;font-size:20px;cursor:pointer;float:right}
     .err{color:var(--error);font-size:.9rem;min-height:18px;margin-top:6px}
+    .ok{color:var(--ok);font-size:.95rem;margin-top:8px}
     .muted{color:var(--muted);font-size:.9rem;margin-top:8px}
     .step{display:none}.step.active{display:block}
     .inline{display:flex;align-items:center;gap:.5rem}
@@ -237,6 +238,9 @@
         <input id="loginPassword" type="password" placeholder="••••••••" autocomplete="current-password" />
         <div class="err" id="loginErr"></div>
         <button class="btn btn-primary" id="loginSubmit" type="button">Log in</button>
+        <div class="muted" style="margin-top:10px;">
+          <a href="#" id="forgotPasswordLink">Forgot password?</a>
+        </div>
       </div>
     </div>
   </div>
@@ -289,6 +293,37 @@
     </div>
   </div>
 
+  <!-- Password Reset Modal -->
+  <div class="overlay" id="resetOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="resetTitle">
+      <button class="close-x" id="resetClose" aria-label="Close">×</button>
+      <h3 id="resetTitle">Reset your password</h3>
+      <p class="sub" id="resetSub">We’ll email you a secure link.</p>
+
+      <!-- Step A: Request -->
+      <div id="resetStepRequest" class="step active">
+        <label for="resetEmail">Email</label>
+        <input id="resetEmail" type="email" placeholder="you@example.com" autocomplete="email" />
+        <div class="err" id="resetReqErr"></div>
+        <div class="ok" id="resetReqOk" style="display:none;"></div>
+        <button class="btn btn-primary" id="resetRequestBtn" type="button">Send reset link</button>
+      </div>
+
+      <!-- Step B: Confirm (when opened via ?reset=TOKEN) -->
+      <div id="resetStepConfirm" class="step">
+        <label for="resetPassword">New password</label>
+        <input id="resetPassword" type="password" placeholder="At least 8 characters" autocomplete="new-password" />
+        <label for="resetPassword2" style="margin-top:8px;">Confirm password</label>
+        <input id="resetPassword2" type="password" placeholder="Re-enter password" autocomplete="new-password" />
+        <div class="err" id="resetConfErr"></div>
+        <div class="ok" id="resetConfOk" style="display:none;"></div>
+        <button class="btn btn-primary" id="resetConfirmBtn" type="button">Set new password</button>
+      </div>
+
+      <div class="muted" id="resetFootNote" style="margin-top:10px;display:none;">Done! You can close this window and <a href="#" id="resetGoLogin">log in</a>.</div>
+    </div>
+  </div>
+
   <!-- Paystack -->
   <script src="https://js.paystack.co/v2/inline.js"></script>
   <script>
@@ -322,6 +357,15 @@
       const r = await fetch("/api/signup-free", { method:"POST", headers:{ "Content-Type":"application/json" }, credentials:"include", body:JSON.stringify({email,password})});
       return r.json();
     }
+    async function apiPwResetRequest(email){
+      const r = await fetch("/api/password-reset/request", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ email }) });
+      return r.json().catch(()=>({}));
+    }
+    async function apiPwResetConfirm(token, password){
+      const r = await fetch("/api/password-reset/confirm", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ token, password }) });
+      return r.json().catch(()=>({}));
+    }
+
     function authOK(r){ return r && (r.status === "ok" || r.status === "success") && (r.user?.email || r.email); }
     function authEmail(r){ return (r && (r.user?.email || r.email)) || ""; }
     function isValidEmail(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e); }
@@ -364,6 +408,7 @@
     const loginErr = document.getElementById("loginErr");
     const loginSubmit = document.getElementById("loginSubmit");
     const loginGoSignup = document.getElementById("loginGoSignup");
+    const forgotPasswordLink = document.getElementById("forgotPasswordLink");
 
     function openLogin(){
       loginEmailErr.textContent=''; loginErr.textContent='';
@@ -404,6 +449,99 @@
     loginSubmit.addEventListener('click', handleLoginSubmit);
     loginPassword.addEventListener('keydown',(e)=>{ if(e.key==='Enter') handleLoginSubmit(); });
     loginGoSignup.addEventListener('click',(e)=>{ e.preventDefault(); closeLogin(); openSignup(); });
+
+    // ===== Password Reset modal =====
+    const resetOverlay = document.getElementById("resetOverlay");
+    const resetClose   = document.getElementById("resetClose");
+    const resetStepRequest = document.getElementById("resetStepRequest");
+    const resetStepConfirm = document.getElementById("resetStepConfirm");
+    const resetEmail   = document.getElementById("resetEmail");
+    const resetReqErr  = document.getElementById("resetReqErr");
+    const resetReqOk   = document.getElementById("resetReqOk");
+    const resetRequestBtn = document.getElementById("resetRequestBtn");
+    const resetPassword   = document.getElementById("resetPassword");
+    const resetPassword2  = document.getElementById("resetPassword2");
+    const resetConfErr    = document.getElementById("resetConfErr");
+    const resetConfOk     = document.getElementById("resetConfOk");
+    const resetConfirmBtn = document.getElementById("resetConfirmBtn");
+    const resetFootNote   = document.getElementById("resetFootNote");
+    const resetGoLogin    = document.getElementById("resetGoLogin");
+    const resetSub        = document.getElementById("resetSub");
+
+    function openReset(step='request'){
+      resetReqErr.textContent=''; resetConfErr.textContent='';
+      resetReqOk.style.display='none'; resetConfOk.style.display='none';
+      resetFootNote.style.display='none';
+
+      resetOverlay.classList.add("open"); resetOverlay.setAttribute("aria-hidden","false");
+      if(step==='confirm'){ resetStepRequest.classList.remove('active'); resetStepConfirm.classList.add('active'); setTimeout(()=>resetPassword.focus(),20); }
+      else { resetStepConfirm.classList.remove('active'); resetStepRequest.classList.add('active'); setTimeout(()=>resetEmail.focus(),20); }
+    }
+    function closeReset(){ resetOverlay.classList.remove("open"); resetOverlay.setAttribute("aria-hidden","true"); }
+    resetClose.addEventListener('click', closeReset);
+    resetOverlay.addEventListener('click',(e)=>{ if(e.target===resetOverlay) closeReset(); });
+    document.addEventListener('keydown',(e)=>{ if(e.key==="Escape" && resetOverlay.classList.contains("open")) closeReset(); });
+
+    // Open reset from login
+    forgotPasswordLink.addEventListener('click', (e)=>{
+      e.preventDefault();
+      const pref = (loginEmailEcho.textContent.trim() || loginEmail.value.trim());
+      if(isValidEmail(pref)) resetEmail.value = pref;
+      openReset('request');
+    });
+
+    // Request: send email
+    resetRequestBtn.addEventListener('click', async ()=>{
+      const email = resetEmail.value.trim();
+      resetReqErr.textContent=''; resetReqOk.style.display='none';
+      if(!isValidEmail(email)){ resetReqErr.textContent='Enter a valid email.'; return; }
+      setBtnLoading(resetRequestBtn, true, 'Send reset link');
+      try{
+        await apiPwResetRequest(email); // always return generic ok
+        resetReqOk.textContent = "If an account exists, a reset link has been sent.";
+        resetReqOk.style.display='block';
+      }catch{
+        resetReqErr.textContent = "Could not send reset link. Please try again.";
+      }finally{
+        setBtnLoading(resetRequestBtn, false, 'Send reset link');
+      }
+    });
+
+    // If opened via email link: ?reset=TOKEN
+    const resetToken = urlParams.get('reset');
+    if(resetToken){
+      openReset('confirm');
+      resetSub.textContent = "Enter a new password for your account.";
+    }
+
+    function pwOk(p){ return typeof p==='string' && p.length>=8; }
+
+    // Confirm: set new password
+    resetConfirmBtn.addEventListener('click', async ()=>{
+      resetConfErr.textContent=''; resetConfOk.style.display='none';
+      const p1 = resetPassword.value; const p2 = resetPassword2.value;
+      if(!pwOk(p1)){ resetConfErr.textContent='Password must be at least 8 characters.'; return; }
+      if(p1!==p2){ resetConfErr.textContent='Passwords do not match.'; return; }
+      if(!resetToken){ resetConfErr.textContent='Missing or invalid reset link. Request a new one.'; return; }
+
+      setBtnLoading(resetConfirmBtn, true, 'Set new password');
+      try{
+        const r = await apiPwResetConfirm(resetToken, p1);
+        if(r && (r.status==='ok' || r.status==='success')){
+          resetConfOk.textContent = 'Password updated. You can now log in.';
+          resetConfOk.style.display='block';
+          resetFootNote.style.display='block';
+        }else{
+          resetConfErr.textContent = r?.message || 'Reset failed. The link may be expired.';
+        }
+      }catch{
+        resetConfErr.textContent = 'Network error. Please try again.';
+      }finally{
+        setBtnLoading(resetConfirmBtn, false, 'Set new password');
+      }
+    });
+
+    resetGoLogin?.addEventListener('click', (e)=>{ e.preventDefault(); closeReset(); openLogin(); });
 
     // ===== Sign up modal =====
     const signupOverlay = document.getElementById("signupOverlay");
@@ -584,7 +722,7 @@
 
       // Call backend
       resultEl.textContent = '⏳ Solving…';
-      solveBtn.disabled = true; solveBtn.textContent = 'Solving…';
+      setBtnLoading(solveBtn, true, "Solving…");
 
       try{
         const fd = new FormData();
@@ -594,9 +732,8 @@
         const r = await fetch('/api/photo-solve', { method:'POST', credentials:'include', body: fd });
         const j = await r.json();
 
-        // If server enforces limits, it may return an error — soft-handle:
         if(!r.ok || j.error){
-          if((j.error||'').toLowerCase().includes('limit')){
+          if(j?.status==='limit' || (j?.message||'').toLowerCase().includes('limit')){
             openPaywall();
           }else{
             resultEl.textContent = 'Sorry, photo solve failed. Please try again.';
@@ -611,7 +748,7 @@
       }catch(e){
         resultEl.textContent = 'Sorry, network error. Please try again.';
       }finally{
-        solveBtn.disabled = false; solveBtn.textContent = 'Solve Now';
+        setBtnLoading(solveBtn, false, "Solve Now");
       }
     }
 
@@ -642,3 +779,4 @@
   </script>
 </body>
 </html>
+```0
