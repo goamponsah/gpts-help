@@ -1,571 +1,112 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>GPTs Help – Master Math with AI</title>
+  <meta charset="utf-8" />
+  <title>GPTs Help — Learn with AI</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root {
-      --brand:#6f42c1;   /* Purple */
-      --accent:#ffc107;  /* Amber */
-      --bg:#f8f9fa;
-      --text:#212529;
-      --muted:#6c757d;
-      --panel:#fff;
-      --border:#eee;
-      --shadow:0 16px 36px rgba(0,0,0,.08);
-      --error:#dc3545;
-      --ok:#198754;
+    :root{
+      --bg:#0e0f13; --panel:#0f1117; --text:#e7eaf1; --muted:#9aa3b2;
+      --brand:#5865f2; --border:#232634; --good:#1fbf75; --warn:#e6a23c;
     }
     *{box-sizing:border-box}
-    body{margin:0;font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;color:var(--text);background:var(--bg)}
-    a{color:var(--brand);text-decoration:none}
+    html,body{height:100%;margin:0}
+    body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,sans-serif}
 
-    /* Header */
-    header{background:#fff;border-bottom:1px solid #eee}
-    .nav{max-width:1200px;margin:0 auto;padding:1rem 2rem;display:flex;align-items:center;justify-content:space-between}
-    .brand{font-weight:800;letter-spacing:.2px}
-    .nav-right{display:flex;gap:.5rem;align-items:center}
-    .btn-nav{border:1px solid var(--border);background:#fff;color:var(--brand);padding:.55rem .9rem;border-radius:10px;cursor:pointer;font-weight:600}
-    .btn-nav.primary{background:var(--brand);color:#fff;border-color:transparent}
+    header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);background:linear-gradient(#0e0f13,#10131a)}
+    .logo{font-weight:700}
+    .btn{border:1px solid var(--border);background:#141722;color:#e7eaf1;border-radius:9999px;padding:10px 14px;cursor:pointer;font-size:14px}
+    .btn.primary{background:var(--brand);color:#fff;border-color:transparent}
+    .wrap{max-width:980px;margin:24px auto;padding:0 14px}
 
-    /* Hero */
-    .hero{background:linear-gradient(135deg, var(--brand), #9c6fff);color:#fff;text-align:center;padding:5rem 2rem}
-    .hero h1{font-size:clamp(2rem,4vw,3rem);margin-bottom:1rem}
-    .hero p{font-size:1.1rem;max-width:720px;margin:0 auto 0;opacity:.98}
+    .verifyBanner{display:none;margin:0 auto 14px auto;max-width:980px;background:#10131a;border:1px solid #2a2f45;border-radius:12px;padding:12px 14px;color:#dfe3ec}
+    .verifyBanner.show{display:flex;gap:10px;align-items:center;justify-content:space-between}
+    .verifyBanner b{color:#fff}
+    .verifyBanner .actions{display:flex;gap:8px}
+    .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);padding:10px 14px;font-size:13px;background:#141722;color:#e7eaf1;border:1px solid var(--border);border-radius:9999px;display:none;z-index:1100}
+    .toast.show{display:block}
 
-    /* Sections */
-    .container{max-width:1200px;margin:0 auto;padding:2rem}
-    h2{margin:.5rem 0}
-
-    /* Features */
-    .features{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1.5rem;margin-top:2rem}
-    .card{background:#fff;border:1px solid #eee;border-radius:12px;padding:1.5rem;box-shadow:0 4px 10px rgba(0,0,0,.05)}
-
-    /* Try Photo Solve */
-    .try{display:grid;grid-template-columns:1.2fr .8fr;gap:1.5rem;margin-top:1.25rem}
-    @media (max-width:900px){ .try{grid-template-columns:1fr} }
-    .panel{background:#fff;border:1px solid #eee;border-radius:14px;padding:1rem 1rem 1.25rem;box-shadow:var(--shadow)}
-    .row{display:flex;gap:.75rem;align-items:center;flex-wrap:wrap}
-    .upload{border:2px dashed #ddd;border-radius:12px;padding:1rem;text-align:center}
-    .btn{padding:.85rem 1.2rem;font-weight:700;border:none;border-radius:10px;cursor:pointer}
-    .btn-primary{background:var(--accent);color:#000}
-    .btn-secondary{background:#fff;color:var(--brand);border:1px solid var(--border)}
-    .muted{color:var(--muted);font-size:.95rem}
-    .chip{display:inline-block;background:#f1edff;color:#462b8a;border:1px solid #e7dfff;border-radius:999px;padding:.25rem .6rem;font-size:.8rem;margin-left:.5rem}
-    .result{white-space:pre-wrap;border:1px solid #eee;border-radius:10px;padding:12px;background:#fafbff;margin-top:.75rem;max-height:420px;overflow:auto}
-    .thumb{max-width:140px;border-radius:8px;border:1px solid #eee;margin-left:.25rem}
-
-    /* Pricing */
-    .plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.5rem;margin-top:2rem}
-    .plan{background:#fff;border:1px solid #eee;border-radius:14px;padding:2rem;position:relative;text-align:center;box-shadow:var(--shadow)}
-    .plan h3{margin-bottom:.5rem}
-    .price{font-size:2rem;color:var(--brand);margin:.5rem 0 1rem}
-    .plan ul{list-style:none;padding:0;margin:1rem 0;color:var(--muted);text-align:left}
-    .plan li{margin:.35rem 0}
-    .badge{position:absolute;top:12px;right:12px;background:var(--brand);color:#fff;font-size:.75rem;padding:.25rem .5rem;border-radius:999px}
-
-    /* Testimonials */
-    .testimonials{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.5rem;margin-top:2rem}
-    .testimonial{background:#fff;border:1px solid #eee;border-radius:12px;padding:1.5rem;font-style:italic}
-
-    footer{text-align:center;padding:2rem;color:var(--muted);margin-top:3rem;border-top:1px solid #eee}
-
-    /* Modals */
-    .overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);z-index:1000}
-    .overlay.open{display:flex}
-    .modal{width:min(480px,92vw);background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;box-shadow:var(--shadow)}
-    .modal h3{margin:.25rem 0 4px;font-size:1.15rem}
-    .modal p.sub{color:var(--muted);margin:0 0 12px;font-size:.95rem}
-    label{display:block;font-size:.9rem;color:var(--muted);margin:.35rem 0 .35rem}
-    input[type="email"],input[type="password"]{width:100%;padding:.75rem .9rem;border:1px solid #ddd;border-radius:10px;font-size:1rem}
-    .modal .btn{width:100%}
-    .close-x{border:0;background:transparent;color:#999;font-size:20px;cursor:pointer;float:right}
-    .err{color:var(--error);font-size:.9rem;min-height:18px;margin-top:6px}
-    .spinner{width:16px;height:16px;border:2px solid #fff;border-right-color:transparent;border-radius:50%;display:inline-block;vertical-align:-3px;animation:spin .7s linear infinite;margin-right:.35rem}
-    @keyframes spin{to{transform:rotate(360deg)}}
+    /* simple cards */
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:16px}
+    .card h3{margin:0 0 8px}
   </style>
 </head>
 <body>
-  <!-- Header -->
   <header>
-    <div class="nav">
-      <div class="brand">GPTs Help</div>
-      <div class="nav-right">
-        <button id="openChatBtn" class="btn-nav" style="display:none" onclick="goToChat()">Open Chat</button>
-        <button id="loginBtn" class="btn-nav">Log in</button>
-        <button id="signupBtn" class="btn-nav primary">Sign up for free</button>
-      </div>
+    <div class="logo">GPTs Help</div>
+    <div>
+      <a class="btn" href="/chat.html">Open Chat</a>
+      <a class="btn primary" href="#pricing">Compare plans</a>
     </div>
   </header>
 
-  <!-- Hero -->
-  <section class="hero">
-    <h1>Master Math with AI</h1>
-    <p>Step-by-step math tutoring with clear explanations, hints, and multiple methods — start free, upgrade anytime.</p>
-  </section>
-
-  <!-- Why choose -->
-  <section class="container">
-    <h2>Why Choose GPTs Help?</h2>
-    <div class="features">
-      <div class="card"><h3>Step-by-Step Math</h3><p>Clear reasoning with workings, proofs, and alternatives.</p></div>
-      <div class="card"><h3>Exam-Ready Practice</h3><p>Adaptive practice sets with instant feedback.</p></div>
-      <div class="card"><h3>Secure & Fast</h3><p>Trusted Paystack payments. Your data stays private.</p></div>
-      <div class="card"><h3>Always Improving</h3><p>We’re focused solely on math quality and reliability.</p></div>
-    </div>
-  </section>
-
-  <!-- Try Photo Solve (2 free) -->
-  <section class="container" id="try">
-    <h2>Try Photo Solve <span id="freeBadge" class="chip">2 free</span></h2>
-    <div class="try">
-      <!-- Left: demo panel -->
-      <div class="panel">
-        <div class="upload">
-          <p class="muted" id="demoHint">Upload a photo of a math problem. We’ll solve it step-by-step.</p>
-          <div class="row" style="justify-content:center;margin-top:.5rem;">
-            <input type="file" id="photoFile" accept="image/png,image/jpeg,image/jpg,image/webp" hidden />
-            <button class="btn btn-primary" id="photoBtn" type="button">Upload photo</button>
-            <img id="thumb" class="thumb" alt="" style="display:none"/>
-          </div>
-          <div class="muted" id="limitNote" style="text-align:center;margin-top:.5rem;"></div>
-        </div>
-
-        <div id="solveBox" style="margin-top:1rem;display:none">
-          <div class="row" style="justify-content:space-between;">
-            <strong>Solution</strong>
-            <span class="muted" id="solveStatus"></span>
-          </div>
-          <div id="solveResult" class="result"></div>
-          <div id="limitCTA" class="row" style="justify-content:flex-end;display:none;margin-top:.5rem">
-            <button class="btn btn-secondary" id="goPricingBtn" type="button">See plans</button>
-            <button class="btn btn-primary" id="upgradeBtn" type="button">Upgrade</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Right: quick value props -->
-      <div class="panel">
-        <h3 style="margin-top:.25rem">What you get</h3>
-        <ul class="muted" style="line-height:1.65">
-          <li><strong>Step-by-step</strong> worked solutions</li>
-          <li><strong>Multiple methods</strong> when applicable</li>
-          <li><strong>Hints</strong> to learn, not just answers</li>
-          <li><strong>Unlimited solving</strong> on paid plans</li>
-        </ul>
-        <div style="margin-top:1rem;">
-          <button class="btn btn-secondary" onclick="document.getElementById('pricing').scrollIntoView({behavior:'smooth'})">Compare plans</button>
-          <button class="btn btn-primary" id="openChatBtn2" style="margin-left:.5rem" onclick="goToChat()">Open Chat</button>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Pricing -->
-  <section class="container" id="pricing">
-    <h2>Choose Your Plan</h2>
-    <div class="plans">
-      <!-- Free -->
-      <div class="plan">
-        <h3>Free Plan</h3>
-        <div class="price">₵0 / mo</div>
-        <ul id="freeList">
-          <li>Up to 10 text questions / month</li>
-          <li>Up to 2 photo solves / month</li>
-          <li>Basic AI explanations</li>
-        </ul>
-        <button class="btn btn-secondary" id="startFreeBtn">Start free</button>
-      </div>
-
-      <!-- Plus Monthly -->
-      <div class="plan">
-        <div class="badge">Popular</div>
-        <h3>Plus Monthly</h3>
-        <div class="price">₵99 / mo</div>
-        <ul>
-          <li>Unlimited math problem solving</li>
-          <li>Advanced explanations & proofs</li>
-          <li>Priority support</li>
-        </ul>
-        <button class="btn btn-primary" data-plan="PLUS_MONTHLY" id="plusMonthlyBtn">Subscribe Monthly</button>
-      </div>
-
-      <!-- Pro Annual -->
-      <div class="plan">
-        <h3>Pro Annual</h3>
-        <div class="price">₵790 / yr</div>
-        <ul>
-          <li>Everything in Plus</li>
-          <li>Annual discount (save 34%)</li>
-          <li>Team collaboration tools</li>
-        </ul>
-        <button class="btn btn-primary" data-plan="PRO_ANNUAL" id="proAnnualBtn">Subscribe Annually</button>
-      </div>
-    </div>
-  </section>
-
-  <!-- Testimonials -->
-  <section class="container">
-    <h2>What Our Users Say</h2>
-    <div class="testimonials">
-      <div class="testimonial">“I finally understood calculus limits—your hints + step-by-step solved it!”<br><strong>— Ama A., Student</strong></div>
-      <div class="testimonial">“The solutions are clear and correct. Huge help for exam prep.”<br><strong>— Joseph K., Student</strong></div>
-    </div>
-  </section>
-
-  <!-- Footer -->
-  <footer>
-    &copy; <span id="year"></span> GPTs Help. All rights reserved.
-  </footer>
-
-  <!-- Log in Modal -->
-  <div class="overlay" id="loginOverlay" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
-      <button class="close-x" id="loginClose" aria-label="Close">×</button>
-      <h3 id="loginTitle">Log in to GPTs Help</h3>
-      <p class="sub">Use your account email and password.</p>
-
-      <label for="loginEmail">Email</label>
-      <input id="loginEmail" type="email" placeholder="you@example.com" autocomplete="email" />
-      <label for="loginPassword" style="margin-top:8px;">Password</label>
-      <input id="loginPassword" type="password" placeholder="••••••••" autocomplete="current-password" />
-      <div class="err" id="loginErr"></div>
-      <button class="btn btn-primary" id="loginSubmit" type="button">Log in</button>
+  <!-- verify banner -->
+  <div class="verifyBanner" id="verifyBanner">
+    <div>📧 <b>Email not verified.</b> Please check your inbox to complete sign-up.</div>
+    <div class="actions">
+      <button class="btn" id="resendBtn">Resend email</button>
+      <button class="btn" id="dismissVB">Dismiss</button>
     </div>
   </div>
 
-  <!-- Sign up Modal -->
-  <div class="overlay" id="signupOverlay" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="signupTitle">
-      <button class="close-x" id="signupClose" aria-label="Close">×</button>
-      <h3 id="signupTitle">Create your free account</h3>
-      <p class="sub">Start with the free plan. Upgrade anytime.</p>
+  <div class="wrap">
+    <h1>Math help & worked solutions</h1>
+    <div class="grid">
+      <div class="card"><h3>Step-by-step Math</h3><p>Explain every step. Learn the method, not just the answer.</p></div>
+      <div class="card"><h3>Photo Solve</h3><p>Upload a problem photo for a detailed solution.</p><p>Free users: 2 photo solves/day, 10 text chats/day.</p></div>
+      <div class="card"><h3>Always improving</h3><p>Focused on math quality and reliability.</p></div>
+    </div>
 
-      <label for="signupEmail">Email</label>
-      <input id="signupEmail" type="email" placeholder="you@example.com" autocomplete="email" />
-      <label for="signupPassword" style="margin-top:8px;">Password</label>
-      <input id="signupPassword" type="password" placeholder="At least 8 characters" autocomplete="new-password" />
-      <div class="err" id="signupErr"></div>
-      <button class="btn btn-primary" id="signupSubmit" type="button">Create account</button>
-      <p class="muted" style="margin-top:.75rem">We’ll send a verification email.</p>
+    <h2 id="pricing" style="margin-top:26px">Pricing</h2>
+    <div class="grid">
+      <div class="card">
+        <h3>Free</h3>
+        <ul>
+          <li>10 text chats/day</li><li>2 photo solves/day</li>
+        </ul>
+        <a class="btn" href="/chat.html">Start free</a>
+      </div>
+      <div class="card">
+        <h3>Plus</h3>
+        <p>Higher limits & faster answers.</p>
+        <a class="btn primary" href="/chat.html">Upgrade in app</a>
+      </div>
     </div>
   </div>
 
-  <!-- Paystack -->
-  <script src="https://js.paystack.co/v2/inline.js"></script>
+  <div class="toast" id="toast">Sent</div>
+
   <script>
-    // ---- Config & global state ----
-    const genRef = () => "gptshelp_" + Date.now() + "_" + Math.random().toString(36).slice(2,8);
+    const vb = document.getElementById('verifyBanner');
+    const resendBtn = document.getElementById('resendBtn');
+    const dismissVB = document.getElementById('dismissVB');
+    const toastEl = document.getElementById('toast');
 
-    let PAYSTACK_PUBLIC_KEY = null;
-    let FREE_LIMITS = { text: 10, photo: 2 };
-    let pendingPlan = null;
-    let pendingDemoFile = null; // holds File while auth modal is open
-    let pendingDemoNote = "";   // optional note later if you add
-    let authUser = null;
+    function showToast(msg){ toastEl.textContent=msg; toastEl.classList.add('show'); setTimeout(()=>toastEl.classList.remove('show'),1500); }
 
-    async function loadConfig(){
+    async function checkMe(){
       try{
-        const r = await fetch("/api/public-config");
-        const cfg = await r.json();
-        PAYSTACK_PUBLIC_KEY = cfg.paystackPublicKey || null;
-        if (cfg.freeLimits) FREE_LIMITS = cfg.freeLimits;
-        // update UI badges
-        document.getElementById("freeBadge").textContent = `${FREE_LIMITS.photo} free`;
-        const freeList = document.getElementById("freeList");
-        if (freeList) freeList.innerHTML = `
-          <li>Up to ${FREE_LIMITS.text} text questions / month</li>
-          <li>Up to ${FREE_LIMITS.photo} photo solves / month</li>
-          <li>Basic AI explanations</li>`;
-        document.getElementById("limitNote").textContent = `Free users: ${FREE_LIMITS.photo} photo solves / month.`;
+        const r = await fetch('/api/me', {credentials:'include'});
+        if(!r.ok) return;
+        const data = await r.json();
+        if(data?.user && data.user.verified === false){
+          vb.classList.add('show');
+        }
       }catch{}
     }
-    loadConfig();
 
-    // ---- API helpers ----
-    async function apiMe(){ try{ return await fetch("/api/me",{credentials:"include"}).then(r=>r.json()); }catch{return{}} }
-    async function apiLogin(email, password){
-      const r = await fetch("/api/login", { method:"POST", headers:{ "Content-Type":"application/json" }, credentials:"include", body:JSON.stringify({email,password})});
-      return r.json();
-    }
-    async function apiSignupFree(email, password){
-      const r = await fetch("/api/signup-free", { method:"POST", headers:{ "Content-Type":"application/json" }, credentials:"include", body:JSON.stringify({email,password})});
-      return r.json();
-    }
-    async function apiPhotoSolve(fd){
-      const r = await fetch("/api/photo-solve", { method:"POST", credentials:"include", body:fd });
-      return r.json();
-    }
-
-    function goToChat(){ location.assign("/chat.html"); }
-    function isValidEmail(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e); }
-    function setBtnLoading(btn, loading, label){
-      if(!btn) return;
-      if(loading){
-        btn.disabled = true;
-        btn.dataset.prev = btn.textContent;
-        btn.innerHTML = '<span class="spinner"></span> ' + (label || btn.textContent || 'Working…');
-      }else{
-        btn.disabled = false;
-        btn.textContent = label || btn.dataset.prev || btn.textContent;
-      }
-    }
-
-    // ---- Auth state in header ----
-    async function reflectAuth(){
-      const me = await apiMe();
-      const openChatBtn = document.getElementById("openChatBtn");
-      const loginBtn = document.getElementById("loginBtn");
-      const signupBtn = document.getElementById("signupBtn");
-
-      if(me?.status === "ok" && me.user?.email){
-        authUser = me.user;
-        openChatBtn.style.display = "inline-block";
-        loginBtn.textContent = "Switch account";
-        signupBtn.textContent = "New account";
-      }else{
-        authUser = null;
-        openChatBtn.style.display = "none";
-        loginBtn.textContent = "Log in";
-        signupBtn.textContent = "Sign up for free";
-      }
-    }
-
-    // ---- Try Photo Solve UI ----
-    const photoBtn = document.getElementById("photoBtn");
-    const photoFile = document.getElementById("photoFile");
-    const thumb = document.getElementById("thumb");
-    const solveBox = document.getElementById("solveBox");
-    const solveStatus = document.getElementById("solveStatus");
-    const solveResult = document.getElementById("solveResult");
-    const limitCTA = document.getElementById("limitCTA");
-    const upgradeBtn = document.getElementById("upgradeBtn");
-    const goPricingBtn = document.getElementById("goPricingBtn");
-
-    photoBtn.addEventListener("click", async ()=>{
-      // Must be logged in to attribute usage to a user (server enforces limits)
-      const me = await apiMe();
-      if(!(me?.status==="ok" && me.user?.email)){
-        // remember we were trying to run a demo and keep the file after modal flow
-        pendingDemoFile = null;
-        openSignup(); // let them create account without leaving the page
-        return;
-      }
-      photoFile.click();
-    });
-
-    photoFile.addEventListener("change", async ()=>{
-      const file = photoFile.files && photoFile.files[0]; if(!file) return;
-      const okTypes=['image/png','image/jpeg','image/jpg','image/webp'];
-      if(!okTypes.includes(file.type)){ alert('Please choose a PNG, JPG, or WEBP image.'); photoFile.value=''; return; }
-      if(file.size>6*1024*1024){ alert('Image is larger than 6MB.'); photoFile.value=''; return; }
-
-      // show thumb
-      const url = URL.createObjectURL(file);
-      thumb.src = url; thumb.style.display = "inline-block";
-
-      // run solve
-      await runPhotoSolve(file);
-      URL.revokeObjectURL(url);
-      photoFile.value='';
-    });
-
-    async function runPhotoSolve(file){
-      solveBox.style.display = "block";
-      solveStatus.textContent = "Solving…";
-      solveResult.textContent = "";
-      limitCTA.style.display = "none";
-
+    resendBtn.addEventListener('click', async ()=>{
+      resendBtn.disabled = true;
       try{
-        const fd = new FormData();
-        fd.append("image", file);
-        fd.append("gptType", "math");
-        const r = await apiPhotoSolve(fd);
-
-        if(r?.status === "limit"){
-          // show CTA
-          solveStatus.textContent = "Free limit reached";
-          solveResult.textContent = `You’ve used your free ${r.kind === 'photo' ? 'photo solves' : 'messages'} for this month.`;
-          limitCTA.style.display = "flex";
-          return;
-        }
-        if(r?.status === "unverified"){
-          solveStatus.textContent = "Please verify your email";
-          solveResult.textContent = "We’ve sent a verification link to your email. Click it and try again.";
-          return;
-        }
-
-        solveStatus.textContent = "Done";
-        solveResult.textContent = (r?.response || "No response.");
-      }catch(e){
-        solveStatus.textContent = "Error";
-        solveResult.textContent = "Could not solve this image. Please try again.";
-      }
-    }
-
-    goPricingBtn.addEventListener("click", ()=> document.getElementById("pricing").scrollIntoView({behavior:"smooth"}));
-    upgradeBtn.addEventListener("click", ()=> startSubscriptionFlow(PLAN_CODE_PLUS_MONTHLY, "Plus Monthly"));
-
-    // ---- Pricing / Paystack ----
-    const PLAN_CODE_PLUS_MONTHLY = "PLN_t8tii7sryvwsxxf";
-    const PLAN_CODE_PRO_ANNUAL  = "PLN_3gkd3qo1pv8rylt";
-
-    const startFreeBtn   = document.getElementById("startFreeBtn");
-    const plusMonthlyBtn = document.getElementById("plusMonthlyBtn");
-    const proAnnualBtn   = document.getElementById("proAnnualBtn");
-
-    startFreeBtn.addEventListener('click', ()=>{
-      apiMe().then(me=>{
-        if(me?.status==="ok" && me.user?.email){ goToChat(); }
-        else { openSignup(); }
-      });
+        const r = await fetch('/api/resend-verification', {method:'POST', credentials:'include'});
+        if(!r.ok){ showToast('Could not send.'); return; }
+        showToast('Verification email sent.');
+      }catch{ showToast('Network error'); }
+      finally{ resendBtn.disabled = false; }
     });
-
-    async function startSubscriptionFlow(planCode, label){
-      const me = await apiMe();
-      if(!(me?.status==="ok" && me.user?.email)){
-        pendingPlan = { planCode, label };
-        openLogin();
-        return;
-      }
-      if(!PAYSTACK_PUBLIC_KEY){ alert("Payment key not loaded yet. Please try again."); return; }
-      const email = me.user.email;
-
-      const popup = new PaystackPop();
-      popup.newTransaction({
-        key: PAYSTACK_PUBLIC_KEY,
-        email,
-        currency: "GHS",
-        plan: planCode,
-        reference: genRef(),
-        callback: (response) => {
-          fetch("/api/paystack/verify", {
-            method:"POST",
-            headers:{ "Content-Type":"application/json" },
-            credentials:"include",
-            body: JSON.stringify({ reference: response.reference })
-          })
-          .then(r=>r.json())
-          .then(async (r)=>{
-            if(r.status==="success" || r.status==="ok"){
-              alert(label + " subscription activated!");
-              await reflectAuth(); // refresh auth state -> plan now upgraded
-              limitCTA.style.display = "none";
-              solveStatus.textContent = "Upgraded";
-            }else{
-              alert("Verification failed. Ref: " + response.reference);
-            }
-          })
-          .catch(()=> alert("Verification request failed."));
-        },
-        onCancel: () => alert("Payment cancelled.")
-      });
-    }
-
-    plusMonthlyBtn.addEventListener('click', ()=>startSubscriptionFlow(PLAN_CODE_PLUS_MONTHLY,"Plus Monthly"));
-    proAnnualBtn.addEventListener('click', ()=>startSubscriptionFlow(PLAN_CODE_PRO_ANNUAL,"Pro Annual"));
-
-    // ---- Auth modals ----
-    const loginOverlay = document.getElementById("loginOverlay");
-    const loginBtn = document.getElementById("loginBtn");
-    const loginClose = document.getElementById("loginClose");
-    const loginEmail = document.getElementById("loginEmail");
-    const loginPassword = document.getElementById("loginPassword");
-    const loginErr = document.getElementById("loginErr");
-    const loginSubmit = document.getElementById("loginSubmit");
-
-    const signupOverlay = document.getElementById("signupOverlay");
-    const signupBtn = document.getElementById("signupBtn");
-    const signupClose = document.getElementById("signupClose");
-    const signupEmail = document.getElementById("signupEmail");
-    const signupPassword = document.getElementById("signupPassword");
-    const signupErr = document.getElementById("signupErr");
-    const signupSubmit = document.getElementById("signupSubmit");
-
-    function openLogin(){
-      loginErr.textContent='';
-      loginOverlay.classList.add("open"); loginOverlay.setAttribute("aria-hidden","false");
-      setTimeout(()=>loginEmail.focus(),20);
-    }
-    function closeLogin(){ loginOverlay.classList.remove("open"); loginOverlay.setAttribute("aria-hidden","true"); }
-    function openSignup(){
-      signupErr.textContent='';
-      signupOverlay.classList.add("open"); signupOverlay.setAttribute("aria-hidden","false");
-      setTimeout(()=>signupEmail.focus(),20);
-    }
-    function closeSignup(){ signupOverlay.classList.remove("open"); signupOverlay.setAttribute("aria-hidden","true"); }
-
-    loginBtn.addEventListener('click', openLogin);
-    loginClose.addEventListener('click', closeLogin);
-    loginOverlay.addEventListener('click',(e)=>{ if(e.target===loginOverlay) closeLogin(); });
-
-    signupBtn.addEventListener('click', openSignup);
-    signupClose.addEventListener('click', closeSignup);
-    signupOverlay.addEventListener('click',(e)=>{ if(e.target===signupOverlay) closeSignup(); });
-
-    async function handleLoginSubmit(){
-      const email = loginEmail.value.trim();
-      const pw = loginPassword.value;
-      if(!isValidEmail(email)){ loginErr.textContent = "Enter a valid email."; return; }
-      if(!pw){ loginErr.textContent = "Enter your password."; return; }
-      setBtnLoading(loginSubmit,true,"Log in");
-      try{
-        const r = await apiLogin(email, pw);
-        if(r?.status === "ok"){
-          closeLogin();
-          await reflectAuth();
-          // If we were resuming a plan checkout
-          if(pendingPlan){
-            const { planCode, label } = pendingPlan; pendingPlan = null;
-            startSubscriptionFlow(planCode, label);
-          }
-          // If we were trying to demo photo solve
-          if(pendingDemoFile){
-            await runPhotoSolve(pendingDemoFile);
-            pendingDemoFile = null;
-          }
-        }else{
-          loginErr.textContent = r?.message || "Invalid email or password.";
-        }
-      }catch{ loginErr.textContent = "Could not log in. Check connection."; }
-      finally{ setBtnLoading(loginSubmit,false,"Log in"); }
-    }
-    loginSubmit.addEventListener('click', handleLoginSubmit);
-    loginPassword.addEventListener('keydown',(e)=>{ if(e.key==='Enter') handleLoginSubmit(); });
-
-    async function handleSignupSubmit(){
-      const email = signupEmail.value.trim();
-      const pw = signupPassword.value;
-      if(!isValidEmail(email)){ signupErr.textContent = "Enter a valid email."; return; }
-      if(!pw || pw.length < 8){ signupErr.textContent = "Password must be at least 8 characters."; return; }
-      setBtnLoading(signupSubmit,true,"Create account");
-      try{
-        const r = await apiSignupFree(email, pw);
-        if(r?.status === "success"){
-          alert("Account created! Please check your email to verify.");
-          closeSignup();
-          await reflectAuth();
-          // If we started from demo, keep them here and run it now
-          if(pendingDemoFile){
-            await runPhotoSolve(pendingDemoFile);
-            pendingDemoFile = null;
-          }
-        }else{
-          signupErr.textContent = r?.message || "Sign up failed. Try again.";
-        }
-      }catch{ signupErr.textContent = "Network error. Please try again."; }
-      finally{ setBtnLoading(signupSubmit,false,"Create account"); }
-    }
-    signupSubmit.addEventListener('click', handleSignupSubmit);
-    signupPassword.addEventListener('keydown',(e)=>{ if(e.key==='Enter') handleSignupSubmit(); });
-
-    // If user clicked upload before logging in, we stash the file after modal completes
-    // (handled by pendingDemoFile above when we actually had a file)
-
-    // ---- Init ----
-    document.getElementById("year").textContent = new Date().getFullYear();
-    reflectAuth();
+    dismissVB.addEventListener('click', ()=> vb.classList.remove('show'));
+    checkMe();
   </script>
 </body>
 </html>
