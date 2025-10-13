@@ -117,7 +117,7 @@ async function ensureSchema() {
       created_at  timestamptz not null default now()
     );
 
-    -- Free-tier usage per device (rolling 24h window)
+    -- Free-tier usage per device (by natural day)
     create table if not exists device_quotas (
       id           bigserial primary key,
       device_id    text not null,
@@ -147,7 +147,7 @@ async function ensureSchema() {
 }
 await ensureSchema();
 
-/* ---------------- auth helpers ---------------- */
+/* ---------------- helpers ---------------- */
 const SJWT = JWT_SECRET || crypto.randomBytes(48).toString("hex");
 function cookieOptions() {
   const cross = Boolean(FRONTEND_ORIGIN);
@@ -176,8 +176,6 @@ function needEmail(req, res) {
   if (!s?.email) { res.status(401).json({ status: "unauthenticated" }); return null; }
   return s.email;
 }
-
-// Ensure device cookie for per-device quotas
 function ensureDevice(req, res) {
   let { did } = req.cookies || {};
   if (!did) {
@@ -271,7 +269,7 @@ function resetEmailHtml(link) {
   </div>`;
 }
 
-/* ---------------- small utils for Paystack ---------------- */
+/* ---------------- Paystack utils ---------------- */
 function extractPlanCode(ps) {
   return (
     ps?.data?.plan?.plan_code ||
@@ -317,12 +315,6 @@ app.post("/api/signup-free", async (req, res) => {
     // create verify token (24h)
     const token = crypto.randomBytes(24).toString("hex");
     const until = new Date(Date.now() + 24*60*60*1000);
-    await pool.query(
-      `update users set verify_token=$2, verify_expires=$3, verified=false, updated_at=now()
-        where email=$1`,
-      [email, until.toISOString() >= "0" ? email : email, token, until.toISOString()] // (silly guard to avoid lint)
-    );
-    // Correct params (above line kept a guard; below is actual update):
     await pool.query(
       `update users set verify_token=$2, verify_expires=$3, verified=false, updated_at=now()
         where email=$1`,
@@ -409,7 +401,6 @@ app.post("/api/password-reset/request", async (req, res) => {
   try {
     const { email } = req.body || {};
     if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
-      // Always respond generic to prevent enumeration
       return res.json({ status: "ok" });
     }
     const u = await getUserByEmail(email);
@@ -437,7 +428,6 @@ app.post("/api/password-reset/request", async (req, res) => {
     res.json({ status: "ok" });
   } catch (e) {
     console.error("password-reset-request", e);
-    // Still reply OK to avoid enumeration
     res.json({ status: "ok" });
   }
 });
@@ -522,7 +512,6 @@ const FREE_PHOTO_LIMIT = 2;
 
 async function getQuota(deviceId) {
   const day = new Date().toISOString().slice(0,10);
-  // Insert relying on defaults (avoids NULLs) and upsert by (device_id, day)
   await pool.query(
     `insert into device_quotas(device_id, day)
        values($1, $2)
@@ -552,29 +541,25 @@ async function bumpQuota(deviceId, kind) {
 }
 
 /* ---------------- conversations ---------------- */
-app.get("/api/conversations", async (req, res) => {
+/* Digit-only route params prevent NaN IDs from ever reaching these handlers */
+app.get("/api/conversations/:id(\\d+)", async (req, res) => {
   const u = await requireUser(req, res); if (!u) return;
-  const r = await pool.query(
-    `select id, title, archived
-       from conversations
-      where user_id=$1
-      order by created_at desc`,
-    [u.id]
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "invalid id" });
+
+  const conv = await pool.query(`select id, title from conversations where id=$1 and user_id=$2`, [id, u.id]);
+  if (!conv.rowCount) return res.status(404).json({ error: "not found" });
+  const msgs = await pool.query(
+    `select role, content, created_at
+       from messages
+      where conversation_id=$1
+      order by id`,
+    [id]
   );
-  res.json(r.rows);
+  res.json({ id, title: conv.rows[0].title, messages: msgs.rows });
 });
 
-app.post("/api/conversations", async (req, res) => {
-  const u = await requireUser(req, res); if (!u) return;
-  const title = (req.body?.title || "New chat").trim();
-  const r = await pool.query(
-    `insert into conversations(user_id, title) values($1,$2) returning id, title`,
-    [u.id, title]
-  );
-  res.json(r.rows[0]);
-});
-
-app.patch("/api/conversations/:id", async (req, res) => {
+app.patch("/api/conversations/:id(\\d+)", async (req, res) => {
   const u = await requireUser(req, res); if (!u) return;
   const id = parseInt(req.params.id, 10);
   if (!Number.isFinite(id)) return res.status(400).json({ error: "invalid id" });
@@ -597,7 +582,7 @@ app.patch("/api/conversations/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
-app.delete("/api/conversations/:id", async (req, res) => {
+app.delete("/api/conversations/:id(\\d+)", async (req, res) => {
   const u = await requireUser(req, res); if (!u) return;
   const id = parseInt(req.params.id, 10);
   if (!Number.isFinite(id)) return res.status(400).json({ error: "invalid id" });
@@ -606,25 +591,18 @@ app.delete("/api/conversations/:id", async (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/conversations/:id", async (req, res) => {
+app.post("/api/conversations", async (req, res) => {
   const u = await requireUser(req, res); if (!u) return;
-  const id = parseInt(req.params.id, 10);
-  if (!Number.isFinite(id)) return res.status(400).json({ error: "invalid id" });
-
-  const conv = await pool.query(`select id, title from conversations where id=$1 and user_id=$2`, [id, u.id]);
-  if (!conv.rowCount) return res.status(404).json({ error: "not found" });
-  const msgs = await pool.query(
-    `select role, content, created_at
-       from messages
-      where conversation_id=$1
-      order by id`,
-    [id]
+  const title = (req.body?.title || "New chat").trim();
+  const r = await pool.query(
+    `insert into conversations(user_id, title) values($1,$2) returning id, title`,
+    [u.id, title]
   );
-  res.json({ id, title: conv.rows[0].title, messages: msgs.rows });
+  res.json(r.rows[0]);
 });
 
 /* ---------------- share links ---------------- */
-app.post("/api/conversations/:id/share", async (req, res) => {
+app.post("/api/conversations/:id(\\d+)/share", async (req, res) => {
   const u = await requireUser(req, res); if (!u) return;
   const id = parseInt(req.params.id, 10);
   if (!Number.isFinite(id)) return res.status(400).json({ error: "invalid id" });
@@ -667,6 +645,39 @@ app.get("/api/share/:token", async (req, res) => {
 });
 
 /* ---------------- chat (text) ---------------- */
+const FREE_TEXT_LIMIT = 10;
+const FREE_PHOTO_LIMIT = 2;
+
+async function getQuota(deviceId) {
+  const day = new Date().toISOString().slice(0,10);
+  await pool.query(
+    `insert into device_quotas(device_id, day)
+       values($1, $2)
+     on conflict (device_id, day) do nothing`,
+    [deviceId, day]
+  );
+  const r = await pool.query(
+    `select text_count, photo_count from device_quotas where device_id=$1 and day=$2`,
+    [deviceId, day]
+  );
+  if (!r.rowCount) return { day, text_count: 0, photo_count: 0 };
+  return { day, ...r.rows[0] };
+}
+async function bumpQuota(deviceId, kind) {
+  const day = new Date().toISOString().slice(0,10);
+  if (kind === "text") {
+    await pool.query(
+      `update device_quotas set text_count=text_count+1 where device_id=$1 and day=$2`,
+      [deviceId, day]
+    );
+  } else {
+    await pool.query(
+      `update device_quotas set photo_count=photo_count+1 where device_id=$1 and day=$2`,
+      [deviceId, day]
+    );
+  }
+}
+
 app.post("/api/chat", async (req, res) => {
   try {
     const u = await requireUser(req, res); if (!u) return;
@@ -674,7 +685,6 @@ app.post("/api/chat", async (req, res) => {
     const { message, gptType, conversationId } = req.body || {};
     if (!message) return res.status(400).json({ error: "message required" });
 
-    // free-tier quota (device-based)
     if ((u.plan || "FREE") === "FREE") {
       const q = await getQuota(deviceId);
       if (q.text_count >= FREE_TEXT_LIMIT) {
@@ -688,7 +698,7 @@ app.post("/api/chat", async (req, res) => {
     }
 
     let convId = conversationId != null ? parseInt(conversationId, 10) : null;
-    if (convId && Number.isFinite(convId)) {
+    if (Number.isFinite(convId)) {
       const own = await pool.query(`select id from conversations where id=$1 and user_id=$2`, [convId, u.id]);
       if (!own.rowCount) convId = null;
     } else {
@@ -740,7 +750,6 @@ app.post("/api/chat", async (req, res) => {
       [convId, "assistant", answer]
     );
 
-    // bump quota on success for FREE
     if ((u.plan || "FREE") === "FREE") await bumpQuota(deviceId, "text");
 
     res.json({ response: answer, conversationId: convId });
@@ -758,7 +767,6 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
     const { gptType, conversationId, attempt } = req.body || {};
     if (!req.file) return res.status(400).json({ error: "image required" });
 
-    // free-tier quota (device-based)
     if ((u.plan || "FREE") === "FREE") {
       const q = await getQuota(deviceId);
       if (q.photo_count >= FREE_PHOTO_LIMIT) {
@@ -772,7 +780,7 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
     }
 
     let convId = conversationId != null ? parseInt(conversationId, 10) : null;
-    if (convId && Number.isFinite(convId)) {
+    if (Number.isFinite(convId)) {
       const own = await pool.query(`select id from conversations where id=$1 and user_id=$2`, [convId, u.id]);
       if (!own.rowCount) convId = null;
     } else {
@@ -830,7 +838,6 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
       [convId, "assistant", answer]
     );
 
-    // bump quota on success for FREE
     if ((u.plan || "FREE") === "FREE") await bumpQuota(deviceId, "photo");
 
     res.json({ response: answer, conversationId: convId });
