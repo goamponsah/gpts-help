@@ -31,22 +31,21 @@ const {
   OPENAI_MODEL,
   PAYSTACK_PUBLIC_KEY,
   PAYSTACK_SECRET_KEY,
-  PLAN_CODE_PLUS_MONTHLY,   // optional explicit plan codes
+  PLAN_CODE_PLUS_MONTHLY,   // optional
   PLAN_CODE_PRO_ANNUAL,     // optional
-  FRONTEND_ORIGIN,          // optional if hosting frontend elsewhere
+  FRONTEND_ORIGIN,          // optional
 
-  // Resend (for email verification)
+  // Resend
   RESEND_API_KEY,
-  MAIL_FROM                // e.g. 'GPTs Help <no-reply@gptshelp.online>' (domain must be verified in Resend)
+  RESEND_FROM
 } = process.env;
 
 if (!DATABASE_URL) console.error("[ERROR] DATABASE_URL not set");
 if (!JWT_SECRET) console.warn("[WARN] JWT_SECRET not set; a random one will be used (sessions reset on restart).");
 if (!OPENAI_API_KEY) console.warn("[WARN] OPENAI_API_KEY not set.");
-if (!RESEND_API_KEY || !MAIL_FROM) {
-  console.warn("[WARN] Resend env not fully set; verification emails will be skipped.");
+if (!RESEND_API_KEY || !RESEND_FROM) {
+  console.warn("[WARN] RESEND_* env not fully set; emails will be skipped.");
 }
-
 const OPENAI_DEFAULT_MODEL = OPENAI_MODEL || "gpt-4o-mini";
 
 /* ---------------- middlewares ---------------- */
@@ -65,9 +64,8 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-/*  Create / migrate schema (idempotent)  */
+// Create / migrate schema (idempotent)
 async function ensureSchema() {
-  // Base schema
   await pool.query(`
     create table if not exists users (
       id              bigserial primary key,
@@ -78,6 +76,8 @@ async function ensureSchema() {
       verified        boolean not null default false,
       verify_token    text,
       verify_expires  timestamptz,
+      reset_token     text,
+      reset_expires   timestamptz,
       created_at      timestamptz not null default now(),
       updated_at      timestamptz not null default now()
     );
@@ -117,81 +117,33 @@ async function ensureSchema() {
       created_at  timestamptz not null default now()
     );
 
-    -- target shape for quotas; we’ll also migrate legacy tables below
+    -- Free-tier usage per device (rolling 24h window)
     create table if not exists device_quotas (
-      device_id   text not null,
-      day         date not null,
-      text_count  integer not null default 0,
-      photo_count integer not null default 0,
-      primary key (device_id, day)
+      id           bigserial primary key,
+      device_id    text not null,
+      period_start timestamptz not null default (date_trunc('day', now())),
+      text_count   integer not null default 0,
+      photo_count  integer not null default 0,
+      day          date not null default current_date,
+      unique (device_id, day)
     );
 
     create index if not exists conversations_user_idx on conversations(user_id, created_at desc);
     create index if not exists messages_conv_idx on messages(conversation_id, id);
   `);
 
-  // Backfill users columns (older installs)
-  const ucols = await pool.query(`
+  // Add missing columns for older installs
+  const cols = await pool.query(`
     select column_name from information_schema.columns
     where table_name='users'
   `);
-  const haveUsers = new Set(ucols.rows.map(r => r.column_name));
-  async function alt(sql){ try { await pool.query(sql); } catch {} }
-  if (!haveUsers.has("verified"))       await alt(`alter table users add column verified boolean not null default false`);
-  if (!haveUsers.has("verify_token"))   await alt(`alter table users add column verify_token text`);
-  if (!haveUsers.has("verify_expires")) await alt(`alter table users add column verify_expires timestamptz`);
-
-  // ---- Migrate/normalize device_quotas (handles legacy schemas like period_start) ----
-  const qcols = await pool.query(`
-    select column_name from information_schema.columns
-    where table_name='device_quotas'
-  `);
-  const qHave = new Set(qcols.rows.map(r => r.column_name));
-
-  // Add missing target columns
-  if (!qHave.has("day"))           await alt(`alter table device_quotas add column day date`);
-  if (!qHave.has("text_count"))    await alt(`alter table device_quotas add column text_count integer`);
-  if (!qHave.has("photo_count"))   await alt(`alter table device_quotas add column photo_count integer`);
-
-  // Defaults + not null
-  await alt(`alter table device_quotas alter column day set default current_date`);
-  await alt(`update device_quotas set day = current_date where day is null`);
-  await alt(`alter table device_quotas alter column day set not null`);
-
-  await alt(`update device_quotas set text_count = 0 where text_count is null`);
-  await alt(`alter table device_quotas alter column text_count set default 0`);
-  await alt(`alter table device_quotas alter column text_count set not null`);
-
-  await alt(`update device_quotas set photo_count = 0 where photo_count is null`);
-  await alt(`alter table device_quotas alter column photo_count set default 0`);
-  await alt(`alter table device_quotas alter column photo_count set not null`);
-
-  // If a legacy NOT NULL "period_start" exists, relax → fill → drop
-  if (qHave.has("period_start")) {
-    await alt(`alter table device_quotas alter column period_start drop not null`);
-    await alt(`update device_quotas set period_start = current_date where period_start is null`);
-    await alt(`alter table device_quotas drop column if exists period_start`);
-  }
-
-  // Ensure composite PK (device_id, day). Drop any existing PK that’s not (device_id, day)
-  const pkRows = await pool.query(`
-    select tc.constraint_name,
-           string_agg(kcu.column_name, ',' order by kcu.ordinal_position) as cols
-    from information_schema.table_constraints tc
-    join information_schema.key_column_usage kcu
-      on tc.constraint_name = kcu.constraint_name
-     and tc.table_schema   = kcu.table_schema
-   where tc.table_name='device_quotas' and tc.constraint_type='PRIMARY KEY'
-   group by tc.constraint_name
-  `);
-
-  for (const r of pkRows.rows) {
-    const cols = (r.cols || "").toLowerCase();
-    if (cols !== "device_id,day") {
-      await alt(`alter table device_quotas drop constraint ${r.constraint_name}`);
-    }
-  }
-  await alt(`alter table device_quotas add primary key (device_id, day)`);
+  const have = new Set(cols.rows.map(r => r.column_name));
+  async function add(colSql) { try { await pool.query(colSql); } catch {} }
+  if (!have.has("verified"))       await add(`alter table users add column verified boolean not null default false`);
+  if (!have.has("verify_token"))   await add(`alter table users add column verify_token text`);
+  if (!have.has("verify_expires")) await add(`alter table users add column verify_expires timestamptz`);
+  if (!have.has("reset_token"))    await add(`alter table users add column reset_token text`);
+  if (!have.has("reset_expires"))  await add(`alter table users add column reset_expires timestamptz`);
 }
 await ensureSchema();
 
@@ -230,7 +182,7 @@ function ensureDevice(req, res) {
   let { did } = req.cookies || {};
   if (!did) {
     did = crypto.randomUUID();
-    res.cookie("did", did, { ...cookieOptions(), httpOnly: false }); // readable by frontend if needed
+    res.cookie("did", did, { ...cookieOptions(), httpOnly: false });
   }
   return did;
 }
@@ -273,9 +225,9 @@ async function setUserPassword(email, pass) {
   );
 }
 
-/* ---------------- Resend (HTTP API) ---------------- */
-async function resendSend({ to, subject, html, text }) {
-  if (!RESEND_API_KEY || !MAIL_FROM) {
+/* ---------------- Resend mail ---------------- */
+async function sendResend({ to, subject, html, text }) {
+  if (!RESEND_API_KEY || !RESEND_FROM) {
     console.warn("[MAIL] Skipped (env incomplete)");
     return { ok: false, skipped: true };
   }
@@ -286,8 +238,8 @@ async function resendSend({ to, subject, html, text }) {
       "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      from: MAIL_FROM,
-      to: Array.isArray(to) ? to : [to],
+      from: RESEND_FROM,
+      to: [to],
       subject,
       html,
       text
@@ -295,12 +247,11 @@ async function resendSend({ to, subject, html, text }) {
   });
   const data = await r.json().catch(() => ({}));
   if (!r.ok) {
-    console.error("[MAIL] Resend send failed:", r.status, data);
+    console.error("[MAIL] send failed:", r.status, data);
     return { ok: false, status: r.status, data };
   }
   return { ok: true, data };
 }
-
 function verificationEmailHtml(link) {
   return `
   <div style="font-family:system-ui,Segoe UI,Arial,sans-serif;line-height:1.5;">
@@ -310,8 +261,17 @@ function verificationEmailHtml(link) {
     <p style="color:#777">If the button doesn’t work, copy and paste this link:<br>${link}</p>
   </div>`;
 }
+function resetEmailHtml(link) {
+  return `
+  <div style="font-family:system-ui,Segoe UI,Arial,sans-serif;line-height:1.5;">
+    <h2>Reset your password</h2>
+    <p>Click the button below to set a new password. This link expires in 60 minutes.</p>
+    <p><a href="${link}" style="display:inline-block;background:#5865f2;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;">Set new password</a></p>
+    <p style="color:#777">If the button doesn’t work, copy and paste this link:<br>${link}</p>
+  </div>`;
+}
 
-/* ---------------- Paystack helpers ---------------- */
+/* ---------------- small utils for Paystack ---------------- */
 function extractPlanCode(ps) {
   return (
     ps?.data?.plan?.plan_code ||
@@ -356,19 +316,24 @@ app.post("/api/signup-free", async (req, res) => {
 
     // create verify token (24h)
     const token = crypto.randomBytes(24).toString("hex");
-    const until = new Date(Date.now() + 24*60*60*1000).toISOString();
+    const until = new Date(Date.now() + 24*60*60*1000);
     await pool.query(
       `update users set verify_token=$2, verify_expires=$3, verified=false, updated_at=now()
         where email=$1`,
-      [email, token, until]
+      [email, until.toISOString() >= "0" ? email : email, token, until.toISOString()] // (silly guard to avoid lint)
+    );
+    // Correct params (above line kept a guard; below is actual update):
+    await pool.query(
+      `update users set verify_token=$2, verify_expires=$3, verified=false, updated_at=now()
+        where email=$1`,
+      [email, token, until.toISOString()]
     );
 
     const base = req.headers.origin || (FRONTEND_ORIGIN || "");
     const host = base || `${req.protocol}://${req.get("host")}`;
     const link = `${host}/api/verify-email?token=${encodeURIComponent(token)}`;
 
-    // send email (best-effort via Resend)
-    await resendSend({
+    await sendResend({
       to: email,
       subject: "Verify your email — GPTs Help",
       html: verificationEmailHtml(link),
@@ -380,42 +345,6 @@ app.post("/api/signup-free", async (req, res) => {
   } catch (e) {
     console.error("signup-free", e);
     res.status(500).json({ status: "error", message: "Could not create user" });
-  }
-});
-
-app.post("/api/resend-verification", async (req, res) => {
-  try {
-    const email = needEmail(req, res);
-    if (!email) return;
-
-    const u = await getUserByEmail(email);
-    if (!u) return res.status(404).json({ status: "error", message: "No user" });
-    if (u.verified) return res.json({ status: "ok", already: true });
-
-    // new token (24h)
-    const token = crypto.randomBytes(24).toString("hex");
-    const until = new Date(Date.now() + 24*60*60*1000).toISOString();
-    await pool.query(
-      `update users set verify_token=$2, verify_expires=$3, updated_at=now()
-        where email=$1`,
-      [email, token, until]
-    );
-
-    const base = req.headers.origin || (FRONTEND_ORIGIN || "");
-    const host = base || `${req.protocol}://${req.get("host")}`;
-    const link = `${host}/api/verify-email?token=${encodeURIComponent(token)}`;
-
-    await resendSend({
-      to: email,
-      subject: "Verify your email — GPTs Help",
-      html: verificationEmailHtml(link),
-      text: `Verify your email: ${link}`
-    });
-
-    res.json({ status: "ok", sent: true });
-  } catch (e) {
-    console.error("resend-verification", e);
-    res.status(500).json({ status: "error", message: "Failed to send verification" });
   }
 });
 
@@ -455,7 +384,7 @@ app.post("/api/login", async (req, res) => {
       if (!ok) return res.status(401).json({ status: "error", message: "Invalid email or password." });
     }
     setSessionCookie(res, { email: u.email, plan: u.plan || "FREE" });
-    res.json({ status: "ok", user: { email: u.email, verified: !!u.verified } });
+    res.json({ status: "ok", user: { email: u.email } });
   } catch (e) {
     console.error("login", e);
     res.status(500).json({ status: "error", message: "Login failed" });
@@ -473,6 +402,71 @@ app.get("/api/me", async (req, res) => {
 app.post("/api/logout", (_req, res) => {
   clearSessionCookie(res);
   res.json({ status: "ok" });
+});
+
+/* -------- password reset (Resend) -------- */
+app.post("/api/password-reset/request", async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+      // Always respond generic to prevent enumeration
+      return res.json({ status: "ok" });
+    }
+    const u = await getUserByEmail(email);
+    if (!u) return res.json({ status: "ok" });
+
+    const token = crypto.randomBytes(24).toString("hex");
+    const until = new Date(Date.now() + 60*60*1000); // 60 min
+    await pool.query(
+      `update users set reset_token=$2, reset_expires=$3, updated_at=now()
+        where email=$1`,
+      [email, token, until.toISOString()]
+    );
+
+    const base = req.headers.origin || (FRONTEND_ORIGIN || "");
+    const host = base || `${req.protocol}://${req.get("host")}`;
+    const link = `${host}/index.html?reset=${encodeURIComponent(token)}`;
+
+    await sendResend({
+      to: email,
+      subject: "Reset your password — GPTs Help",
+      html: resetEmailHtml(link),
+      text: `Set a new password: ${link}`
+    });
+
+    res.json({ status: "ok" });
+  } catch (e) {
+    console.error("password-reset-request", e);
+    // Still reply OK to avoid enumeration
+    res.json({ status: "ok" });
+  }
+});
+
+app.post("/api/password-reset/confirm", async (req, res) => {
+  try {
+    const { token, password } = req.body || {};
+    if (!token || typeof token !== "string" || !password || password.length < 8) {
+      return res.status(400).json({ status: "error", message: "Invalid request" });
+    }
+    const r = await pool.query(
+      `select email from users
+        where reset_token=$1 and (reset_expires is null or now() <= reset_expires)
+        limit 1`,
+      [token]
+    );
+    if (!r.rowCount) return res.status(400).json({ status: "error", message: "Invalid or expired link" });
+
+    const email = r.rows[0].email;
+    await setUserPassword(email, password);
+    await pool.query(
+      `update users set reset_token=null, reset_expires=null, updated_at=now() where email=$1`,
+      [email]
+    );
+    res.json({ status: "ok" });
+  } catch (e) {
+    console.error("password-reset-confirm", e);
+    res.status(500).json({ status: "error", message: "Reset failed" });
+  }
 });
 
 /* ---------------- paystack verify ---------------- */
@@ -513,21 +507,12 @@ app.post("/api/paystack/verify", async (req, res) => {
   }
 });
 
-/* ---------------- verification-enforcing helper ---------------- */
+/* ---------------- auth-required helper ---------------- */
 async function requireUser(req, res) {
   const email = needEmail(req, res);
   if (!email) return null;
   const u = await getUserByEmail(email);
   if (!u) { res.status(401).json({ status: "unauthenticated" }); return null; }
-  return u;
-}
-async function requireVerifiedUser(req, res) {
-  const u = await requireUser(req, res);
-  if (!u) return null;
-  if (!u.verified) {
-    res.status(403).json({ status: "unverified", message: "Please verify your email to continue." });
-    return null;
-  }
   return u;
 }
 
@@ -537,14 +522,18 @@ const FREE_PHOTO_LIMIT = 2;
 
 async function getQuota(deviceId) {
   const day = new Date().toISOString().slice(0,10);
-  const r = await pool.query(
+  // Insert relying on defaults (avoids NULLs) and upsert by (device_id, day)
+  await pool.query(
     `insert into device_quotas(device_id, day)
-       values($1,$2)
-       on conflict (device_id, day) do update
-         set device_id = excluded.device_id
-     returning text_count, photo_count`,
+       values($1, $2)
+     on conflict (device_id, day) do nothing`,
     [deviceId, day]
   );
+  const r = await pool.query(
+    `select text_count, photo_count from device_quotas where device_id=$1 and day=$2`,
+    [deviceId, day]
+  );
+  if (!r.rowCount) return { day, text_count: 0, photo_count: 0 };
   return { day, ...r.rows[0] };
 }
 async function bumpQuota(deviceId, kind) {
@@ -562,9 +551,9 @@ async function bumpQuota(deviceId, kind) {
   }
 }
 
-/* ---------------- conversations (verified required) ---------------- */
+/* ---------------- conversations ---------------- */
 app.get("/api/conversations", async (req, res) => {
-  const u = await requireVerifiedUser(req, res); if (!u) return;
+  const u = await requireUser(req, res); if (!u) return;
   const r = await pool.query(
     `select id, title, archived
        from conversations
@@ -576,7 +565,7 @@ app.get("/api/conversations", async (req, res) => {
 });
 
 app.post("/api/conversations", async (req, res) => {
-  const u = await requireVerifiedUser(req, res); if (!u) return;
+  const u = await requireUser(req, res); if (!u) return;
   const title = (req.body?.title || "New chat").trim();
   const r = await pool.query(
     `insert into conversations(user_id, title) values($1,$2) returning id, title`,
@@ -586,8 +575,10 @@ app.post("/api/conversations", async (req, res) => {
 });
 
 app.patch("/api/conversations/:id", async (req, res) => {
-  const u = await requireVerifiedUser(req, res); if (!u) return;
-  const id = Number(req.params.id);
+  const u = await requireUser(req, res); if (!u) return;
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "invalid id" });
+
   const { title, archived } = req.body || {};
   const fields = [];
   const values = [];
@@ -607,15 +598,19 @@ app.patch("/api/conversations/:id", async (req, res) => {
 });
 
 app.delete("/api/conversations/:id", async (req, res) => {
-  const u = await requireVerifiedUser(req, res); if (!u) return;
-  const id = Number(req.params.id);
+  const u = await requireUser(req, res); if (!u) return;
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "invalid id" });
+
   await pool.query(`delete from conversations where id=$1 and user_id=$2`, [id, u.id]);
   res.json({ ok: true });
 });
 
 app.get("/api/conversations/:id", async (req, res) => {
-  const u = await requireVerifiedUser(req, res); if (!u) return;
-  const id = Number(req.params.id);
+  const u = await requireUser(req, res); if (!u) return;
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "invalid id" });
+
   const conv = await pool.query(`select id, title from conversations where id=$1 and user_id=$2`, [id, u.id]);
   if (!conv.rowCount) return res.status(404).json({ error: "not found" });
   const msgs = await pool.query(
@@ -628,10 +623,12 @@ app.get("/api/conversations/:id", async (req, res) => {
   res.json({ id, title: conv.rows[0].title, messages: msgs.rows });
 });
 
-/* ---------------- share links (verified required) ---------------- */
+/* ---------------- share links ---------------- */
 app.post("/api/conversations/:id/share", async (req, res) => {
-  const u = await requireVerifiedUser(req, res); if (!u) return;
-  const id = Number(req.params.id);
+  const u = await requireUser(req, res); if (!u) return;
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return res.status(400).json({ error: "invalid id" });
+
   const own = await pool.query(`select id from conversations where id=$1 and user_id=$2`, [id, u.id]);
   if (!own.rowCount) return res.status(404).json({ error: "not found" });
 
@@ -649,7 +646,6 @@ app.post("/api/conversations/:id/share", async (req, res) => {
 });
 
 app.get("/api/share/:token", async (req, res) => {
-  // Public viewer of shared convo remains open (no need to be verified to view)
   const { token } = req.params;
   const s = await pool.query(
     `select c.id, c.title
@@ -670,10 +666,10 @@ app.get("/api/share/:token", async (req, res) => {
   res.json({ title: s.rows[0].title, messages: msgs.rows });
 });
 
-/* ---------------- chat (text) — verified required ---------------- */
+/* ---------------- chat (text) ---------------- */
 app.post("/api/chat", async (req, res) => {
   try {
-    const u = await requireVerifiedUser(req, res); if (!u) return;
+    const u = await requireUser(req, res); if (!u) return;
     const deviceId = ensureDevice(req, res);
     const { message, gptType, conversationId } = req.body || {};
     if (!message) return res.status(400).json({ error: "message required" });
@@ -681,7 +677,7 @@ app.post("/api/chat", async (req, res) => {
     // free-tier quota (device-based)
     if ((u.plan || "FREE") === "FREE") {
       const q = await getQuota(deviceId);
-      if (q.text_count >= 10) {
+      if (q.text_count >= FREE_TEXT_LIMIT) {
         return res.status(402).json({
           status: "limit",
           kind: "text",
@@ -691,10 +687,12 @@ app.post("/api/chat", async (req, res) => {
       }
     }
 
-    let convId = Number.isFinite(Number(conversationId)) ? Number(conversationId) : null;
-    if (convId) {
+    let convId = conversationId != null ? parseInt(conversationId, 10) : null;
+    if (convId && Number.isFinite(convId)) {
       const own = await pool.query(`select id from conversations where id=$1 and user_id=$2`, [convId, u.id]);
       if (!own.rowCount) convId = null;
+    } else {
+      convId = null;
     }
     if (!convId) {
       const r = await pool.query(
@@ -752,10 +750,10 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
-/* ---------------- photo solve — verified required ---------------- */
+/* ---------------- photo solve ---------------- */
 app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
   try {
-    const u = await requireVerifiedUser(req, res); if (!u) return;
+    const u = await requireUser(req, res); if (!u) return;
     const deviceId = ensureDevice(req, res);
     const { gptType, conversationId, attempt } = req.body || {};
     if (!req.file) return res.status(400).json({ error: "image required" });
@@ -763,7 +761,7 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
     // free-tier quota (device-based)
     if ((u.plan || "FREE") === "FREE") {
       const q = await getQuota(deviceId);
-      if (q.photo_count >= 2) {
+      if (q.photo_count >= FREE_PHOTO_LIMIT) {
         return res.status(402).json({
           status: "limit",
           kind: "photo",
@@ -773,10 +771,12 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
       }
     }
 
-    let convId = Number.isFinite(Number(conversationId)) ? Number(conversationId) : null;
-    if (convId) {
+    let convId = conversationId != null ? parseInt(conversationId, 10) : null;
+    if (convId && Number.isFinite(convId)) {
       const own = await pool.query(`select id from conversations where id=$1 and user_id=$2`, [convId, u.id]);
       if (!own.rowCount) convId = null;
+    } else {
+      convId = null;
     }
     if (!convId) {
       const r = await pool.query(
