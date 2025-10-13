@@ -29,23 +29,27 @@ const {
   JWT_SECRET,
   OPENAI_API_KEY,
   OPENAI_MODEL,
+
   PAYSTACK_PUBLIC_KEY,
   PAYSTACK_SECRET_KEY,
-  PLAN_CODE_PLUS_MONTHLY,   // optional
-  PLAN_CODE_PRO_ANNUAL,     // optional
-  FRONTEND_ORIGIN,          // optional
+  PLAN_CODE_PLUS_MONTHLY,   // optional mapping convenience
+  PLAN_CODE_PRO_ANNUAL,     // optional mapping convenience
+  FRONTEND_ORIGIN,          // if frontend hosted elsewhere, enables CORS+SameSite=None
 
-  // Resend HTTP API
+  // Resend (preferred if present)
   RESEND_API_KEY,
-  MAIL_FROM                 // e.g. 'GPTs Help <no-reply@updates.gptshelp.online>'
+
+  // Mailgun HTTP API (fallback if RESEND not set)
+  MAILGUN_API_KEY,
+  MAILGUN_DOMAIN,           // e.g. mg.gptshelp.online
+  MAIL_FROM,                // e.g. 'GPTs Help <no-reply@mg.gptshelp.online>'
+  MAILGUN_REGION            // 'us' (default) or 'eu'
 } = process.env;
 
 if (!DATABASE_URL) console.error("[ERROR] DATABASE_URL not set");
-if (!JWT_SECRET) console.warn("[WARN] JWT_SECRET not set; a random one will be used (sessions reset on restart).");
-if (!OPENAI_API_KEY) console.warn("[WARN] OPENAI_API_KEY not set.");
-if (!RESEND_API_KEY || !MAIL_FROM) {
-  console.warn("[WARN] Resend env not fully set; verification emails will be skipped.");
-}
+if (!JWT_SECRET) console.warn("[WARN] JWT_SECRET not set; using ephemeral secret (sessions reset on restart).");
+if (!OPENAI_API_KEY) console.warn("[WARN] OPENAI_API_KEY not set (chat will fail until provided).");
+
 const OPENAI_DEFAULT_MODEL = OPENAI_MODEL || "gpt-4o-mini";
 
 // ---------------- middlewares ----------------
@@ -219,44 +223,79 @@ async function setUserPassword(email, pass) {
   );
 }
 
-// ---------------- Resend (email service) ----------------
-async function mailgunSend({ to, subject, html, text }) {
-  // kept the function name used elsewhere; now sends via Resend
-  if (!RESEND_API_KEY || !MAIL_FROM) {
-    console.warn("[MAIL] Skipped (RESEND_API_KEY or MAIL_FROM missing)");
-    return { ok: false, skipped: true };
+// ---------------- Email sender (Resend -> Mailgun fallback) ----------------
+async function sendEmail({ to, subject, html, text }) {
+  // Prefer Resend if key present
+  if (RESEND_API_KEY) {
+    try {
+      const r = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${RESEND_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          from: MAIL_FROM || "GPTs Help <no-reply@gptshelp.online>",
+          to: [to],
+          subject,
+          html,
+          text
+        })
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        console.error("[MAIL] Resend failed:", r.status, data);
+      } else {
+        return { ok: true, provider: "resend", data };
+      }
+    } catch (e) {
+      console.error("[MAIL] Resend error:", e);
+    }
   }
 
-  const r = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${RESEND_API_KEY}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      from: MAIL_FROM,
-      to,
-      subject,
-      html,
-      text
-    })
-  });
+  // Fallback to Mailgun if configured
+  if (MAILGUN_API_KEY && MAILGUN_DOMAIN && (MAIL_FROM || true)) {
+    try {
+      const region = (MAILGUN_REGION || "us").toLowerCase() === "eu" ? "api.eu.mailgun.net" : "api.mailgun.net";
+      const url = `https://${region}/v3/${encodeURIComponent(MAILGUN_DOMAIN)}/messages`;
+      const form = new URLSearchParams();
+      form.set("from", MAIL_FROM || `GPTs Help <no-reply@${MAILGUN_DOMAIN}>`);
+      form.set("to", to);
+      form.set("subject", subject);
+      if (text) form.set("text", text);
+      if (html) form.set("html", html);
 
-  const data = await r.json().catch(() => ({}));
-  if (!r.ok) {
-    console.error("[MAIL] send failed:", r.status, data);
-    return { ok: false, status: r.status, data };
+      const r = await fetch(url, {
+        method: "POST",
+        headers: {
+          Authorization: "Basic " + Buffer.from(`api:${MAILGUN_API_KEY}`).toString("base64"),
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: form
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) {
+        console.error("[MAIL] Mailgun send failed:", r.status, data);
+        return { ok: false, provider: "mailgun", statusCode: r.status, data };
+      }
+      return { ok: true, provider: "mailgun", data };
+    } catch (e) {
+      console.error("[MAIL] Mailgun error:", e);
+      return { ok: false, provider: "mailgun", error: String(e) };
+    }
   }
-  return { ok: true, data };
+
+  console.warn("[MAIL] Skipped (no provider configured)");
+  return { ok: false, skipped: true };
 }
 
 function verificationEmailHtml(link) {
   return `
-  <div style="font-family:system-ui,Segoe UI,Arial,sans-serif;line-height:1.5;">
-    <h2>Verify your email</h2>
+  <div style="font-family:system-ui,Segoe UI,Arial,sans-serif;line-height:1.55;">
+    <h2 style="margin:0 0 8px">Verify your email</h2>
     <p>Thanks for signing up for <strong>GPTs Help</strong>. Please confirm your email by clicking the button below.</p>
-    <p><a href="${link}" style="display:inline-block;background:#5865f2;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px;">Verify email</a></p>
-    <p style="color:#777">If the button doesn’t work, copy and paste this link:<br>${link}</p>
+    <p><a href="${link}" style="display:inline-block;background:#5865f2;color:#fff;text-decoration:none;padding:10px 16px;border-radius:8px">Verify email</a></p>
+    <p style="color:#777;margin-top:16px">If the button doesn’t work, copy and paste this link:<br>${link}</p>
   </div>`;
 }
 
@@ -317,12 +356,13 @@ app.post("/api/signup-free", async (req, res) => {
     const link = `${host}/api/verify-email?token=${encodeURIComponent(token)}`;
 
     // send email (best-effort)
-    await mailgunSend({
+    const mail = await sendEmail({
       to: email,
       subject: "Verify your email — GPTs Help",
       html: verificationEmailHtml(link),
       text: `Verify your email: ${link}`
     });
+    if (!mail.ok) console.warn("[MAIL] verification send did not complete; user can click 'Resend' later.", mail);
 
     setSessionCookie(res, { email: u.email, plan: u.plan });
     res.json({ status: "success", user: { email: u.email }, verifySent: true });
@@ -344,7 +384,6 @@ app.get("/api/verify-email", async (req, res) => {
       [token]
     );
     if (!r.rowCount) return res.status(400).send("Invalid or expired token");
-    // Keep UX simple: land them in chat after verify
     res.redirect("/chat.html");
   } catch (e) {
     console.error("verify-email", e);
@@ -580,6 +619,10 @@ app.post("/api/chat", async (req, res) => {
     const { message, gptType, conversationId } = req.body || {};
     if (!message) return res.status(400).json({ error: "message required" });
 
+    if (!OPENAI_API_KEY) {
+      return res.status(500).json({ error: "MISSING_OPENAI_KEY" });
+    }
+
     // free-tier quota (device-based)
     if ((u.plan || "FREE") === "FREE") {
       const q = await getQuota(deviceId);
@@ -635,7 +678,13 @@ app.post("/api/chat", async (req, res) => {
         temperature: 0.2
       })
     });
-    if (!r.ok) throw new Error(`OpenAI ${r.status}: ${await r.text()}`);
+
+    if (!r.ok) {
+      const bodyText = await r.text().catch(() => "");
+      console.error("[OPENAI] chat error", r.status, bodyText);
+      return res.status(502).json({ error: "UPSTREAM_OPENAI_ERROR", status: r.status, details: bodyText.slice(0, 2000) });
+    }
+
     const data = await r.json();
     const answer = data?.choices?.[0]?.message?.content || "";
 
@@ -644,7 +693,6 @@ app.post("/api/chat", async (req, res) => {
       [convId, "assistant", answer]
     );
 
-    // bump quota on success for FREE
     if ((u.plan || "FREE") === "FREE") await bumpQuota(deviceId, "text");
 
     res.json({ response: answer, conversationId: convId });
@@ -661,6 +709,10 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
     const deviceId = ensureDevice(req, res);
     const { gptType, conversationId, attempt } = req.body || {};
     if (!req.file) return res.status(400).json({ error: "image required" });
+
+    if (!OPENAI_API_KEY) {
+      return res.status(500).json({ error: "MISSING_OPENAI_KEY" });
+    }
 
     // free-tier quota (device-based)
     if ((u.plan || "FREE") === "FREE") {
@@ -723,7 +775,13 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
         temperature: 0.2
       })
     });
-    if (!r.ok) throw new Error(`OpenAI vision ${r.status}: ${await r.text()}`);
+
+    if (!r.ok) {
+      const bodyText = await r.text().catch(() => "");
+      console.error("[OPENAI] vision error", r.status, bodyText);
+      return res.status(502).json({ error: "UPSTREAM_OPENAI_ERROR", status: r.status, details: bodyText.slice(0, 2000) });
+    }
+
     const data = await r.json();
     const answer = data?.choices?.[0]?.message?.content || "No result";
 
@@ -732,7 +790,6 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
       [convId, "assistant", answer]
     );
 
-    // bump quota on success for FREE
     if ((u.plan || "FREE") === "FREE") await bumpQuota(deviceId, "photo");
 
     res.json({ response: answer, conversationId: convId });
@@ -746,4 +803,7 @@ app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`GPTs Help server running on :${PORT}`);
+  if (!RESEND_API_KEY && !(MAILGUN_API_KEY && MAILGUN_DOMAIN)) {
+    console.warn("[MAIL] No email provider configured (set RESEND_API_KEY or MAILGUN_* envs)");
+  }
 });
