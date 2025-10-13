@@ -415,4 +415,234 @@ async function makeTitleFromOpenAI(prompt) {
     return prompt.slice(0, 40);
   }
 }
+// ---------- conversations ----------
+app.get("/api/conversations", async (req, res) => {
+  const u = await requireVerifiedUser(req, res); if (!u) return;
+  const r = await pool.query(
+    `select id, title, archived from conversations where user_id=$1 order by created_at desc`,
+    [u.id]
+  );
+  res.json(r.rows);
+});
+
+app.post("/api/conversations", async (req, res) => {
+  const u = await requireVerifiedUser(req, res); if (!u) return;
+  const title = (req.body?.title || "New chat").trim();
+  const r = await pool.query(
+    `insert into conversations(user_id, title) values($1,$2) returning id, title`,
+    [u.id, title]
+  );
+  res.json(r.rows[0]);
+});
+
+app.patch("/api/conversations/:id", async (req, res) => {
+  const u = await requireVerifiedUser(req, res); if (!u) return;
+  const id = Number(req.params.id);
+  const { title, archived } = req.body || {};
+  const fields = [], values = [];
+  let i = 1;
+  if (typeof title === "string") { fields.push(`title=$${++i}`); values.push(title.trim() || "Untitled"); }
+  if (typeof archived === "boolean") { fields.push(`archived=$${++i}`); values.push(!!archived); }
+  if (!fields.length) return res.json({ ok: true });
+  await pool.query(
+    `update conversations set ${fields.join(", ")}, updated_at=now()
+     where id=$1 and user_id=$${++i}`,
+    [id, ...values, u.id]
+  );
+  res.json({ ok: true });
+});
+
+app.delete("/api/conversations/:id", async (req, res) => {
+  const u = await requireVerifiedUser(req, res); if (!u) return;
+  const id = Number(req.params.id);
+  await pool.query(`delete from conversations where id=$1 and user_id=$2`, [id, u.id]);
+  res.json({ ok: true });
+});
+
+app.get("/api/conversations/:id", async (req, res) => {
+  const u = await requireVerifiedUser(req, res); if (!u) return;
+  const id = Number(req.params.id);
+  const conv = await pool.query(`select id, title from conversations where id=$1 and user_id=$2`, [id, u.id]);
+  if (!conv.rowCount) return res.status(404).json({ error: "not found" });
+  const msgs = await pool.query(
+    `select role, content, created_at from messages where conversation_id=$1 order by id`,
+    [id]
+  );
+  res.json({ id, title: conv.rows[0].title, messages: msgs.rows });
+});
+
+// ---------- chat ----------
+const upload = multer({ storage: multer.memoryStorage() });
+
+app.post("/api/chat", async (req, res) => {
+  try {
+    const u = await requireVerifiedUser(req, res); if (!u) return;
+    const deviceId = ensureDevice(req, res);
+
+    const { message, gptType, conversationId } = (req.body || {});
+    if (!message) return res.status(400).json({ error: "message required" });
+
+    // free-tier quota
+    if ((u.plan || "FREE") === "FREE") {
+      const q = await getQuota(deviceId);
+      if (q.text_count >= FREE_TEXT_LIMIT) {
+        return res.status(402).json({
+          status: "limit",
+          kind: "text",
+          message: "You’ve reached the free text limit.",
+          upgradeUrl: "/index.html#pricing"
+        });
+      }
+    }
+
+    let convId = conversationId ? Number(conversationId) : null;
+    if (convId) {
+      const own = await pool.query(`select id from conversations where id=$1 and user_id=$2`, [convId, u.id]);
+      if (!own.rowCount) convId = null;
+    }
+    if (!convId) {
+      const title = await makeTitleFromOpenAI(message);
+      const r = await pool.query(
+        `insert into conversations(user_id, title) values($1,$2) returning id`,
+        [u.id, title]
+      );
+      convId = r.rows[0].id;
+    }
+
+    const hist = await pool.query(
+      `select role, content from messages where conversation_id=$1 order by id`,
+      [convId]
+    );
+
+    const system =
+      gptType === "math"
+        ? "You are Math GPT. Solve math problems step-by-step with clear reasoning, and show workings. Be accurate and concise."
+        : "You are a helpful writing assistant. Be clear, structured, and helpful.";
+
+    const msgs = [{ role: "system", content: system }, ...hist.rows, { role: "user", content: message }];
+
+    await pool.query(
+      `insert into messages(conversation_id, role, content) values($1,$2,$3)`,
+      [convId, "user", message]
+    );
+
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: OPENAI_DEFAULT_MODEL,
+        messages: msgs,
+        temperature: 0.2
+      })
+    });
+    if (!r.ok) throw new Error(`OpenAI ${r.status}: ${await r.text()}`);
+    const data = await r.json();
+    const answer = data?.choices?.[0]?.message?.content || "";
+
+    await pool.query(
+      `insert into messages(conversation_id, role, content) values($1,$2,$3)`,
+      [convId, "assistant", answer]
+    );
+
+    if ((u.plan || "FREE") === "FREE") await bumpQuota(deviceId, "text");
+    res.json({ response: answer, conversationId: convId });
+  } catch (e) {
+    console.error("chat error:", e);
+    res.status(500).json({ error: "Chat failed" });
+  }
+});
+
+// ---------- photo solve ----------
+app.post("/api/photo-solve", upload.single("image"), async (req, res) => {
+  try {
+    const u = await requireVerifiedUser(req, res); if (!u) return;
+    const deviceId = ensureDevice(req, res);
+    const { gptType, conversationId, attempt } = req.body || {};
+    if (!req.file) return res.status(400).json({ error: "image required" });
+
+    if ((u.plan || "FREE") === "FREE") {
+      const q = await getQuota(deviceId);
+      if (q.photo_count >= FREE_PHOTO_LIMIT) {
+        return res.status(402).json({
+          status: "limit",
+          kind: "photo",
+          message: "You’ve reached the free photo-solve limit.",
+          upgradeUrl: "/index.html#pricing"
+        });
+      }
+    }
+
+    let convId = conversationId ? Number(conversationId) : null;
+    if (convId) {
+      const own = await pool.query(`select id from conversations where id=$1 and user_id=$2`, [convId, u.id]);
+      if (!own.rowCount) convId = null;
+    }
+    if (!convId) {
+      const r = await pool.query(
+        `insert into conversations(user_id, title) values($1,$2) returning id`,
+        [u.id, "Photo solve"]
+      );
+      convId = r.rows[0].id;
+    }
+
+    const mime = req.file.mimetype || "image/png";
+    const b64 = req.file.buffer.toString("base64");
+    const dataUrl = `data:${mime};base64,${b64}`;
+
+    const system =
+      gptType === "math"
+        ? "You are Math GPT. Read the problem from the image and solve it step-by-step. Explain clearly."
+        : "You are a helpful assistant. Describe and analyze the content of the image, then answer the user's request.";
+
+    await pool.query(
+      `insert into messages(conversation_id, role, content) values($1,$2,$3)`,
+      [convId, "user", attempt ? `(Photo) ${attempt}` : "(Photo uploaded)"]
+    );
+
+    const r = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: OPENAI_DEFAULT_MODEL,
+        messages: [
+          { role: "system", content: system },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: attempt ? `Note from user: ${attempt}\nSolve:` : "Solve this problem step-by-step:" },
+              { type: "image_url", image_url: { url: dataUrl } }
+            ]
+          }
+        ],
+        temperature: 0.2
+      })
+    });
+    if (!r.ok) throw new Error(`OpenAI vision ${r.status}: ${await r.text()}`);
+    const data = await r.json();
+    const answer = data?.choices?.[0]?.message?.content || "No result";
+
+    await pool.query(
+      `insert into messages(conversation_id, role, content) values($1,$2,$3)`,
+      [convId, "assistant", answer]
+    );
+
+    if ((u.plan || "FREE") === "FREE") await bumpQuota(deviceId, "photo");
+    res.json({ response: answer, conversationId: convId });
+  } catch (e) {
+    console.error("photo-solve", e);
+    res.status(500).json({ error: "Photo solve failed" });
+  }
+});
+
+// ---------- start ----------
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`GPTs Help server running on :${PORT}`);
+});
 
