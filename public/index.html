@@ -21,7 +21,7 @@
     body{margin:0;font-family:Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;color:var(--text);background:var(--bg)}
     a{color:var(--brand);text-decoration:none}
 
-    /* Header (single Login / Sign up area like ChatGPT) */
+    /* Header */
     header{background:#fff;border-bottom:1px solid #eee}
     .nav{max-width:1200px;margin:0 auto;padding:1rem 2rem;display:flex;align-items:center;justify-content:space-between}
     .brand{font-weight:800;letter-spacing:.2px}
@@ -73,13 +73,12 @@
     .plan li{margin:.35rem 0}
     .badge{position:absolute;top:12px;right:12px;background:var(--brand);color:#fff;font-size:.75rem;padding:.25rem .5rem;border-radius:999px}
 
-    /* Testimonials */
+    /* Testimonials & Footer */
     .testimonials{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.5rem;margin-top:2rem}
     .testimonial{background:#fff;border:1px solid #eee;border-radius:12px;padding:1.5rem;font-style:italic}
-
     footer{text-align:center;padding:2rem;color:var(--muted);margin-top:3rem;border-top:1px solid #eee}
 
-    /* Modals (login/signup/paywall/reset) */
+    /* Modals */
     .overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);z-index:1000}
     .overlay.open{display:flex}
     .modal{width:min(520px,92vw);background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;box-shadow:var(--shadow)}
@@ -87,7 +86,7 @@
     .modal p.sub{color:var(--muted);margin:0 0 12px;font-size:.95rem}
     .row{display:flex;gap:.6rem}
     label{display:block;font-size:.9rem;color:var(--muted);margin:.35rem 0 .35rem}
-    input[type="email"],input[type="password"],input[type="text"]{width:100%;padding:.75rem .9rem;border:1px solid #ddd;border-radius:10px;font-size:1rem}
+    input[type="email"],input[type="password"]{width:100%;padding:.75rem .9rem;border:1px solid #ddd;border-radius:10px;font-size:1rem}
     .modal .btn{width:100%}
     .close-x{border:0;background:transparent;color:#999;font-size:20px;cursor:pointer;float:right}
     .err{color:var(--error);font-size:.9rem;min-height:18px;margin-top:6px}
@@ -117,7 +116,7 @@
     <p>Upload a math problem and get a step-by-step solution. Try it free — then unlock unlimited photo solves.</p>
   </section>
 
-  <!-- Try Photo Solve (live) -->
+  <!-- Try Photo Solve -->
   <section class="container">
     <h2>Try Photo Solve</h2>
     <div class="demo">
@@ -157,7 +156,6 @@
   <section class="container" id="pricing">
     <h2>Choose Your Plan</h2>
     <div class="plans">
-      <!-- Free -->
       <div class="plan">
         <h3>Free Plan</h3>
         <div class="price">₵0 / mo</div>
@@ -168,8 +166,6 @@
         </ul>
         <button class="btn btn-secondary" id="startFreeBtn">Start free</button>
       </div>
-
-      <!-- Plus Monthly -->
       <div class="plan">
         <div class="badge">Popular</div>
         <h3>Plus Monthly</h3>
@@ -181,8 +177,6 @@
         </ul>
         <button class="btn btn-primary" id="plusMonthlyBtn">Subscribe Monthly</button>
       </div>
-
-      <!-- Pro Annual -->
       <div class="plan">
         <h3>Pro Annual</h3>
         <div class="price">₵790 / yr</div>
@@ -217,7 +211,6 @@
       <h3 id="loginTitle">Log in to GPTs Help</h3>
       <p class="sub">Use your account email and password.</p>
 
-      <!-- Step 1: Email -->
       <div id="loginStepEmail" class="step active">
         <label for="loginEmail">Email</label>
         <input id="loginEmail" type="email" placeholder="you@example.com" autocomplete="email" />
@@ -226,7 +219,6 @@
         <div class="muted" style="margin-top:10px;">New here? <a href="#" id="loginGoSignup">Create an account</a></div>
       </div>
 
-      <!-- Step 2: Password -->
       <div id="loginStepPassword" class="step">
         <label>Email</label>
         <div class="inline" style="justify-content:space-between;">
@@ -236,11 +228,11 @@
 
         <label for="loginPassword" style="margin-top:8px;">Password</label>
         <input id="loginPassword" type="password" placeholder="••••••••" autocomplete="current-password" />
+        <div class="muted" style="margin-top:6px;">
+          <a href="#" id="forgotLink">Forgot password?</a>
+        </div>
         <div class="err" id="loginErr"></div>
         <button class="btn btn-primary" id="loginSubmit" type="button">Log in</button>
-        <div class="muted" style="margin-top:10px;">
-          <a href="#" id="forgotPasswordLink">Forgot password?</a>
-        </div>
       </div>
     </div>
   </div>
@@ -252,7 +244,6 @@
       <h3 id="signupTitle">Create your free account</h3>
       <p class="sub">Start with the free plan. Upgrade anytime.</p>
 
-      <!-- Step 1: Email -->
       <div id="signupStepEmail" class="step active">
         <label for="signupEmail">Email</label>
         <input id="signupEmail" type="email" placeholder="you@example.com" autocomplete="email" />
@@ -261,7 +252,6 @@
         <div class="muted" style="margin-top:10px;">Already have an account? <a href="#" id="signupGoLogin">Log in</a></div>
       </div>
 
-      <!-- Step 2: Password -->
       <div id="signupStepPassword" class="step">
         <label>Email</label>
         <div class="inline" style="justify-content:space-between;">
@@ -274,8 +264,23 @@
         <label for="signupPassword2" style="margin-top:8px;">Confirm password</label>
         <input id="signupPassword2" type="password" placeholder="Re-enter password" autocomplete="new-password" />
         <div class="err" id="signupErr"></div>
+        <div class="ok" id="signupOk" style="display:none;"></div>
         <button class="btn btn-primary" id="signupSubmit" type="button">Create account</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Password reset Modal -->
+  <div class="overlay" id="resetOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="resetTitle">
+      <button class="close-x" id="resetClose" aria-label="Close">×</button>
+      <h3 id="resetTitle">Reset your password</h3>
+      <p class="sub">Enter the email you used for GPTs Help. We’ll send a reset link if an account exists.</p>
+      <label for="resetEmail">Email</label>
+      <input id="resetEmail" type="email" placeholder="you@example.com" autocomplete="email" />
+      <div class="err" id="resetErr"></div>
+      <div class="ok" id="resetOk" style="display:none;"></div>
+      <button class="btn btn-primary" id="resetSendBtn" type="button">Send reset link</button>
     </div>
   </div>
 
@@ -293,47 +298,13 @@
     </div>
   </div>
 
-  <!-- Password Reset Modal -->
-  <div class="overlay" id="resetOverlay" aria-hidden="true">
-    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="resetTitle">
-      <button class="close-x" id="resetClose" aria-label="Close">×</button>
-      <h3 id="resetTitle">Reset your password</h3>
-      <p class="sub" id="resetSub">We’ll email you a secure link.</p>
-
-      <!-- Step A: Request -->
-      <div id="resetStepRequest" class="step active">
-        <label for="resetEmail">Email</label>
-        <input id="resetEmail" type="email" placeholder="you@example.com" autocomplete="email" />
-        <div class="err" id="resetReqErr"></div>
-        <div class="ok" id="resetReqOk" style="display:none;"></div>
-        <button class="btn btn-primary" id="resetRequestBtn" type="button">Send reset link</button>
-      </div>
-
-      <!-- Step B: Confirm (when opened via ?reset=TOKEN) -->
-      <div id="resetStepConfirm" class="step">
-        <label for="resetPassword">New password</label>
-        <input id="resetPassword" type="password" placeholder="At least 8 characters" autocomplete="new-password" />
-        <label for="resetPassword2" style="margin-top:8px;">Confirm password</label>
-        <input id="resetPassword2" type="password" placeholder="Re-enter password" autocomplete="new-password" />
-        <div class="err" id="resetConfErr"></div>
-        <div class="ok" id="resetConfOk" style="display:none;"></div>
-        <button class="btn btn-primary" id="resetConfirmBtn" type="button">Set new password</button>
-      </div>
-
-      <div class="muted" id="resetFootNote" style="margin-top:10px;display:none;">Done! You can close this window and <a href="#" id="resetGoLogin">log in</a>.</div>
-    </div>
-  </div>
-
   <!-- Paystack -->
   <script src="https://js.paystack.co/v2/inline.js"></script>
   <script>
     const genRef = () => "gptshelp_" + Date.now() + "_" + Math.random().toString(36).slice(2,8);
-
-    // Redirect after auth
     const urlParams = new URLSearchParams(location.search);
     const NEXT_URL = urlParams.get("next") || "/chat.html";
 
-    // Plan codes (from your Paystack dashboard)
     const PLAN_CODE_PLUS_MONTHLY = "PLN_t8tii7sryvwsxxf";
     const PLAN_CODE_PRO_ANNUAL  = "PLN_3gkd3qo1pv8rylt";
 
@@ -341,13 +312,13 @@
     async function loadConfig(){
       try{
         const r = await fetch("/api/public-config");
-        const cfg = await r.json();
-        PAYSTACK_PUBLIC_KEY = cfg.paystackPublicKey || null;
+        const cfg = await r.json().catch(()=>({}));
+        PAYSTACK_PUBLIC_KEY = cfg?.paystackPublicKey || null;
       }catch{}
     }
     loadConfig();
 
-    // API helpers
+    // --- API helpers ---
     async function apiMe(){ try{ return await fetch("/api/me",{credentials:"include"}).then(r=>r.json()); }catch{return{}} }
     async function apiLogin(email, password){
       const r = await fetch("/api/login", { method:"POST", headers:{ "Content-Type":"application/json" }, credentials:"include", body:JSON.stringify({email,password})});
@@ -357,17 +328,12 @@
       const r = await fetch("/api/signup-free", { method:"POST", headers:{ "Content-Type":"application/json" }, credentials:"include", body:JSON.stringify({email,password})});
       return r.json();
     }
-    async function apiPwResetRequest(email){
-      const r = await fetch("/api/password-reset/request", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ email }) });
-      return r.json().catch(()=>({}));
-    }
-    async function apiPwResetConfirm(token, password){
-      const r = await fetch("/api/password-reset/confirm", { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ token, password }) });
-      return r.json().catch(()=>({}));
+    async function apiForgot(email){
+      const r = await fetch("/api/password/forgot",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify({email})});
+      return r.json();
     }
 
-    function authOK(r){ return r && (r.status === "ok" || r.status === "success") && (r.user?.email || r.email); }
-    function authEmail(r){ return (r && (r.user?.email || r.email)) || ""; }
+    function authOK(r){ return r && (r.status === "ok" || r.status === "success" || r.ok === true); }
     function isValidEmail(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e); }
     function goToChat(){ location.assign("/chat.html"); }
     function setBtnLoading(btn, loading, label){
@@ -376,7 +342,7 @@
       else { btn.disabled = false; btn.textContent = label || btn.dataset.prev || btn.textContent; }
     }
 
-    // Header auth state
+    // Header state
     async function reflectAuth(){
       const me = await apiMe();
       const openChatBtn = document.getElementById("openChatBtn");
@@ -408,7 +374,6 @@
     const loginErr = document.getElementById("loginErr");
     const loginSubmit = document.getElementById("loginSubmit");
     const loginGoSignup = document.getElementById("loginGoSignup");
-    const forgotPasswordLink = document.getElementById("forgotPasswordLink");
 
     function openLogin(){
       loginEmailErr.textContent=''; loginErr.textContent='';
@@ -434,8 +399,14 @@
       setBtnLoading(loginSubmit, true, "Log in");
       try{
         const r = await apiLogin(email, pw);
-        if(authOK(r)){ localStorage.setItem("userEmail", authEmail(r)); location.replace(NEXT_URL); }
-        else { loginErr.textContent = r?.message || "Invalid email or password."; }
+        if(r?.status === "verify_required"){
+          loginErr.textContent = "Please check your email and verify your account before continuing.";
+        } else if(authOK(r)){
+          localStorage.setItem("userEmail", email);
+          location.replace(NEXT_URL);
+        } else {
+          loginErr.textContent = r?.message || "Invalid email or password.";
+        }
       }catch{ loginErr.textContent="Could not log in. Check connection."; }
       finally{ setBtnLoading(loginSubmit, false, "Log in"); }
     }
@@ -450,98 +421,36 @@
     loginPassword.addEventListener('keydown',(e)=>{ if(e.key==='Enter') handleLoginSubmit(); });
     loginGoSignup.addEventListener('click',(e)=>{ e.preventDefault(); closeLogin(); openSignup(); });
 
-    // ===== Password Reset modal =====
+    // ===== Forgot password =====
+    const forgotLink = document.getElementById("forgotLink");
     const resetOverlay = document.getElementById("resetOverlay");
-    const resetClose   = document.getElementById("resetClose");
-    const resetStepRequest = document.getElementById("resetStepRequest");
-    const resetStepConfirm = document.getElementById("resetStepConfirm");
-    const resetEmail   = document.getElementById("resetEmail");
-    const resetReqErr  = document.getElementById("resetReqErr");
-    const resetReqOk   = document.getElementById("resetReqOk");
-    const resetRequestBtn = document.getElementById("resetRequestBtn");
-    const resetPassword   = document.getElementById("resetPassword");
-    const resetPassword2  = document.getElementById("resetPassword2");
-    const resetConfErr    = document.getElementById("resetConfErr");
-    const resetConfOk     = document.getElementById("resetConfOk");
-    const resetConfirmBtn = document.getElementById("resetConfirmBtn");
-    const resetFootNote   = document.getElementById("resetFootNote");
-    const resetGoLogin    = document.getElementById("resetGoLogin");
-    const resetSub        = document.getElementById("resetSub");
+    const resetClose = document.getElementById("resetClose");
+    const resetEmail = document.getElementById("resetEmail");
+    const resetErr = document.getElementById("resetErr");
+    const resetOk = document.getElementById("resetOk");
+    const resetSendBtn = document.getElementById("resetSendBtn");
 
-    function openReset(step='request'){
-      resetReqErr.textContent=''; resetConfErr.textContent='';
-      resetReqOk.style.display='none'; resetConfOk.style.display='none';
-      resetFootNote.style.display='none';
-
-      resetOverlay.classList.add("open"); resetOverlay.setAttribute("aria-hidden","false");
-      if(step==='confirm'){ resetStepRequest.classList.remove('active'); resetStepConfirm.classList.add('active'); setTimeout(()=>resetPassword.focus(),20); }
-      else { resetStepConfirm.classList.remove('active'); resetStepRequest.classList.add('active'); setTimeout(()=>resetEmail.focus(),20); }
-    }
-    function closeReset(){ resetOverlay.classList.remove("open"); resetOverlay.setAttribute("aria-hidden","true"); }
-    resetClose.addEventListener('click', closeReset);
-    resetOverlay.addEventListener('click',(e)=>{ if(e.target===resetOverlay) closeReset(); });
-    document.addEventListener('keydown',(e)=>{ if(e.key==="Escape" && resetOverlay.classList.contains("open")) closeReset(); });
-
-    // Open reset from login
-    forgotPasswordLink.addEventListener('click', (e)=>{
-      e.preventDefault();
-      const pref = (loginEmailEcho.textContent.trim() || loginEmail.value.trim());
-      if(isValidEmail(pref)) resetEmail.value = pref;
-      openReset('request');
-    });
-
-    // Request: send email
-    resetRequestBtn.addEventListener('click', async ()=>{
+    forgotLink.addEventListener('click',(e)=>{ e.preventDefault(); resetErr.textContent=''; resetOk.style.display='none'; resetEmail.value = (loginEmailEcho.textContent.trim() || loginEmail.value.trim() || ''); resetOverlay.classList.add('open'); setTimeout(()=>resetEmail.focus(),20); });
+    resetClose.addEventListener('click', ()=> resetOverlay.classList.remove('open'));
+    resetOverlay.addEventListener('click',(e)=>{ if(e.target===resetOverlay) resetOverlay.classList.remove('open'); });
+    async function handleSendReset(){
+      resetErr.textContent=''; resetOk.style.display='none';
       const email = resetEmail.value.trim();
-      resetReqErr.textContent=''; resetReqOk.style.display='none';
-      if(!isValidEmail(email)){ resetReqErr.textContent='Enter a valid email.'; return; }
-      setBtnLoading(resetRequestBtn, true, 'Send reset link');
+      if(!isValidEmail(email)){ resetErr.textContent="Enter a valid email."; return; }
+      setBtnLoading(resetSendBtn,true,"Sending");
       try{
-        await apiPwResetRequest(email); // always return generic ok
-        resetReqOk.textContent = "If an account exists, a reset link has been sent.";
-        resetReqOk.style.display='block';
-      }catch{
-        resetReqErr.textContent = "Could not send reset link. Please try again.";
-      }finally{
-        setBtnLoading(resetRequestBtn, false, 'Send reset link');
-      }
-    });
-
-    // If opened via email link: ?reset=TOKEN
-    const resetToken = urlParams.get('reset');
-    if(resetToken){
-      openReset('confirm');
-      resetSub.textContent = "Enter a new password for your account.";
-    }
-
-    function pwOk(p){ return typeof p==='string' && p.length>=8; }
-
-    // Confirm: set new password
-    resetConfirmBtn.addEventListener('click', async ()=>{
-      resetConfErr.textContent=''; resetConfOk.style.display='none';
-      const p1 = resetPassword.value; const p2 = resetPassword2.value;
-      if(!pwOk(p1)){ resetConfErr.textContent='Password must be at least 8 characters.'; return; }
-      if(p1!==p2){ resetConfErr.textContent='Passwords do not match.'; return; }
-      if(!resetToken){ resetConfErr.textContent='Missing or invalid reset link. Request a new one.'; return; }
-
-      setBtnLoading(resetConfirmBtn, true, 'Set new password');
-      try{
-        const r = await apiPwResetConfirm(resetToken, p1);
-        if(r && (r.status==='ok' || r.status==='success')){
-          resetConfOk.textContent = 'Password updated. You can now log in.';
-          resetConfOk.style.display='block';
-          resetFootNote.style.display='block';
+        const r = await apiForgot(email);
+        if(r?.status==="ok"){
+          resetOk.textContent = "If an account exists for that email, a reset link has been sent. Please check your inbox.";
+          resetOk.style.display='block';
         }else{
-          resetConfErr.textContent = r?.message || 'Reset failed. The link may be expired.';
+          resetErr.textContent = r?.error || "Could not send reset link. Try again.";
         }
-      }catch{
-        resetConfErr.textContent = 'Network error. Please try again.';
-      }finally{
-        setBtnLoading(resetConfirmBtn, false, 'Set new password');
-      }
-    });
-
-    resetGoLogin?.addEventListener('click', (e)=>{ e.preventDefault(); closeReset(); openLogin(); });
+      }catch{ resetErr.textContent="Network error. Try again."; }
+      finally{ setBtnLoading(resetSendBtn,false,"Send reset link"); }
+    }
+    resetSendBtn.addEventListener('click', handleSendReset);
+    resetEmail.addEventListener('keydown',(e)=>{ if(e.key==='Enter') handleSendReset(); });
 
     // ===== Sign up modal =====
     const signupOverlay = document.getElementById("signupOverlay");
@@ -557,11 +466,12 @@
     const signupPassword = document.getElementById("signupPassword");
     const signupPassword2 = document.getElementById("signupPassword2");
     const signupErr = document.getElementById("signupErr");
+    const signupOk = document.getElementById("signupOk");
     const signupSubmit = document.getElementById("signupSubmit");
     const signupGoLogin = document.getElementById("signupGoLogin");
 
     function openSignup(){
-      signupEmailErr.textContent=''; signupErr.textContent='';
+      signupEmailErr.textContent=''; signupErr.textContent=''; signupOk.style.display='none';
       signupOverlay.classList.add("open"); signupOverlay.setAttribute("aria-hidden","false");
       signupStepEmail.classList.add("active"); signupStepPassword.classList.remove("active");
       setTimeout(()=>signupEmail.focus(),20);
@@ -578,7 +488,7 @@
     }
     function passwordOk(p){ return typeof p === 'string' && p.length >= 8; }
     async function handleSignupSubmit(){
-      signupErr.textContent='';
+      signupErr.textContent=''; signupOk.style.display='none';
       const email = signupEmailEcho.textContent.trim() || signupEmail.value.trim();
       const p1 = signupPassword.value;
       const p2 = signupPassword2.value;
@@ -588,8 +498,16 @@
       setBtnLoading(signupSubmit,true,"Create account");
       try{
         const r = await apiSignupFree(email, p1);
-        if(authOK(r)){ localStorage.setItem("userEmail", authEmail(r)); location.replace(NEXT_URL); }
-        else { signupErr.textContent = r?.message || "Sign up failed. Try again."; }
+        if (r?.status === "verify_required" || r?.verifySent || r?.ok) {
+          // Clear errors and show clear instruction to verify email
+          signupErr.textContent = "";
+          signupOk.textContent = "Please check your email and verify your account before continuing.";
+          signupOk.style.display = "block";
+        } else if (r?.error) {
+          signupErr.textContent = r.error;
+        } else {
+          signupErr.textContent = "Sign up failed. Try again.";
+        }
       }catch{ signupErr.textContent="Network error. Please try again."; }
       finally{ setBtnLoading(signupSubmit,false,"Create account"); }
     }
@@ -604,7 +522,7 @@
     signupPassword2.addEventListener('keydown',(e)=>{ if(e.key==='Enter') handleSignupSubmit(); });
     signupGoLogin.addEventListener('click',(e)=>{ e.preventDefault(); closeSignup(); openLogin(); });
 
-    // ===== Paywall modal + Paystack subscribe =====
+    // ===== Paywall & Paystack =====
     const paywallOverlay = document.getElementById("paywallOverlay");
     const paywallClose = document.getElementById("paywallClose");
     const paywallMonthly = document.getElementById("paywallMonthly");
@@ -649,10 +567,10 @@
         });
       });
     }
-    paywallMonthly.addEventListener('click', ()=> startSubscription(PLAN_CODE_PLUS_MONTHLY, "Plus Monthly"));
-    paywallAnnual.addEventListener('click', ()=> startSubscription(PLAN_CODE_PRO_ANNUAL, "Pro Annual"));
+    document.getElementById("paywallMonthly").addEventListener('click', ()=> startSubscription(PLAN_CODE_PLUS_MONTHLY, "Plus Monthly"));
+    document.getElementById("paywallAnnual").addEventListener('click', ()=> startSubscription(PLAN_CODE_PRO_ANNUAL, "Pro Annual"));
 
-    // ===== Photo Solve DEMO logic =====
+    // ===== Demo solve logic (unchanged) =====
     const drop = document.getElementById("drop");
     const pickBtn = document.getElementById("pickBtn");
     const fileInput = document.getElementById("fileInput");
@@ -661,23 +579,19 @@
     const clearBtn = document.getElementById("clearBtn");
     const demoActions = document.getElementById("demoActions");
     const resultEl = document.getElementById("result");
-
     let selectedFile = null;
 
-    // Drag & drop styling
     ;['dragenter','dragover'].forEach(evt => drop.addEventListener(evt, e=>{ e.preventDefault(); e.stopPropagation(); drop.classList.add('drag'); }));
     ;['dragleave','drop'].forEach(evt => drop.addEventListener(evt, e=>{ e.preventDefault(); e.stopPropagation(); drop.classList.remove('drag'); }));
     drop.addEventListener('drop', (e)=>{
       const f = e.dataTransfer.files?.[0];
       if (f) handlePickedFile(f);
     });
-
     pickBtn.addEventListener('click', ()=> fileInput.click());
     fileInput.addEventListener('change', ()=> {
       const f = fileInput.files?.[0];
       if (f) handlePickedFile(f);
     });
-
     function handlePickedFile(file){
       if(!['image/png','image/jpeg','image/jpg','image/webp'].includes(file.type)){ alert('Choose a PNG, JPG, or WEBP image.'); return; }
       if(file.size > 6*1024*1024){ alert('Image is larger than 6MB.'); return; }
@@ -692,66 +606,41 @@
       resultEl.textContent = 'Ready. Click “Solve Now”.';
     }
 
-    // free photo count key (by email)
     function photoCountKey(email){ return `photoCount:${email}`; }
-    function getPhotoCount(email){
-      try{ return parseInt(localStorage.getItem(photoCountKey(email))||'0',10) || 0; }catch{ return 0; }
-    }
-    function bumpPhotoCount(email){
-      try{ const n = getPhotoCount(email)+1; localStorage.setItem(photoCountKey(email), String(n)); }catch{}
-    }
+    function getPhotoCount(email){ try{ return parseInt(localStorage.getItem(photoCountKey(email))||'0',10) || 0; }catch{ return 0; } }
+    function bumpPhotoCount(email){ try{ const n = getPhotoCount(email)+1; localStorage.setItem(photoCountKey(email), String(n)); }catch{} }
 
     async function solveNow(){
       if(!selectedFile){ alert('Pick an image first.'); return; }
-
-      // Must be logged in to call the real endpoint
       const me = await apiMe();
       if(!(me?.status==="ok" && me.user?.email)){ openSignup(); return; }
-
       const email = me.user.email;
       const plan = (me.user.plan || 'FREE').toUpperCase();
-
-      // Free gate: only 2 uploads
       if(plan === 'FREE'){
         const used = getPhotoCount(email);
-        if(used >= 2){
-          openPaywall();
-          return;
-        }
+        if(used >= 2){ openPaywall(); return; }
       }
-
-      // Call backend
       resultEl.textContent = '⏳ Solving…';
-      setBtnLoading(solveBtn, true, "Solving…");
-
+      solveBtn.disabled = true; solveBtn.textContent = 'Solving…';
       try{
         const fd = new FormData();
         fd.append('image', selectedFile);
         fd.append('gptType', 'math');
-
         const r = await fetch('/api/photo-solve', { method:'POST', credentials:'include', body: fd });
         const j = await r.json();
-
         if(!r.ok || j.error){
-          if(j?.status==='limit' || (j?.message||'').toLowerCase().includes('limit')){
-            openPaywall();
-          }else{
-            resultEl.textContent = 'Sorry, photo solve failed. Please try again.';
-          }
+          if((j.error||'').toLowerCase().includes('limit')) openPaywall();
+          else resultEl.textContent = 'Sorry, photo solve failed. Please try again.';
           return;
         }
-
         if(plan === 'FREE') bumpPhotoCount(email);
-
-        const answer = j.response || 'No response text returned.';
-        resultEl.textContent = answer;
+        resultEl.textContent = j.response || 'No response text returned.';
       }catch(e){
         resultEl.textContent = 'Sorry, network error. Please try again.';
       }finally{
-        setBtnLoading(solveBtn, false, "Solve Now");
+        solveBtn.disabled = false; solveBtn.textContent = 'Solve Now';
       }
     }
-
     solveBtn.addEventListener('click', solveNow);
     clearBtn.addEventListener('click', ()=>{
       selectedFile = null; preview.innerHTML = ''; demoActions.style.display='none';
@@ -760,18 +649,14 @@
     });
 
     // Pricing buttons
-    const startFreeBtn   = document.getElementById("startFreeBtn");
-    const plusMonthlyBtn = document.getElementById("plusMonthlyBtn");
-    const proAnnualBtn   = document.getElementById("proAnnualBtn");
-
-    startFreeBtn.addEventListener('click', ()=>{
+    document.getElementById("startFreeBtn").addEventListener('click', ()=>{
       apiMe().then(me=>{
         if(me?.status==="ok" && me.user?.email){ location.assign("/chat.html"); }
         else { openSignup(); }
       });
     });
-    plusMonthlyBtn.addEventListener('click', ()=> startSubscription(PLAN_CODE_PLUS_MONTHLY, "Plus Monthly"));
-    proAnnualBtn.addEventListener('click', ()=> startSubscription(PLAN_CODE_PRO_ANNUAL, "Pro Annual"));
+    document.getElementById("plusMonthlyBtn").addEventListener('click', ()=> startSubscription(PLAN_CODE_PLUS_MONTHLY, "Plus Monthly"));
+    document.getElementById("proAnnualBtn").addEventListener('click', ()=> startSubscription(PLAN_CODE_PRO_ANNUAL, "Pro Annual"));
 
     // Year + header auth
     document.getElementById("year").textContent = new Date().getFullYear();
@@ -779,4 +664,3 @@
   </script>
 </body>
 </html>
-```0
