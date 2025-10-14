@@ -7,22 +7,12 @@
   <style>
     :root{
       --sidebar-w:280px;
-      --bg:#0e0f13;
-      --panel:#13141a;
-      --muted:#9aa3b2;
-      --text:#e7eaf1;
-      --brand:#5865f2;
-      --user:#1c2333;
-      --assistant:#13141a;
-      --border:#232634;
-      --vh:100vh;
-      --composer-h:88px;
-      --menu-bg:#0f1117;
+      --bg:#0e0f13; --panel:#13141a; --muted:#9aa3b2; --text:#e7eaf1; --brand:#5865f2;
+      --user:#1c2333; --assistant:#13141a; --border:#232634; --vh:100vh; --composer-h:88px; --menu-bg:#0f1117;
     }
     *{box-sizing:border-box}
     html,body{height:100%;margin:0}
     body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,sans-serif;}
-
     .app{height:calc(var(--vh));display:grid;grid-template-columns:var(--sidebar-w) 1fr;}
     @media (max-width:900px){ .app{ grid-template-columns:1fr } .sidebar{ display:none } }
 
@@ -31,7 +21,6 @@
     .side-top{padding:12px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;justify-content:space-between}
     .logo{font-weight:700;letter-spacing:.2px}
     .new-chat{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px 10px;cursor:pointer;font-size:13px}
-
     .side-list{overflow-y:auto;padding:10px 8px 10px 12px;min-height:0}
     .conv{position:relative;display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;border:1px solid transparent;font-size:14px;margin-bottom:6px;white-space:nowrap;overflow:visible;cursor:pointer}
     .conv:hover{background:#151824;border-color:#1b1f2b}
@@ -48,14 +37,8 @@
     .side-bottom{position:sticky;bottom:0;padding:10px;border-top:1px solid var(--border);background:#0f1117;display:grid;gap:8px}
     .usercard{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--border);border-radius:12px;background:#10131b;cursor:pointer}
     .avatar{width:34px;height:34px;border-radius:50%;background:#1a2031;display:grid;place-items:center;color:#c8cee0;font-weight:700;font-size:12px;border:1px solid #22283a}
-    .u-name{
-      display:block;font-size:14px;font-weight:600;line-height:1.2;
-      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px;
-    }
-    .u-plan{
-      display:block;margin-top:2px;font-size:12px;color:var(--muted);
-      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px;
-    }
+    .u-name{ display:block;font-size:14px;font-weight:600;line-height:1.2; white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px;}
+    .u-plan{ display:block;margin-top:2px;font-size:12px;color:var(--muted); white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px;}
     .carat{color:#aab1c7}
 
     /* User dropdown */
@@ -79,7 +62,6 @@
     .readOnlyBanner{display:none;padding:10px 14px;border-bottom:1px solid var(--border);background:#10121a;color:#cbd2e1;font-size:14px}
     .readOnlyBanner.show{display:block}
     .messages{overflow-y:auto;padding:20px 18px calc(20px + var(--composer-h));min-height:0;scroll-behavior:smooth;background:radial-gradient(1200px 400px at 50% -200px, rgba(88,101,242,.08), transparent 60%);}
-
     .msg{max-width:900px;margin:0 auto 12px auto;display:flex}
     .bubble{max-width:68ch;padding:12px 14px;border:1px solid var(--border);border-radius:12px;line-height:1.55;font-size:15px;background:var(--assistant)}
     .meta{display:block;color:var(--muted);margin-bottom:6px;font-size:12px}
@@ -119,10 +101,10 @@
     .btn{border:1px solid var(--border);background:#141722;color:#e7eaf1;border-radius:9999px;padding:10px 14px;cursor:pointer;font-size:14px}
     .btn.primary{background:var(--brand);color:#fff;border-color:transparent}
     .modal-close{border:0;background:transparent;color:#9aa3b2;cursor:pointer;font-size:20px;line-height:1}
+
     .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);padding:10px 14px;font-size:13px;background:#141722;color:#e7eaf1;border:1px solid var(--border);border-radius:9999px;display:none;z-index:1100}
     .toast.show{display:block}
   </style>
-
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 </head>
@@ -207,6 +189,7 @@
       </div>
     </div>
   </div>
+
   <div class="toast" id="toast">Link copied to clipboard</div>
 
   <script>
@@ -345,7 +328,6 @@
     shareCloseBtn.addEventListener('click', closeShareModal);
     shareOverlay.addEventListener('click', (e)=>{ if(e.target===shareOverlay) closeShareModal(); });
     document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && shareOverlay.classList.contains('open')) closeShareModal(); });
-
     createShareBtn.addEventListener('click', async ()=>{
       const id = pendingShareConvId ?? currentConvId;
       if(!id) return;
@@ -374,7 +356,6 @@
         const bRename=el('button',{},'Rename');
         const bArchive=el('button',{},'Archive');
         const bDelete=el('button',{},'Delete');
-
         bShare.addEventListener('click',(e)=>{ e.stopPropagation(); menu.classList.remove('open'); openShareModal(c.id); });
         bRename.addEventListener('click',async (e)=>{
           e.stopPropagation(); menu.classList.remove('open');
@@ -386,18 +367,14 @@
         });
         bArchive.addEventListener('click', async (e)=>{ e.stopPropagation(); menu.classList.remove('open'); await api.archiveConv(c.id,true); if(currentConvId===c.id){ currentConvId=null; clearMessages(); } await loadConversations(); });
         bDelete.addEventListener('click', async (e)=>{ e.stopPropagation(); menu.classList.remove('open'); if(confirm('Delete this chat?')){ await api.deleteConv(c.id); if(currentConvId===c.id){ currentConvId=null; clearMessages(); } await loadConversations(); } });
-
         menu.appendChild(bShare); menu.appendChild(bRename); menu.appendChild(bArchive); menu.appendChild(bDelete);
         menuBtn.addEventListener('click',e=>{ e.stopPropagation(); document.querySelectorAll('.menu.open').forEach(m=>{ if(m!==menu)m.classList.remove('open'); }); menu.classList.toggle('open'); });
         row.addEventListener('click',async ()=>{ currentConvId=c.id; document.querySelectorAll('.conv').forEach(n=>n.classList.remove('active')); row.classList.add('active'); await showConversation(c.id); });
-
         row.appendChild(title); row.appendChild(menuBtn); row.appendChild(menu);
         convListEl.appendChild(row);
       });
-
       document.addEventListener('click', (e)=>{ if(!e.target.closest('.menu') && !e.target.closest('.conv-menu-btn')){ document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open')); } }, {capture:false});
     }
-
     async function showConversation(id){
       clearMessages();
       const r = await api.getConvMsgs(id);
@@ -430,16 +407,16 @@
       renderMessage('assistant', md);
     }
 
-    /* Submit text */
+    /* ---------- Submit text ---------- */
     document.getElementById('composer').addEventListener('submit', async (e)=>{
       e.preventDefault(); if(readOnly) return;
       const text=(promptEl.value||'').trim(); if(!text) return;
       renderMessage('user', text, now()); scrollToBottom();
       sendBtn.disabled=true; photoBtn.disabled=true; promptEl.disabled=true; statusEl.textContent='Thinking…';
+
       try{
         const payload={ message:text, gptType:'math' };
         if(currentConvId) payload.conversationId=currentConvId;
-
         const res=await api.chat(payload);
 
         // Create convo on first response (even if quota)
@@ -461,15 +438,21 @@
           }catch{}
         }
 
-        // Quota handling
-        if(res.__status === 402){
+        // ===== NEW: explicit auth/verify handling =====
+        if(res.__status === 401){
+          renderMessage('assistant','Please log in again.');
+          setTimeout(()=>location.replace('/index.html?next=/chat.html'), 900);
+        } else if (res.__status === 403 && (res.error === 'verify_required' || res.status === 'verify_required')){
+          renderMessage('assistant','✉️ Please verify your email to continue. Check your inbox for the verification link, then try again.');
+        } else if(res.__status === 402){
           renderQuotaMessage(res.message, res.upgradeLink);
         } else if (res.__status && res.__status !== 200){
           renderMessage('assistant', res.message || 'Sorry, something went wrong. Please try again.');
         } else {
-          renderMessage('assistant', typeof res?.response === 'string' ? res.response : ''); 
+          renderMessage('assistant', typeof res?.response === 'string' ? res.response : '');
         }
         scrollToBottom();
+
       }catch{
         renderMessage('assistant','Sorry, something went wrong. Please try again.'); scrollToBottom();
       }finally{
@@ -478,7 +461,7 @@
       }
     });
 
-    /* Photo Solve */
+    /* ---------- Photo Solve ---------- */
     photoBtn.addEventListener('click',()=> !readOnly && photoFile.click());
     photoFile.addEventListener('change', async ()=>{
       if(readOnly) return;
@@ -490,13 +473,13 @@
       const objUrl=URL.createObjectURL(file);
       renderImageMessage(note ? `📷 (with note) ${note}` : '📷 Photo uploaded', objUrl); scrollToBottom();
       sendBtn.disabled=true; photoBtn.disabled=true; promptEl.disabled=true; statusEl.textContent='Solving…';
+
       try{
         const fd=new FormData();
         fd.append('image', file);
         fd.append('gptType', 'math');
         if(note) fd.append('attempt', note);
         if(currentConvId) fd.append('conversationId', currentConvId);
-
         const wasNew = !currentConvId;
         const res=await api.photoSolve(fd);
 
@@ -517,7 +500,13 @@
           }catch{}
         }
 
-        if(res.__status === 402){
+        // ===== NEW: explicit auth/verify handling for photo =====
+        if(res.__status === 401){
+          renderMessage('assistant','Please log in again.');
+          setTimeout(()=>location.replace('/index.html?next=/chat.html'), 900);
+        } else if (res.__status === 403 && (res.error === 'verify_required' || res.status === 'verify_required')){
+          renderMessage('assistant','✉️ Please verify your email to continue. Check your inbox for the verification link, then try again.');
+        } else if(res.__status === 402){
           renderQuotaMessage(res.message, res.upgradeLink);
         } else if (res.__status && res.__status !== 200){
           renderMessage('assistant', res.message || 'Photo solve failed. Please try again.');
@@ -526,6 +515,7 @@
           renderMessage('assistant', out);
         }
         scrollToBottom();
+
       }catch{
         renderMessage('assistant','Photo solve failed. Please try another image.'); scrollToBottom();
       }finally{
@@ -556,7 +546,6 @@
     userCard.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); toggleUserMenu(); } });
     document.addEventListener('click', (e)=>{ if(!e.target.closest('#userCard') && !e.target.closest('#userMenu')) toggleUserMenu(false); });
     document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') toggleUserMenu(false); });
-
     umUpgrade.addEventListener('click', ()=>{ location.href='/index.html#pricing'; });
     umLogout.addEventListener('click', async ()=>{ try{ await api.logout(); }catch{} location.replace('/index.html'); });
 
@@ -600,16 +589,13 @@
       const displayName = email ? nameFromEmail(email) : 'User';
       const initials = initialsFrom(email || displayName);
       const label = planLabelize(plan||'FREE');
-
       userNameEl.textContent = displayName;
       userPlanEl.textContent = label;
       userAvatar.textContent  = initials;
-
       umName.textContent   = displayName;
       umEmail.textContent  = email || '';
       umAvatar.textContent = initials;
       umPlanBadge.textContent = label;
-
       userCard.title = `${displayName} • ${label}`;
     }
 
@@ -632,7 +618,6 @@
         return true;
       }
     }
-
     async function refreshPlan(){
       try{
         const me = await api.me();
@@ -661,6 +646,7 @@
       const fromUrl = p.get('c');
       await loadConversations(fromUrl?Number(fromUrl):null);
       if(fromUrl){ currentConvId=Number(fromUrl); await showConversation(currentConvId); }
+
       updatePlaceholder();
       (function autoresizeInit(){ const e = document.getElementById('prompt'); e.style.height='auto'; e.style.height=Math.min(120,e.scrollHeight)+'px'; })();
       updateComposerPad();
