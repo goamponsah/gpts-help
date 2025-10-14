@@ -2,90 +2,55 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>GPTs Help — Chat</title>
   <style>
     :root{
-      --bg:#0f1117; --panel:#111827; --panel2:#0c1320;
-      --text:#e7eaf1; --muted:#98a2b3; --accent:#6f42c1; --accent2:#9c6fff;
-      --error:#ef4444; --ok:#22c55e; --border:#1f2a37;
+      --bg:#0f1117; --panel:#121826; --text:#e7eaf1; --muted:#94a3b8;
+      --border:#1f2a37; --user:#182033; --ai:#0b1220; --accent:#6f42c1; --accent2:#9c6fff;
+      --sys:#1f2937;
     }
     *{box-sizing:border-box}
     html,body{height:100%}
-    body{margin:0;background:linear-gradient(180deg,var(--panel2),var(--bg));color:var(--text);font:16px/1.45 Inter,system-ui,Arial,sans-serif}
+    body{margin:0;background:linear-gradient(180deg,#0c1320,var(--bg));color:var(--text);
+         font:16px/1.45 Inter,system-ui,Segoe UI,Roboto,Arial,sans-serif}
 
-    /* Top bar */
-    .top{position:sticky;top:0;z-index:50;background:rgba(15,17,23,.7);backdrop-filter:blur(8px);border-bottom:1px solid var(--border)}
-    .nav{max-width:1100px;margin:0 auto;padding:10px 14px;display:flex;align-items:center;gap:12px}
-    .brand{font-weight:800;letter-spacing:.2px}
-    .spacer{flex:1}
-    .pill{display:inline-flex;align-items:center;gap:8px;background:#1a2230;border:1px solid var(--border);padding:6px 10px;border-radius:999px;font-size:.88rem;color:var(--muted)}
-    .logout{cursor:pointer;color:#fff;background:transparent;border:0;padding:0;text-decoration:underline}
-
-    /* Verify banner */
-    .verify{display:none;background:#1f2937;border-bottom:1px solid var(--border)}
-    .verify .inner{max-width:1100px;margin:0 auto;padding:10px 14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-    .verify .msg{color:#ffd166}
-    .verify .actions{margin-left:auto;display:flex;gap:8px}
-    .btn{border:1px solid var(--border);background:#1a2230;color:#fff;padding:8px 12px;border-radius:10px;cursor:pointer}
-    .btn.primary{background:linear-gradient(135deg,var(--accent),var(--accent2));border-color:transparent}
-
-    /* Layout */
+    /* Thread */
     .wrap{max-width:920px;margin:0 auto;padding:12px}
     .thread{padding:8px 0 120px}
     .row{display:flex;gap:10px;margin:10px 0}
-    .bubble{max-width:80%;padding:12px 14px;border-radius:14px;border:1px solid var(--border)}
-    .user{justify-content:flex-end}
-    .user .bubble{background:#1d2534}
-    .ai .bubble{background:#0e1422}
-    .time{font-size:.72rem;color:#6b7280;margin:0 4px}
+    .row.user{justify-content:flex-end}
+    .bubble{max-width:80%; padding:12px 14px; border-radius:14px; border:1px solid var(--border)}
+    .row.user .bubble{background:var(--user)}
+    .row.ai   .bubble{background:var(--ai)}
+    .row.sys  .bubble{background:var(--sys); color:#e5e7eb}
+    .time{font-size:.72rem;color:var(--muted);margin:0 4px}
 
     /* Composer */
-    .composer{position:fixed;left:0;right:0;bottom:0;background:rgba(15,17,23,.85);backdrop-filter:blur(8px);border-top:1px solid var(--border)}
-    .composer .inner{max-width:920px;margin:0 auto;padding:10px;display:flex;gap:8px;align-items:flex-end}
+    .composer{position:fixed;left:0;right:0;bottom:0;background:rgba(12,19,32,.85);
+              backdrop-filter:blur(8px);border-top:1px solid var(--border)}
+    .inner{max-width:920px;margin:0 auto;padding:10px;display:flex;gap:8px;align-items:flex-end}
     .select{color:#cbd5e1;background:#0b1220;border:1px solid var(--border);border-radius:10px;padding:8px}
-    textarea{flex:1;resize:none;min-height:46px;max-height:180px;padding:12px 14px;border-radius:12px;border:1px solid var(--border);background:#0b1220;color:#fff}
-    .send{width:46px;height:46px;border-radius:12px;border:0;background:linear-gradient(135deg,var(--accent),var(--accent2));cursor:pointer}
+    textarea{flex:1;resize:none;min-height:46px;max-height:180px;padding:12px 14px;border-radius:12px;
+             border:1px solid var(--border);background:#0b1220;color:#fff}
+    .send{width:46px;height:46px;border-radius:12px;border:0;cursor:pointer;
+          background:linear-gradient(135deg,var(--accent),var(--accent2))}
     .send[disabled]{opacity:.6;cursor:not-allowed}
-    .spinner{width:16px;height:16px;border:2px solid #fff;border-right-color:transparent;border-radius:50%;display:inline-block;animation:spin .7s linear infinite}
+    .spinner{width:16px;height:16px;border:2px solid #fff;border-right-color:transparent;border-radius:50%;
+             display:inline-block;animation:spin .7s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
 
-    /* Toasts */
-    .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:96px;background:#1f2937;color:#fff;padding:10px 14px;border-radius:10px;border:1px solid var(--border);display:none}
+    /* Toast (for quick notices) */
+    .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:96px;background:#1f2937;color:#fff;
+           padding:10px 14px;border-radius:10px;border:1px solid var(--border);display:none}
     .toast.show{display:block}
   </style>
 </head>
 <body>
-  <!-- Top bar -->
-  <div class="top">
-    <div class="nav">
-      <div class="brand">GPTs Help</div>
-      <div class="spacer"></div>
-      <div id="userPill" class="pill" style="display:none">
-        <span id="userEmail"></span> • <span id="userPlan"></span>
-        <span style="opacity:.5">|</span>
-        <button id="logoutBtn" class="logout" title="Log out">Log out</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Verify banner -->
-  <div id="verifyBar" class="verify" role="alert">
-    <div class="inner">
-      <div class="msg">✉️ Email not verified. Please check your inbox and click the verification link to continue.</div>
-      <div class="actions">
-        <button id="verifyResend" class="btn">Resend email</button>
-        <button id="verifyDismiss" class="btn">Dismiss</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- Messages -->
   <div class="wrap">
     <div id="thread" class="thread" aria-live="polite"></div>
   </div>
 
-  <!-- Composer -->
   <div class="composer">
     <div class="inner">
       <select id="assistantSel" class="select" aria-label="Assistant">
@@ -102,35 +67,31 @@
   <div id="toast" class="toast"></div>
 
   <script>
-    // ---------- helpers ----------
-    const $ = s => document.querySelector(s);
-    const qs = (n, p=document) => p.querySelector(n);
-    const threadEl = $('#thread');
-    const inputEl = $('#input');
-    const sendBtn = $('#sendBtn');
-    const verifyBar = $('#verifyBar');
-    const toast = $('#toast');
+    // ---------- elements ----------
+    const threadEl = document.getElementById('thread');
+    const inputEl  = document.getElementById('input');
+    const sendBtn  = document.getElementById('sendBtn');
+    const toast    = document.getElementById('toast');
 
     const urlParams = new URLSearchParams(location.search);
     let conversationId = Number(urlParams.get('id')) || null;
+    let ME = null;
 
-    function showToast(text){ toast.textContent = text; toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'), 2600); }
-    function fmtTime(d){ return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); }
-
+    // ---------- helpers ----------
+    const fmtTime = d => d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+    const esc = s => (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+    function showToast(t){ toast.textContent=t; toast.classList.add('show'); setTimeout(()=>toast.classList.remove('show'), 2200); }
     function addRow(kind, text){
       const row = document.createElement('div');
-      row.className = 'row ' + (kind === 'user' ? 'user' : 'ai');
-      row.innerHTML = `
-        <div class="time">${fmtTime(new Date())}</div>
-        <div class="bubble">${(text || '').replace(/</g,'&lt;')}</div>`;
+      row.className = 'row ' + kind;
+      row.innerHTML = `<div class="time">${fmtTime(new Date())}</div><div class="bubble">${esc(text)}</div>`;
       threadEl.appendChild(row);
       threadEl.scrollTop = threadEl.scrollHeight;
       return row;
     }
-
-    function setSending(sending){
-      sendBtn.disabled = sending || mustVerify();
-      sendBtn.innerHTML = sending
+    function setSending(s){
+      sendBtn.disabled = s;
+      sendBtn.innerHTML = s
         ? '<span class="spinner" aria-label="Sending"></span>'
         : '<svg width="20" height="20" viewBox="0 0 24 24" fill="#fff"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>';
     }
@@ -138,97 +99,59 @@
     // ---------- API ----------
     async function apiMe(){ try{ return await fetch('/api/me',{credentials:'include'}).then(r=>r.json()); }catch{return null;} }
     async function apiChat(payload){
-      const r = await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(payload)});
+      const r = await fetch('/api/chat',{
+        method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',
+        body:JSON.stringify(payload)
+      });
       const j = await r.json().catch(()=>({}));
-      return { ok: r.ok, status: r.status, data: j };
+      return {ok:r.ok,status:r.status,data:j};
     }
     async function apiConvPatch(id, body){
-      try{ await fetch(`/api/conversations/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(body)});}catch{}
-    }
-    async function apiLogout(){ try{ await fetch('/api/logout',{method:'POST',credentials:'include'});}catch{} }
-
-    // ---------- auth / verify gate ----------
-    let ME = null;
-    function mustVerify(){ return !!(ME && ME.user && ME.user.verified === false); }
-    function reflectVerifyUI(){
-      if(mustVerify()){
-        verifyBar.style.display = 'block';
-        inputEl.placeholder = 'Please verify your email first (check your inbox)…';
-        setSending(false); // still disables via mustVerify
-      }else{
-        verifyBar.style.display = 'none';
-        inputEl.placeholder = 'Message Math GPT…';
-      }
+      try{ await fetch(`/api/conversations/${id}`,{
+        method:'PATCH',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify(body)
+      }); }catch{}
     }
 
     // ---------- init ----------
     async function init(){
       ME = await apiMe();
-      if(!(ME && ME.status === 'ok')){
+      if(!(ME && ME.status==='ok')){
+        // not logged in -> go home and come back
         location.replace('/index.html?next=/chat.html');
         return;
       }
-      // header user pill
-      qs('#userPill').style.display = 'inline-flex';
-      qs('#userEmail').textContent = ME.user.email;
-      qs('#userPlan').textContent = (ME.user.plan || 'FREE');
-
-      reflectVerifyUI();
       inputEl.focus();
     }
-
-    // resend verify (best-effort; if backend doesn’t support, show hint)
-    $('#verifyResend').addEventListener('click', async ()=>{
-      try{
-        const r = await fetch('/api/verify/resend',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include'});
-        const j = await r.json().catch(()=>({}));
-        if(r.ok || j.status === 'ok' || j.verifySent){
-          showToast('Verification email sent. Please check your inbox.');
-        }else{
-          showToast('Could not resend. Sign out & sign up again to trigger a new email.');
-        }
-      }catch{ showToast('Network error. Try again.'); }
-    });
-    $('#verifyDismiss').addEventListener('click', ()=> verifyBar.style.display='none');
-
-    // logout
-    $('#logoutBtn').addEventListener('click', async ()=>{
-      await apiLogout();
-      location.replace('/index.html?next=/chat.html');
-    });
 
     // ---------- send ----------
     async function sendMessage(){
       const msg = inputEl.value.trim();
       if(!msg) return;
-      if(mustVerify()){ showToast('Please verify your email to start chatting.'); return; }
 
       inputEl.value = '';
       addRow('user', msg);
       setSending(true);
 
-      const payload = { message: msg, gptType: $('#assistantSel').value, conversationId: conversationId || undefined };
+      const payload = { message: msg, gptType: document.getElementById('assistantSel').value, conversationId: conversationId || undefined };
       const res = await apiChat(payload).catch(()=>({ok:false,status:0,data:{}}));
       setSending(false);
 
-      // handle auth/verify
+      // auth / verify handling WITHOUT changing layout
       if(res.status === 401){
-        showToast('Please log in again. Redirecting…');
+        addRow('sys', 'Please log in again.');
         setTimeout(()=>location.replace('/index.html?next=/chat.html'), 900);
         return;
       }
       if(res.status === 403 && (res.data?.error === 'verify_required' || res.data?.status === 'verify_required')){
-        reflectVerifyUI();
-        showToast('Please verify your email to continue.');
+        addRow('sys', '✉️ Please verify your email to continue. Check your inbox for the verification link.');
         return;
       }
 
       if(!res.ok || res.data?.error){
-        // 402 = free limit hit -> nudge to pricing
-        if(res.status === 402 || (res.data?.status === 'limit')){
-          showToast('Free limit reached. Upgrade on the homepage to continue.');
+        if(res.status === 402 || res.data?.status === 'limit'){
+          addRow('sys', 'You’ve reached the free limit. Visit the homepage to upgrade.');
         }else{
-          showToast('Could not get a reply. Please try again.');
+          addRow('sys', 'Sorry, something went wrong. Please try again.');
         }
         return;
       }
@@ -237,20 +160,19 @@
       conversationId = res.data.conversationId || conversationId;
       addRow('ai', answer);
 
-      // lightweight auto-title: first time we get a conv id, set title to first user msg (<=40 chars)
+      // auto-title like before: once we have a conv id, set title to first user message
       if(conversationId){
-        const t = (msg || 'New chat').slice(0, 40);
+        const t = msg.slice(0, 40) || 'New chat';
         apiConvPatch(conversationId, { title: t });
       }
     }
 
     // events
     sendBtn.addEventListener('click', sendMessage);
-    inputEl.addEventListener('keydown', (e)=>{
-      if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); }
+    inputEl.addEventListener('keydown', e=>{
+      if(e.key==='Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); }
     });
 
-    // kick off
     init();
   </script>
 </body>
