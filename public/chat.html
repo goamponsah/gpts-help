@@ -7,17 +7,21 @@
   <style>
     :root{
       --sidebar-w:280px;
-      --bg:#0e0f13; --panel:#13141a; --muted:#9aa3b2; --text:#e7eaf1;
-      --brand:#5865f2; --user:#1c2333; --assistant:#13141a; --border:#232634;
-      --vh:100vh; --composer-h:88px; --menu-bg:#0f1117;
-      --pill:#0f1117; --pill-border:#202433;
-      --cta:#22c55e; /* green send icon vibe on mobile */
+      --bg:#0e0f13;
+      --panel:#13141a;
+      --muted:#9aa3b2;
+      --text:#e7eaf1;
+      --brand:#5865f2;
+      --user:#1c2333;
+      --assistant:#13141a;
+      --border:#232634;
+      --vh:100vh;
+      --composer-h:88px;
+      --menu-bg:#0f1117;
     }
     *{box-sizing:border-box}
     html,body{height:100%;margin:0}
-    body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,sans-serif}
-    a{color:#9aa3b2}
-
+    body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,sans-serif;}
     .app{height:calc(var(--vh));display:grid;grid-template-columns:var(--sidebar-w) 1fr;}
     @media (max-width:900px){ .app{ grid-template-columns:1fr } .sidebar{ display:none } }
 
@@ -27,7 +31,7 @@
     .logo{font-weight:700;letter-spacing:.2px}
     .new-chat{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px 10px;cursor:pointer;font-size:13px}
     .side-list{overflow-y:auto;padding:10px 8px 10px 12px;min-height:0}
-    .conv{position:relative;display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;border:1px solid transparent;font-size:14px;margin-bottom:6px;white-space:nowrap;cursor:pointer}
+    .conv{position:relative;display:flex;align-items:center;gap:8px;padding:8px 10px;border-radius:10px;border:1px solid transparent;font-size:14px;margin-bottom:6px;white-space:nowrap;overflow:visible;cursor:pointer}
     .conv:hover{background:#151824;border-color:#1b1f2b}
     .conv.active{background:#171b28;border-color:#2a3352}
     .conv-title{flex:1;overflow:hidden;text-overflow:ellipsis}
@@ -38,16 +42,20 @@
     .menu button{display:block;width:100%;text-align:left;background:transparent;color:var(--text);border:0;padding:10px 12px;cursor:pointer;font-size:14px}
     .menu button:hover{background:#1a1d2a}
 
-    /* Bottom user card */
+    /* Bottom: user card */
     .side-bottom{position:sticky;bottom:0;padding:10px;border-top:1px solid var(--border);background:#0f1117;display:grid;gap:8px}
     .usercard{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;padding:8px 10px;border:1px solid var(--border);border-radius:12px;background:#10131b;cursor:pointer}
     .avatar{width:34px;height:34px;border-radius:50%;background:#1a2031;display:grid;place-items:center;color:#c8cee0;font-weight:700;font-size:12px;border:1px solid #22283a}
-    .u-name{display:block;font-size:14px;font-weight:600;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
-    .u-plan{display:block;margin-top:2px;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
+    .u-name{display:block;font-size:14px;font-weight:600;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px;}
+    .u-plan{display:block;margin-top:2px;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px;}
     .carat{color:#aab1c7}
 
     /* User dropdown */
-    .user-menu{position:absolute;left:10px;bottom:64px;width:calc(var(--sidebar-w) - 20px);background:var(--menu-bg);border:1px solid var(--border);border-radius:16px;box-shadow:0 18px 40px rgba(0,0,0,.45);display:none;z-index:50;overflow:hidden}
+    .user-menu{
+      position:absolute;left:10px;bottom:64px;width:calc(var(--sidebar-w) - 20px);
+      background:var(--menu-bg);border:1px solid var(--border);border-radius:16px;
+      box-shadow:0 18px 40px rgba(0,0,0,.45);display:none;z-index:50;overflow:hidden;
+    }
     .user-menu.open{display:block}
     .um-head{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center}
     .um-email{font-size:13px;color:#cbd2e1}
@@ -58,11 +66,11 @@
     .um-text{font-size:14px}
     .um-right{margin-left:auto;color:#8b93ad;font-size:12px}
 
-    /* Main + messages */
-    .main{display:grid;grid-template-rows:auto 1fr;min-height:0;height:100%}
+    /* Main */
+    .main{display:grid;grid-template-rows:auto 1fr;min-height:0;height:100%;}
     .readOnlyBanner{display:none;padding:10px 14px;border-bottom:1px solid var(--border);background:#10121a;color:#cbd2e1;font-size:14px}
     .readOnlyBanner.show{display:block}
-    .messages{overflow-y:auto;padding:20px 18px calc(20px + var(--composer-h));min-height:0;scroll-behavior:smooth;background:radial-gradient(1200px 400px at 50% -200px, rgba(88,101,242,.08), transparent 60%)}
+    .messages{overflow-y:auto;padding:20px 18px calc(20px + var(--composer-h));min-height:0;scroll-behavior:smooth;background:radial-gradient(1200px 400px at 50% -200px, rgba(88,101,242,.08), transparent 60%);}
     .msg{max-width:900px;margin:0 auto 12px auto;display:flex}
     .bubble{max-width:68ch;padding:12px 14px;border:1px solid var(--border);border-radius:12px;line-height:1.55;font-size:15px;background:var(--assistant)}
     .meta{display:block;color:var(--muted);margin-bottom:6px;font-size:12px}
@@ -77,33 +85,20 @@
     .bubble code{background:#0b0d12;padding:2px 6px;border-radius:6px;border:1px solid var(--border)}
     .bubble pre{background:#0b0d12;padding:10px;border-radius:10px;border:1px solid var(--border);overflow:auto}
 
-    /* Composer (fixed bottom) */
-    .composer{position:fixed;left:var(--sidebar-w);right:0;bottom:0;z-index:30;border-top:1px solid var(--border);background:linear-gradient(#0e0f13,#0f1117);padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px))}
-    @media (max-width:900px){ .composer{ left:0 } }
+    /* Composer fixed bottom (mobile like ChatGPT) */
+    .composer{position:fixed;left:var(--sidebar-w);right:0;bottom:0;z-index:30;border-top:1px solid var(--border);background:linear-gradient(#0e0f13,#0f1117);padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));}
+    @media (max-width:900px){ .composer{ left:0; } }
     .row{max-width:900px;margin:0 auto;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
     .input{display:flex;align-items:flex-end;gap:8px;background:#0f1117;border:1px solid var(--border);border-radius:9999px;padding:6px 10px;min-height:42px}
     .ta-wrap{flex:1;display:flex;flex-direction:column}
     .meta-row{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:11px;margin:2px 2px 4px 6px}
-    select{background:#0f1117;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:4px 6px;font-size:11px}
-    textarea{width:100%;resize:none;min-height:24px;max-height:120px;background:transparent;color:var(--text);outline:none;border:0;font:inherit;line-height:1.45;padding:0 4px 2px 6px}
+    select{background:#0f1117;color:#e7eaf1;border:1px solid var(--border);border-radius:8px;padding:4px 6px;font-size:11px}
+    textarea{width:100%;resize:none;min-height:24px;max-height:120px;background:transparent;color:#e7eaf1;outline:none;border:0;font:inherit;line-height:1.45;padding:0 4px 2px 6px}
     .controls{display:inline-flex;gap:6px}
     .icon-btn{width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:9999px;border:1px solid var(--border);background:#141722;color:#dfe3ec;cursor:pointer;font-size:16px;line-height:1}
     .icon-btn.primary{background:var(--brand);color:#fff;border-color:transparent}
-    .send-mobile{background:var(--cta);color:#04110a;border-color:transparent}
     .icon-btn:disabled{opacity:.6;cursor:not-allowed}
 
-    /* Welcome screen (mobile) */
-    .welcome{display:none;place-items:center;text-align:center;padding:40px 16px 120px}
-    .welcome h1{font-size:32px;margin:12px 0 18px}
-    .quick{display:grid;gap:12px;grid-template-columns:1fr 1fr;max-width:560px;margin:0 auto}
-    .pill{display:flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--pill-border);background:var(--pill);color:#cbd2e1;border-radius:18px;height:54px;font-weight:600;cursor:pointer}
-    .pill:active{transform:scale(.98)}
-    .mic{font-size:18px}
-    @media (max-width:900px){
-      .welcome{display:grid}
-    }
-
-    /* Overlay + modal (share) */
     .overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000}
     .overlay.open{display:flex}
     .modal{width:min(560px,92vw);background:#0f1117;border:1px solid var(--border);border-radius:16px;padding:18px;box-shadow:0 18px 40px rgba(0,0,0,.45)}
@@ -120,7 +115,8 @@
   </style>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
-</head><body>
+</head>
+<body>
   <div class="app">
     <!-- Sidebar -->
     <aside class="sidebar">
@@ -160,18 +156,6 @@
     <!-- Main -->
     <main class="main">
       <div class="readOnlyBanner" id="roBanner">🔒 Read-only shared view. <a href="/index.html" style="color:#9aa3b2">Sign up</a> to chat.</div>
-
-      <!-- Mobile welcome (shown when no messages selected) -->
-      <section class="welcome" id="welcome">
-        <h1>What can I help with?</h1>
-        <div class="quick">
-          <button class="pill" data-prompt="Create an image of a right triangle with labels.">🖼️ Create image</button>
-          <button class="pill" data-prompt="Write a JavaScript function that factors a quadratic ax^2+bx+c.">[>-] Code</button>
-          <button class="pill" data-prompt="Help me write a study plan for calculus.">✍️ Help me write</button>
-          <button class="pill" data-prompt="Explain limits in simple steps with examples.">✨ More</button>
-        </div>
-      </section>
-
       <div class="messages" id="messages"></div>
     </main>
   </div>
@@ -183,7 +167,9 @@
         <div class="ta-wrap">
           <div class="meta-row">
             <label for="gptType">Assistant</label>
-            <select id="gptType"><option value="math">Math GPT</option></select>
+            <select id="gptType">
+              <option value="math">Math GPT</option>
+            </select>
             <span id="status" style="margin-left:auto;"></span>
           </div>
           <textarea id="prompt" placeholder="Message Math GPT…" autocomplete="off"></textarea>
@@ -191,8 +177,7 @@
       </div>
       <div class="controls">
         <button class="icon-btn" id="photoBtn" type="button" title="Photo Solve" aria-label="Photo Solve">📷</button>
-        <!-- send is green on mobile for the familiar look -->
-        <button class="icon-btn primary send-mobile" id="sendBtn" type="submit" title="Send" aria-label="Send">➤</button>
+        <button class="icon-btn primary" id="sendBtn" type="submit" title="Send" aria-label="Send">➤</button>
         <input type="file" id="photoFile" accept="image/png,image/jpeg,image/jpg,image/webp" hidden />
       </div>
     </div>
@@ -212,13 +197,12 @@
       </div>
     </div>
   </div>
-
   <div class="toast" id="toast">Link copied to clipboard</div><script>
     /* mobile 100vh fix */
     function setVh(){ const vh = window.innerHeight * 0.01; document.documentElement.style.setProperty('--vh', `${vh*100}px`); }
     setVh(); window.addEventListener('resize', setVh);
 
-    /* API (capture status for quota / verify handling) */
+    /* API (capture HTTP status for quota / verify handling) */
     const api = {
       listConvs: ()=>fetch('/api/conversations',{credentials:'include'}).then(r=>r.json()),
       createConv:(title)=>fetch('/api/conversations',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({title})}).then(r=>r.json()),
@@ -254,7 +238,6 @@
     const statusEl = document.getElementById('status');
     const newChatBtn = document.getElementById('newChatBtn');
     const roBanner = document.getElementById('roBanner');
-    const welcome = document.getElementById('welcome');
 
     /* user card/menu elements */
     const userCard   = document.getElementById('userCard');
@@ -280,17 +263,20 @@
     let pendingShareConvId = null;
     let readOnly = false;
 
-    /* Title helpers */
+    /* Title helpers for convs */
     const convTitleCache = {};
     const pendingAutoTitle = new Set();
 
-    function updatePlaceholder(){
+    /* Placeholder */
+    function updatePlaceholder() {
       promptEl.placeholder = `Message Math GPT…`;
       promptEl.setAttribute('aria-label', `Message Math GPT`);
       promptEl.setAttribute('title', `Message Math GPT`);
     }
-    gptTypeEl.addEventListener('change', updatePlaceholder); updatePlaceholder();
+    gptTypeEl.addEventListener('change', updatePlaceholder);
+    updatePlaceholder();
 
+    /* Composer pad */
     function updateComposerPad(){
       const visible = getComputedStyle(composerEl).display !== 'none';
       const h = visible ? (composerEl.offsetHeight || 0) : 0;
@@ -320,7 +306,6 @@
       return prefix?`${prefix} ${t}`:t;
     }
     function renderMessage(role, text, when=''){
-      hideWelcome();
       const row=document.createElement('div'); row.className=`msg ${role}`;
       const bubble=document.createElement('div'); bubble.className='bubble';
       if(when){ const small=document.createElement('small'); small.className='meta'; small.textContent=when; bubble.appendChild(small); }
@@ -331,7 +316,6 @@
       row.appendChild(bubble); messagesEl.appendChild(row);
     }
     function renderImageMessage(caption,url){
-      hideWelcome();
       const row=document.createElement('div'); row.className='msg user';
       const bubble=document.createElement('div'); bubble.className='bubble';
       const small=document.createElement('small'); small.className='meta'; small.textContent='';
@@ -339,36 +323,47 @@
       if(url){ const img=document.createElement('img'); img.className='thumb'; img.src=url; img.alt='uploaded image'; bubble.appendChild(img); }
       row.appendChild(bubble); messagesEl.appendChild(row);
     }
-    function clearMessages(){ messagesEl.innerHTML=''; maybeShowWelcome(); }
+    function clearMessages(){ messagesEl.innerHTML=''; }
     function scrollToBottom(){ messagesEl.scrollTop = messagesEl.scrollHeight; }
     function now(){ return new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}); }
 
-    /* Welcome toggling (mobile look) */
-    function hideWelcome(){ welcome.style.display='none'; }
-    function maybeShowWelcome(){
-      // show only on mobile and when no messages in current chat
-      if (window.innerWidth < 900 && messagesEl.children.length === 0) {
-        welcome.style.display='grid';
-      } else {
-        welcome.style.display='none';
-      }
+    /* Ensure conversation immediately + maybe auto-title (old behavior) */
+    async function ensureConversation() {
+      if (currentConvId) return currentConvId;
+      const c = await api.createConv('New chat');
+      currentConvId = c.id;
+      convTitleCache[currentConvId] = 'New chat';
+      pendingAutoTitle.add(currentConvId);
+      await loadConversations(currentConvId);
+      return currentConvId;
     }
-    // quick action pills insert prompt
-    welcome.querySelectorAll('.pill').forEach(p=>{
-      p.addEventListener('click', ()=>{
-        promptEl.value = p.dataset.prompt || '';
-        promptEl.focus();
-      });
-    });
+    function shouldAutoTitleFor(convId){
+      if (!convId) return true;
+      if (pendingAutoTitle.has(convId)) return true;
+      const t = (convTitleCache[convId]||'').trim().toLowerCase();
+      return t === 'new chat' || t === 'untitled' || t === '';
+    }
+    async function maybeAutoTitle(convId, sourceText, prefix=""){
+      if (!convId) return;
+      if (!shouldAutoTitleFor(convId)) return;
+      const autoTitle=makeTitleFrom(sourceText||'', prefix);
+      try{
+        await api.renameConv(convId, autoTitle);
+        convTitleCache[convId]=autoTitle;
+        pendingAutoTitle.delete(convId);
+        await loadConversations(convId);
+      }catch{}
+    }
 
     /* Share modal */
     function openShareModal(convId){ pendingShareConvId=convId; shareOverlay.classList.add('open'); shareOverlay.setAttribute('aria-hidden','false'); shareLinkInput.value=''; shareLinkInput.placeholder='Generating…'; setTimeout(()=>createShareBtn.focus(),10); }
     function closeShareModal(){ shareOverlay.classList.remove('open'); shareOverlay.setAttribute('aria-hidden','true'); pendingShareConvId=null; }
-    document.getElementById('shareCloseBtn').addEventListener('click', closeShareModal);
+    shareCloseBtn.addEventListener('click', closeShareModal);
     shareOverlay.addEventListener('click', (e)=>{ if(e.target===shareOverlay) closeShareModal(); });
     document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && shareOverlay.classList.contains('open')) closeShareModal(); });
     createShareBtn.addEventListener('click', async ()=>{
-      const id = pendingShareConvId ?? currentConvId; if(!id) return;
+      const id = pendingShareConvId ?? currentConvId;
+      if(!id) return;
       try{
         const r = await api.shareCreate(id);
         if(!r?.token){ showToast('Could not create link'); return; }
@@ -380,7 +375,7 @@
       }catch{ showToast('Copy failed. Select and copy manually.'); }
     });
 
-    /* Conversation list */
+    /* Conv list */
     async function loadConversations(selectId=null){
       const list = await api.listConvs();
       convListEl.innerHTML='';
@@ -410,12 +405,12 @@
         menu.appendChild(bShare); menu.appendChild(bRename); menu.appendChild(bArchive); menu.appendChild(bDelete);
         menuBtn.addEventListener('click',e=>{ e.stopPropagation(); document.querySelectorAll('.menu.open').forEach(m=>{ if(m!==menu)m.classList.remove('open'); }); menu.classList.toggle('open'); });
         row.addEventListener('click',async ()=>{ currentConvId=c.id; document.querySelectorAll('.conv').forEach(n=>n.classList.remove('active')); row.classList.add('active'); await showConversation(c.id); });
-
         row.appendChild(title); row.appendChild(menuBtn); row.appendChild(menu);
         convListEl.appendChild(row);
       });
       document.addEventListener('click', (e)=>{ if(!e.target.closest('.menu') && !e.target.closest('.conv-menu-btn')){ document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open')); } }, {capture:false});
     }
+
     async function showConversation(id){
       clearMessages();
       const r = await api.getConvMsgs(id);
@@ -432,59 +427,36 @@
     promptEl.addEventListener('input', autoresize);
     promptEl.addEventListener('keydown', (e)=>{ if(e.key==='Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); if(!sendBtn.disabled) composerEl.requestSubmit(); } });
 
-    function shouldAutoTitleFor(convId){
-      if (!convId) return true;
-      if (pendingAutoTitle.has(convId)) return true;
-      const t = (convTitleCache[convId]||'').trim().toLowerCase();
-      return t === 'new chat' || t === 'untitled' || t === '';
-    }
-
+    /* Render a quota/upgrade message */
     function renderQuotaMessage(message, link){
       const safeMsg = message || "You've reached the free limit.";
       const url = link || "/index.html#pricing";
       const md = `${safeMsg}\n\n[Upgrade now](${url})`;
       renderMessage('assistant', md);
     }
-    function renderVerifyMessage(){
-      renderMessage('assistant','**Please verify your email to continue.**\n\nWe sent a verification link to your inbox. Open that email and click the button, then come back here.');
-    }
-
-    /* Submit text */
+/* Submit text (create convo first, then auto-title from first user message) */
     document.getElementById('composer').addEventListener('submit', async (e)=>{
       e.preventDefault(); if(readOnly) return;
       const text=(promptEl.value||'').trim(); if(!text) return;
 
-      // block if unverified
-      try{
-        const me = await api.me();
-        if(me?.status==='ok' && me.user?.email && !me.user?.verified){
-          renderVerifyMessage(); promptEl.value=''; autoresize(); return;
-        }
-      }catch{}
-
       renderMessage('user', text, now()); scrollToBottom();
       sendBtn.disabled=true; photoBtn.disabled=true; promptEl.disabled=true; statusEl.textContent='Thinking…';
+
       try{
-        const payload={ message:text, gptType:'math' };
-        if(currentConvId) payload.conversationId=currentConvId;
+        // 1) Ensure conversation exists right now (shows as “New chat” immediately)
+        await ensureConversation();
+
+        // 2) Auto-title immediately from user's first text
+        await maybeAutoTitle(currentConvId, text);
+
+        // 3) Call backend
+        const payload={ message:text, gptType:'math', conversationId:currentConvId };
         const res=await api.chat(payload);
 
-        if(!currentConvId && res.conversationId){
-          currentConvId=res.conversationId;
-          convTitleCache[currentConvId] = 'New chat';
-          pendingAutoTitle.add(currentConvId);
-          await loadConversations(currentConvId);
-        }
-
-        if (shouldAutoTitleFor(currentConvId) && text){
-          const autoTitle=makeTitleFrom(text);
-          try{ await api.renameConv(currentConvId, autoTitle); convTitleCache[currentConvId]=autoTitle; pendingAutoTitle.delete(currentConvId); await loadConversations(currentConvId); }catch{}
-        }
-
-        if(res.__status === 403 && (res.status==='verify_required' || res.message?.toLowerCase().includes('verify'))){
-          renderVerifyMessage();
-        } else if(res.__status === 402){
+        if(res.__status === 402){
           renderQuotaMessage(res.message, res.upgradeLink);
+        } else if (res.__status === 403 && res.status === 'verify_required') {
+          renderMessage('assistant', "Please verify your email to start chatting. Check your inbox for the verification link.");
         } else if (res.__status && res.__status !== 200){
           renderMessage('assistant', res.message || 'Sorry, something went wrong. Please try again.');
         } else {
@@ -499,53 +471,41 @@
       }
     });
 
-    /* Photo Solve */
+    /* Photo Solve (create convo first, then auto-title from note or “Photo”) */
     photoBtn.addEventListener('click',()=> !readOnly && photoFile.click());
     photoFile.addEventListener('change', async ()=>{
       if(readOnly) return;
       const file = photoFile.files && photoFile.files[0]; if(!file) return;
-
-      try{
-        const me = await api.me();
-        if(me?.status==='ok' && me.user?.email && !me.user?.verified){
-          renderVerifyMessage(); photoFile.value=''; return;
-        }
-      }catch{}
-
       const okTypes=['image/png','image/jpeg','image/jpg','image/webp'];
       if(!okTypes.includes(file.type)){ alert('Please choose a PNG, JPG, or WEBP image.'); photoFile.value=''; return; }
       if(file.size>6*1024*1024){ alert('Image is larger than 6MB.'); photoFile.value=''; return; }
 
       const note = prompt('Optional: add a short note. Leave blank if not needed.') || '';
       const objUrl=URL.createObjectURL(file);
-      renderImageMessage(note ? `📷 (with note) ${note}` : '📷 Photo uploaded', objUrl); scrollToBottom();
 
+      renderImageMessage(note ? `📷 (with note) ${note}` : '📷 Photo uploaded', objUrl); scrollToBottom();
       sendBtn.disabled=true; photoBtn.disabled=true; promptEl.disabled=true; statusEl.textContent='Solving…';
+
       try{
+        // 1) Ensure conversation exists now
+        await ensureConversation();
+
+        // 2) Auto-title right away from note (or generic “Photo”)
+        await maybeAutoTitle(currentConvId, note || 'Photo', 'Photo:');
+
+        // 3) Call backend
         const fd=new FormData();
         fd.append('image', file);
         fd.append('gptType', 'math');
         if(note) fd.append('attempt', note);
-        if(currentConvId) fd.append('conversationId', currentConvId);
+        fd.append('conversationId', currentConvId);
 
-        const wasNew = !currentConvId;
         const res=await api.photoSolve(fd);
 
-        if(wasNew && res.conversationId){
-          currentConvId=res.conversationId;
-          convTitleCache[currentConvId] = 'New chat';
-          pendingAutoTitle.add(currentConvId);
-          await loadConversations(currentConvId);
-        }
-        if (shouldAutoTitleFor(currentConvId)){
-          const autoTitle=makeTitleFrom(note||'Photo','Photo:');
-          try{ await api.renameConv(currentConvId, autoTitle); convTitleCache[currentConvId]=autoTitle; pendingAutoTitle.delete(currentConvId); await loadConversations(currentConvId); }catch{}
-        }
-
-        if(res.__status === 403 && (res.status==='verify_required' || res.message?.toLowerCase().includes('verify'))){
-          renderVerifyMessage();
-        } else if(res.__status === 402){
+        if(res.__status === 402){
           renderQuotaMessage(res.message, res.upgradeLink);
+        } else if (res.__status === 403 && res.status === 'verify_required') {
+          renderMessage('assistant', "Please verify your email to use photo solve. Check your inbox for the verification link.");
         } else if (res.__status && res.__status !== 200){
           renderMessage('assistant', res.message || 'Photo solve failed. Please try again.');
         } else {
@@ -573,7 +533,7 @@
       promptEl.focus();
     });
 
-    /* User menu */
+    /* User menu behaviour */
     function toggleUserMenu(force){
       const open = force ?? !userMenu.classList.contains('open');
       userMenu.classList.toggle('open', open);
@@ -643,13 +603,16 @@
         if (me.status !== 'ok' || !me.user?.email){
           const emailLS = localStorage.getItem('userEmail');
           if (!emailLS) { location.replace('/index.html'); return false; }
-          setUserUI(emailLS, 'FREE'); return true;
+          setUserUI(emailLS, 'FREE');
+          return true;
         }
-        setUserUI(me.user.email, me.user.plan || 'FREE'); return true;
+        setUserUI(me.user.email, me.user.plan || 'FREE');
+        return true;
       }catch{
         const emailLS = localStorage.getItem('userEmail');
         if (!emailLS) { location.replace('/index.html'); return false; }
-        setUserUI(emailLS, 'FREE'); return true;
+        setUserUI(emailLS, 'FREE');
+        return true;
       }
     }
     async function refreshPlan(){
@@ -661,7 +624,7 @@
             setUserUI(me.user.email, me.user.plan||'FREE');
           }
         }
-      }catch{}
+      }catch{/* ignore */}
     }
 
     /* Init */
@@ -672,7 +635,7 @@
 
       const ok=await guardAuth(); if(!ok) return;
 
-      // Keep plan fresh
+      // Keep the plan fresh after upgrades
       document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refreshPlan(); });
       window.addEventListener('focus', refreshPlan);
       setInterval(refreshPlan, 15000);
@@ -683,11 +646,9 @@
 
       (function autoresizeInit(){ const e = document.getElementById('prompt'); e.style.height='auto'; e.style.height=Math.min(120,e.scrollHeight)+'px'; })();
       updateComposerPad();
-      maybeShowWelcome();
       document.getElementById('prompt').focus();
     })();
   </script>
 </body>
 </html>
 ```0
-
