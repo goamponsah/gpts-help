@@ -58,41 +58,6 @@ async function ensureSchema() {
       updated_at timestamptz not null default now()
     );
 
-    create table if not exists conversations (
-      id bigserial primary key,
-      user_id bigint not null references users(id) on delete cascade,
-      title text not null,
-      archived boolean not null default false,
-      created_at timestamptz not null default now(),
-      updated_at timestamptz not null default now()
-    );
-
-    create table if not exists messages (
-      id bigserial primary key,
-      conversation_id bigint not null references conversations(id) on delete cascade,
-      role text not null,
-      content text not null,
-      created_at timestamptz not null default now()
-    );
-
-    create table if not exists share_links (
-      id bigserial primary key,
-      conversation_id bigint not null references conversations(id) on delete cascade,
-      token text not null unique,
-      created_at timestamptz not null default now(),
-      revoked boolean not null default false
-    );
-
-    create table if not exists paystack_receipts (
-      id bigserial primary key,
-      email text not null,
-      reference text not null unique,
-      plan_code text,
-      status text,
-      raw jsonb,
-      created_at timestamptz not null default now()
-    );
-
     create table if not exists device_quotas (
       id bigserial primary key,
       device_hash text not null,
@@ -105,18 +70,44 @@ async function ensureSchema() {
     );
   `);
 
-  // migrate old column "day" -> "period_start" if present
+  // Migration for older installations
   await pool.query(`
     DO $$
     BEGIN
+      -- rename "day" -> "period_start"
       IF EXISTS (
         SELECT 1 FROM information_schema.columns
         WHERE table_name='device_quotas' AND column_name='day'
+      ) AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name='device_quotas' AND column_name='period_start'
       ) THEN
         ALTER TABLE device_quotas RENAME COLUMN day TO period_start;
       END IF;
+
+      -- rename "device_id" -> "device_hash"
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name='device_quotas' AND column_name='device_id'
+      ) AND NOT EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name='device_quotas' AND column_name='device_hash'
+      ) THEN
+        ALTER TABLE device_quotas RENAME COLUMN device_id TO device_hash;
+      END IF;
     END $$;
   `);
+
+  const q = await pool.query(`
+    select column_name from information_schema.columns where table_name='users'
+  `);
+  const have = new Set(q.rows.map(r => r.column_name));
+  async function add(sql){ try { await pool.query(sql); } catch {} }
+  if (!have.has("verified"))       await add(`alter table users add column verified boolean not null default false`);
+  if (!have.has("verify_token"))   await add(`alter table users add column verify_token text`);
+  if (!have.has("verify_expires")) await add(`alter table users add column verify_expires timestamptz`);
+  if (!have.has("reset_token"))    await add(`alter table users add column reset_token text`);
+  if (!have.has("reset_expires"))  await add(`alter table users add column reset_expires timestamptz`);
 }
 await ensureSchema();// ---------- HELPERS ----------
 const SJWT = JWT_SECRET || crypto.randomBytes(48).toString("hex");
@@ -251,4 +242,3 @@ app.post("/api/chat", async (req,res)=>{
 
 const PORT=process.env.PORT||3000;
 app.listen(PORT,()=>console.log(`GPTs Help server running on :${PORT}`));
-
