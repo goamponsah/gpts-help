@@ -464,26 +464,17 @@ app.post("/api/forgot-password", async (req,res)=>{
 });
 
 // reset password (for reset.html)
+// legacy alias: POST /api/reset-password { token, password }
 app.post("/api/reset-password", async (req,res)=>{
   try{
     const { token, password } = req.body || {};
-    if(!token || typeof password!=="string" || password.length<8){
-      return res.status(400).json({status:"error", message:"Invalid input"});
-    }
-    const r = await pool.query(
-      `select email from users where reset_token=$1 and (reset_expires is null or now()<=reset_expires)`,
-      [token]
-    );
-    if(!r.rowCount) return res.status(400).json({status:"error", message:"Invalid or expired token"});
-    const email = r.rows[0].email;
-    const { salt, hash } = await hashPassword(password);
-    await pool.query(`
-      update users set pass_salt=$2, pass_hash=$3, reset_token=null, reset_expires=null, updated_at=now() where email=$1
-    `,[email, salt, hash]);
-    const u = await getUserByEmail(email);
-    setSessionCookie(res, { email, plan: u?.plan || "FREE" });
-    res.json({ status:"ok" });
-  }catch(e){ console.error("reset-password error",e); res.status(500).json({status:"error", message:"Reset failed"}); }
+    req.body = { token, newPassword: password };
+    // delegate to the new handler
+    return app._router.handle({ ...req, url: "/api/reset/confirm", method: "POST" }, res, ()=>{});
+  }catch(e){
+    console.error("legacy reset-password error", e);
+    res.status(500).json({ status:"error", message:"Reset failed" });
+  }
 });
 
 /* ===================== Conversations & Messages ===================== */
