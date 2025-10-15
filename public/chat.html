@@ -260,11 +260,13 @@
 
     const convTitleCache = {};
     const pendingAutoTitle = new Set();
+    let menusClickBound = false; // prevent duplicate global listeners
 
     function updatePlaceholder(){
-      promptEl.placeholder = `Message Math GPT…`;
-      promptEl.setAttribute('aria-label', `Message Math GPT`);
-      promptEl.setAttribute('title', `Message Math GPT`);
+      const current = gptTypeEl.options[gptTypeEl.selectedIndex]?.text || 'Math GPT';
+      promptEl.placeholder = `Message ${current}…`;
+      promptEl.setAttribute('aria-label', `Message ${current}`);
+      promptEl.setAttribute('title', `Message ${current}`);
     }
     gptTypeEl.addEventListener('change', updatePlaceholder); updatePlaceholder();
 
@@ -357,13 +359,9 @@
     /* ---- LOCAL TITLE UPDATE HELPERS ---- */
     function setConvTitleLocal(id, title){
       convTitleCache[id] = title;
-      // update list row title immediately
       const node = convListEl.querySelector(`.conv[data-id="${id}"] .conv-title`);
       if (node) node.textContent = title;
-      // update document title when this is the open chat
-      if (currentConvId === id) {
-        document.title = `${title} — GPTs Help`;
-      }
+      if (currentConvId === id) document.title = `${title} — GPTs Help`;
     }
 
     function shouldAutoTitleFor(convId){
@@ -377,16 +375,16 @@
       if (!convId) return;
       if (!shouldAutoTitleFor(convId)) return;
       const autoTitle = makeTitleFrom(sourceText, prefix);
-      if (!autoTitle || autoTitle.toLowerCase() === (convTitleCache[convId]||'').trim().toLowerCase()) {
-        return;
-      }
+      if (!autoTitle || autoTitle.toLowerCase() === (convTitleCache[convId]||'').trim().toLowerCase()) return;
       try{
         await api.renameConv(convId, autoTitle);
         setConvTitleLocal(convId, autoTitle);
       }catch(e){
         console.warn('Auto-title rename failed', e);
       }
-    }async function loadConversations(selectId=null){
+    }
+
+    async function loadConversations(selectId=null){
       const list = await api.listConvs();
       convListEl.innerHTML='';
       list.forEach(c=>{ convTitleCache[c.id] = c.title; });
@@ -425,7 +423,16 @@
         row.appendChild(title); row.appendChild(menuBtn); row.appendChild(menu);
         convListEl.appendChild(row);
       });
-      document.addEventListener('click', (e)=>{ if(!e.target.closest('.menu') && !e.target.closest('.conv-menu-btn')){ document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open')); } }, {capture:false});
+
+      // bind global outside-click ONCE
+      if (!menusClickBound) {
+        document.addEventListener('click', (e)=>{
+          if(!e.target.closest('.menu') && !e.target.closest('.conv-menu-btn')){
+            document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'));
+          }
+        }, {capture:false});
+        menusClickBound = true;
+      }
     }
 
     async function showConversation(id){
@@ -433,7 +440,6 @@
       const r = await api.getConvMsgs(id);
       (r.messages||[]).forEach(m=> renderMessage(m.role==='user'?'user':'assistant', m.content));
       scrollToBottom();
-      // update page title from cache if we have it
       if (convTitleCache[id]) document.title = `${convTitleCache[id]} — GPTs Help`;
     }
 
@@ -471,7 +477,7 @@
       renderMessage('user', text, now()); scrollToBottom();
       sendBtn.disabled=true; photoBtn.disabled=true; promptEl.disabled=true; statusEl.textContent='Thinking…';
       try{
-        const payload={ message:text, gptType:'math' };
+        const payload={ message:text, gptType: gptTypeEl.value || 'math' };
         if(currentConvId) payload.conversationId=currentConvId;
         const res=await api.chat(payload);
 
@@ -482,7 +488,7 @@
           await loadConversations(currentConvId);
         }
 
-        // ✅ immediate auto-title update
+        // immediate auto-title update
         await maybeAutoTitle(currentConvId, text);
 
         if(res.__status === 403 && (res.status==='verify_required' || res.message?.toLowerCase().includes('verify'))){
@@ -501,7 +507,9 @@
         promptEl.value=''; autoresize();
         sendBtn.disabled=false; photoBtn.disabled=false; promptEl.disabled=false; promptEl.focus(); statusEl.textContent='';
       }
-    });/* Photo Solve */
+    });
+
+    /* Photo Solve */
     photoBtn.addEventListener('click',()=> !readOnly && photoFile.click());
     photoFile.addEventListener('change', async ()=>{
       if(readOnly) return;
@@ -526,7 +534,7 @@
       try{
         const fd=new FormData();
         fd.append('image', file);
-        fd.append('gptType', 'math');
+        fd.append('gptType', gptTypeEl.value || 'math');
         if(note) fd.append('attempt', note);
         if(currentConvId) fd.append('conversationId', currentConvId);
 
@@ -540,7 +548,7 @@
           await loadConversations(currentConvId);
         }
 
-        // ✅ auto-title for photos
+        // auto-title for photos
         await maybeAutoTitle(currentConvId, note || 'Photo', 'Photo:');
 
         if(res.__status === 403 && (res.status==='verify_required' || res.message?.toLowerCase().includes('verify'))){
