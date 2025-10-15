@@ -29,7 +29,7 @@
     h2{margin:.5rem 0}
 
     .features{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1.5rem;margin-top:2rem}
-    .card{background:#fff;border:1px solid #eee;border-radius:12px;padding:1.5rem;box-shadow:0 4px 10px rgba(0,0,0,.05)}
+    .card{background:#fff;border:1px solid #eee;border-radius:12px;padding:1.5rem;box-shadow:var(--shadow)}
 
     .demo{margin-top:2rem;display:grid;grid-template-columns:1.2fr 1fr;gap:1.5rem}
     @media (max-width:960px){.demo{grid-template-columns:1fr}}
@@ -278,23 +278,32 @@
   <script src="https://js.paystack.co/v2/inline.js"></script>
 
   <script>
+    // ---------- Constants ----------
     const genRef = () => "gptshelp_" + Date.now() + "_" + Math.random().toString(36).slice(2,8);
     const NEXT_URL = "/chat.html";
 
+    // Your Paystack plan codes (must match dashboard)
     const PLAN_CODE_PLUS_MONTHLY = "PLN_t8tii7sryvwsxxf";
     const PLAN_CODE_PRO_ANNUAL  = "PLN_3gkd3qo1pv8rylt";
 
+    // ---------- Config load & gating ----------
     let PAYSTACK_PUBLIC_KEY = null;
+    const payButtons = [];
+    function setPayButtonsEnabled(enabled){
+      payButtons.forEach(b => b && (b.disabled = !enabled));
+    }
     async function loadConfig(){
       try{
         const r = await fetch("/api/public-config");
         const cfg = await r.json();
         PAYSTACK_PUBLIC_KEY = cfg.paystackPublicKey || null;
-      }catch{}
+      }catch{
+        PAYSTACK_PUBLIC_KEY = null;
+      }
+      setPayButtonsEnabled(!!PAYSTACK_PUBLIC_KEY);
     }
-    loadConfig();
 
-    // API helpers
+    // ---------- API helpers ----------
     const J = r => r.json();
     async function apiMe(){ try{ return await fetch("/api/me",{credentials:"include"}).then(J); }catch{return{}} }
     async function apiLogin(email, password){
@@ -323,7 +332,7 @@
       else{ btn.disabled=false; btn.textContent = label || btn.dataset.prev || btn.textContent; }
     }
 
-    // Header auth state
+    // ---------- Header auth state ----------
     async function reflectAuth(){
       const me = await apiMe();
       const openChatBtn = document.getElementById("openChatBtn");
@@ -332,6 +341,7 @@
       if(me?.status==="ok" && me.user?.email){
         if(me.user.verified){
           openChatBtn.style.display="inline-block";
+          openChatBtn.onclick = goToChat;
         }else{
           openChatBtn.style.display="inline-block";
           openChatBtn.onclick = () => { alert("Please verify your email first. We’ve sent you a link."); apiResendVerify().catch(()=>{}); };
@@ -345,7 +355,7 @@
       }
     }
 
-    // ====== Login modal ======
+    // ---------- Login modal ----------
     const loginOverlay = document.getElementById("loginOverlay");
     const loginBtnEl = document.getElementById("loginBtn");
     const loginClose = document.getElementById("loginClose");
@@ -384,7 +394,7 @@
         const r = await apiLogin(email, pw);
         if(authOK(r)){
           const me = await apiMe();
-          localStorage.setItem("userEmail", email);
+          try{ localStorage.setItem("userEmail", email); }catch{}
           if(me?.user?.verified){ location.replace(NEXT_URL); }
           else{
             loginErr.style.color = "var(--ok)";
@@ -427,7 +437,7 @@
       }
     });
 
-    // ====== Signup modal (verify gate) ======
+    // ---------- Signup modal (verify gate) ----------
     const signupOverlay = document.getElementById("signupOverlay");
     const signupBtn = document.getElementById("signupBtn");
     const signupClose = document.getElementById("signupClose");
@@ -460,7 +470,6 @@
     }
     function passwordOk(p){ return typeof p === 'string' && p.length >= 8; }
 
-    // >>> updated: always guide user to verify rather than "failed"
     async function handleSignupSubmit(){
       signupErr.style.color = "";
       signupErr.textContent = "";
@@ -480,13 +489,12 @@
 
       setBtnLoading(signupSubmit,true,"Create account");
       try{
-        await apiSignupFree(email, p1); // best-effort; server sends verify email
+        await apiSignupFree(email, p1);
         try{ localStorage.setItem("userEmail", email); }catch{}
         verifyInfo.style.display="block";
         signupErr.style.color="var(--ok)";
         signupErr.textContent="Almost done — check your inbox and verify your email to continue.";
       }catch{
-        // Even on network hiccups, keep the same next-step guidance
         verifyInfo.style.display="block";
         signupErr.style.color="var(--ok)";
         signupErr.textContent="Almost done — check your inbox and verify your email to continue.";
@@ -512,7 +520,7 @@
       finally{ resendVerifyBtn.disabled = false; }
     });
 
-    // ===== Paywall =====
+    // ---------- Paywall ----------
     const paywallOverlay = document.getElementById("paywallOverlay");
     const paywallClose = document.getElementById("paywallClose");
     const paywallMonthly = document.getElementById("paywallMonthly");
@@ -527,35 +535,40 @@
       apiMe().then(me=>{
         if(!(me?.status==="ok" && me.user?.email)){ openLogin(); return; }
         const email = me.user.email;
+
         const popup = new PaystackPop();
         popup.newTransaction({
           key: PAYSTACK_PUBLIC_KEY,
           email,
-          currency: "GHS",
+          // IMPORTANT: when using a Paystack PLAN, do not send 'amount' or force 'currency':
+          // The plan defines amount & currency on Paystack dashboard.
           plan: planCode,
           reference: genRef(),
           callback: (response) => {
-            fetch("/api/paystack/verify",{method:"POST",headers:{ "Content-Type":"application/json" },credentials:"include",body:JSON.stringify({ reference: response.reference })})
-              .then(r=>r.json())
-              .then(r=>{
-                if(r.status==="success" || r.status==="ok"){
-                  alert(label + " subscription activated!");
-                  closePaywall();
-                  location.href="/chat.html";
-                }else{
-                  alert("Verification failed. Ref: " + response.reference);
-                }
-              })
-              .catch(()=> alert("Verification request failed."));
+            fetch("/api/paystack/verify", {
+              method:"POST",
+              headers:{ "Content-Type":"application/json" },
+              credentials:"include",
+              body:JSON.stringify({ reference: response.reference })
+            })
+            .then(r=>r.json())
+            .then(r=>{
+              if(r.status==="success" || r.status==="ok"){
+                alert(label + " subscription activated!");
+                closePaywall();
+                location.href="/chat.html";
+              }else{
+                alert((r.message || "Verification failed.") + " Ref: " + response.reference);
+              }
+            })
+            .catch(()=> alert("Verification request failed. Ref: " + response.reference));
           },
           onCancel: () => {}
         });
       });
     }
-    document.getElementById("plusMonthlyBtn").addEventListener('click', ()=> startSubscription(PLAN_CODE_PLUS_MONTHLY, "Plus Monthly"));
-    document.getElementById("proAnnualBtn").addEventListener('click', ()=> startSubscription(PLAN_CODE_PRO_ANNUAL, "Pro Annual"));
 
-    // ===== Photo Solve demo =====
+    // ---------- Photo Solve demo ----------
     const drop = document.getElementById("drop");
     const pickBtn = document.getElementById("pickBtn");
     const fileInput = document.getElementById("fileInput");
@@ -601,7 +614,7 @@
       }
 
       resultEl.textContent = '⏳ Solving…';
-      solveBtn.disabled = true; solveBtn.textContent = 'Solving…';
+      setBtnLoading(solveBtn,true,'Solving…');
 
       try{
         const fd = new FormData();
@@ -627,13 +640,19 @@
       }catch{
         resultEl.textContent = 'Sorry, network error. Please try again.';
       }finally{
-        solveBtn.disabled = false; solveBtn.textContent = 'Solve Now';
+        setBtnLoading(solveBtn,false,'Solve Now');
       }
     }
     solveBtn.addEventListener('click', solveNow);
     clearBtn.addEventListener('click', ()=>{ selectedFile=null; preview.innerHTML=''; demoActions.style.display='none'; resultEl.textContent='Upload a math question to see the step-by-step solution here.'; fileInput.value=''; });
 
-    // Plan buttons
+    // ---------- Plan buttons (single binding only) ----------
+    document.getElementById("plusMonthlyBtn").addEventListener('click', ()=> startSubscription(PLAN_CODE_PLUS_MONTHLY, "Plus Monthly"));
+    document.getElementById("proAnnualBtn").addEventListener('click', ()=> startSubscription(PLAN_CODE_PRO_ANNUAL, "Pro Annual"));
+    paywallMonthly.addEventListener('click', ()=> startSubscription(PLAN_CODE_PLUS_MONTHLY, "Plus Monthly"));
+    paywallAnnual.addEventListener('click', ()=> startSubscription(PLAN_CODE_PRO_ANNUAL, "Pro Annual"));
+
+    // ---------- Start Free ----------
     document.getElementById("startFreeBtn").addEventListener('click', ()=>{
       apiMe().then(me=>{
         if(me?.status==="ok" && me.user?.email){
@@ -642,13 +661,22 @@
         } else openSignup();
       });
     });
-    document.getElementById("plusMonthlyBtn").addEventListener('click', ()=> startSubscription(PLAN_CODE_PLUS_MONTHLY, "Plus Monthly"));
-    document.getElementById("proAnnualBtn").addEventListener('click', ()=> startSubscription(PLAN_CODE_PRO_ANNUAL, "Pro Annual"));
 
-    // Year + header auth
+    // ---------- Init ----------
     document.getElementById("year").textContent = new Date().getFullYear();
-    reflectAuth();
+
+    window.addEventListener('DOMContentLoaded', ()=>{
+      // collect pay buttons for gating
+      payButtons.push(
+        document.getElementById("plusMonthlyBtn"),
+        document.getElementById("proAnnualBtn"),
+        document.getElementById("paywallMonthly"),
+        document.getElementById("paywallAnnual")
+      );
+      setPayButtonsEnabled(false);
+      loadConfig();
+      reflectAuth();
+    });
   </script>
 </body>
 </html>
-```0
