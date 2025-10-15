@@ -128,7 +128,7 @@ async function ensureSchema() {
 
   /* ---------- Conversations / Messages / Shares ---------- */
 
-  // Create conversations table if missing (minimal first)
+  // Create conversations table if missing (minimal, then normalize below)
   await pool.query(`
     create table if not exists conversations (
       id bigserial primary key
@@ -152,30 +152,29 @@ async function ensureSchema() {
     END $$;
   `);
 
-  // 2) Ensure required columns exist
+  // 2) Ensure required columns exist (including user_id for legacy DBs that require it)
   await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS user_email   text;`);
+  await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS user_id      bigint;`);
   await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS title        text not null default 'New chat';`);
   await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS archived     boolean not null default false;`);
   await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS created_at   timestamptz not null default now();`);
   await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS updated_at   timestamptz not null default now();`);
 
-  // 3) If both email & user_email exist (rare), backfill user_email where null
+  // 3) Backfill user_id from user_email if missing
   await pool.query(`
-    DO $$
-    BEGIN
-      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='conversations' AND column_name='email')
-         AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='conversations' AND column_name='user_email')
-      THEN
-        EXECUTE 'UPDATE conversations SET user_email = COALESCE(user_email, email) WHERE user_email IS NULL';
-      END IF;
-    END $$;
+    UPDATE conversations c
+       SET user_id = u.id
+      FROM users u
+     WHERE c.user_id IS NULL
+       AND c.user_email = u.email
   `);
 
   // 4) Indexes (idempotent)
   await pool.query(`create index if not exists idx_conversations_user_email on conversations(user_email);`);
+  await pool.query(`create index if not exists idx_conversations_user_id    on conversations(user_id);`);
   await pool.query(`create index if not exists idx_conversations_archived   on conversations(archived);`);
 
-  // 5) Add FK only if column exists and FK missing
+  // 5) Add FKs only if missing
   await pool.query(`
     DO $$
     BEGIN
@@ -194,6 +193,23 @@ async function ensureSchema() {
         ALTER TABLE conversations
           ADD CONSTRAINT conversations_user_email_fkey
           FOREIGN KEY (user_email) REFERENCES users(email) ON DELETE CASCADE;
+      END IF;
+
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name='conversations' AND column_name='user_id'
+      ) AND NOT EXISTS (
+        SELECT 1
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+          ON tc.constraint_name = kcu.constraint_name
+        WHERE tc.table_name='conversations'
+          AND tc.constraint_type='FOREIGN KEY'
+          AND kcu.column_name='user_id'
+      ) THEN
+        ALTER TABLE conversations
+          ADD CONSTRAINT conversations_user_id_fkey
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
       END IF;
     END $$;
   `);
@@ -472,11 +488,18 @@ app.post("/api/reset-password", async (req,res)=>{
 
 /* ===================== Conversations & Messages ===================== */
 
+// helper to get user id fast
+async function getUserIdByEmail(email){
+  const r = await pool.query(`select id from users where email=$1`,[email]);
+  return r.rows?.[0]?.id || null;
+}
+
 // List conversations
 app.get("/api/conversations", async (req,res)=>{
   try{
     const s = readSession(req);
     if(!s?.email) return res.status(401).json({error:"unauthenticated"});
+    // Either filter works; keep by email for compatibility
     const { rows } = await pool.query(
       `select id, title, archived, created_at, updated_at
          from conversations
@@ -494,8 +517,13 @@ app.post("/api/conversations", async (req,res)=>{
     const s = readSession(req);
     if(!s?.email) return res.status(401).json({error:"unauthenticated"});
     const { title="New chat" } = req.body || {};
+    // Insert with BOTH user_email and user_id to satisfy legacy NOT NULL constraints
     const { rows } = await pool.query(
-      `insert into conversations(user_email, title) values($1,$2) returning *`,
+      `insert into conversations(user_email, user_id, title)
+       select $1, u.id, $2
+         from users u
+        where u.email=$1
+       returning *`,
       [s.email, title]
     );
     res.json(rows[0]);
@@ -648,7 +676,11 @@ app.post("/api/chat", async (req,res)=>{
     let convId = conversationId;
     if(!convId){
       const r = await pool.query(
-        `insert into conversations(user_email, title) values($1,$2) returning id`,
+        `insert into conversations(user_email, user_id, title)
+         select $1, u.id, $2
+           from users u
+          where u.email=$1
+         returning id`,
         [s.email, "New chat"]
       );
       convId = r.rows[0].id;
@@ -706,7 +738,11 @@ app.post("/api/photo-solve", upload.single("image"), async (req,res)=>{
     let convId = conversationId;
     if(!convId){
       const r = await pool.query(
-        `insert into conversations(user_email, title) values($1,$2) returning id`,
+        `insert into conversations(user_email, user_id, title)
+         select $1, u.id, $2
+           from users u
+          where u.email=$1
+         returning id`,
         [s.email, "New chat"]
       );
       convId = r.rows[0].id;
