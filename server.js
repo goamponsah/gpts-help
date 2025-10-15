@@ -359,6 +359,24 @@ async function bumpQuota(deviceHash,kind){
   }
 }
 
+/* ===================== Reset helpers (used by routes) ===================== */
+async function getEmailForValidResetToken(token){
+  const r = await pool.query(
+    `select email from users where reset_token=$1 and (reset_expires is null or now()<=reset_expires)`,
+    [token]
+  );
+  return r.rows?.[0]?.email || null;
+}
+async function setNewPasswordForEmail(email, newPassword){
+  const { salt, hash } = await hashPassword(newPassword);
+  await pool.query(
+    `update users
+        set pass_salt=$2, pass_hash=$3, reset_token=null, reset_expires=null, updated_at=now()
+      where email=$1`,
+    [email, salt, hash]
+  );
+}
+
 /* ===================== Auth APIs ===================== */
 
 // public-config (for Paystack public key)
@@ -446,7 +464,6 @@ app.post("/api/resend-verify", async (req,res)=>{
 });
 
 // forgot password
-// forgot password
 app.post("/api/forgot-password", async (req,res)=>{
   try{
     const { email } = req.body || {};
@@ -457,7 +474,7 @@ app.post("/api/forgot-password", async (req,res)=>{
       const token = crypto.randomBytes(24).toString("hex");
       const until = new Date(Date.now() + 2*3600e3); // 2 hours
       await pool.query(`update users set reset_token=$2, reset_expires=$3 where email=$1`,[email,token,until]);
-      // NOTE: point to reset-password.html and use ?t=
+      // Link to the new page & param name expected by frontend
       const link = `${req.headers.origin || FRONTEND_ORIGIN || ''}/reset-password.html?t=${encodeURIComponent(token)}`;
       await resendSend({to:email,subject:"Reset your GPTs Help password",html:resetEmailHtml(link)});
     }
@@ -465,27 +482,57 @@ app.post("/api/forgot-password", async (req,res)=>{
   }catch(e){ console.error(e); res.status(500).json({status:"error"}); }
 });
 
-// reset password (for reset.html)
-app.post("/api/reset-password", async (req,res)=>{
+// validate reset token (used by reset-password.html)
+app.get("/api/reset/validate", async (req, res)=>{
   try{
-    const { token, password } = req.body || {};
-    if(!token || typeof password!=="string" || password.length<8){
-      return res.status(400).json({status:"error", message:"Invalid input"});
+    const token = (req.query.token || req.query.t || "").toString();
+    if(!token) return res.json({ valid:false });
+    const email = await getEmailForValidResetToken(token);
+    res.json({ valid: Boolean(email) });
+  }catch(e){
+    console.error("reset validate error", e);
+    res.json({ valid:false });
+  }
+});
+
+// confirm new password (used by reset-password.html)
+app.post("/api/reset/confirm", async (req,res)=>{
+  try{
+    const { token, newPassword } = req.body || {};
+    if(!token || typeof newPassword !== "string" || newPassword.length < 8){
+      return res.status(400).json({ status:"error", message:"Invalid input" });
     }
-    const r = await pool.query(
-      `select email from users where reset_token=$1 and (reset_expires is null or now()<=reset_expires)`,
-      [token]
-    );
-    if(!r.rowCount) return res.status(400).json({status:"error", message:"Invalid or expired token"});
-    const email = r.rows[0].email;
-    const { salt, hash } = await hashPassword(password);
-    await pool.query(`
-      update users set pass_salt=$2, pass_hash=$3, reset_token=null, reset_expires=null, updated_at=now() where email=$1
-    `,[email, salt, hash]);
+    const email = await getEmailForValidResetToken(token);
+    if(!email) return res.status(400).json({ status:"error", message:"Invalid or expired token" });
+
+    await setNewPasswordForEmail(email, newPassword);
+
     const u = await getUserByEmail(email);
     setSessionCookie(res, { email, plan: u?.plan || "FREE" });
     res.json({ status:"ok" });
-  }catch(e){ console.error("reset-password error",e); res.status(500).json({status:"error", message:"Reset failed"}); }
+  }catch(e){
+    console.error("reset confirm error", e);
+    res.status(500).json({ status:"error", message:"Could not reset password" });
+  }
+});
+
+// legacy alias: POST /api/reset-password { token, password }
+app.post("/api/reset-password", async (req,res)=>{
+  try{
+    const { token, password } = req.body || {};
+    if(!token || typeof password !== "string" || password.length < 8){
+      return res.status(400).json({ status:"error", message:"Invalid input" });
+    }
+    const email = await getEmailForValidResetToken(token);
+    if(!email) return res.status(400).json({ status:"error", message:"Invalid or expired token" });
+    await setNewPasswordForEmail(email, password);
+    const u = await getUserByEmail(email);
+    setSessionCookie(res, { email, plan: u?.plan || "FREE" });
+    res.json({ status:"ok" });
+  }catch(e){
+    console.error("legacy reset-password error", e);
+    res.status(500).json({ status:"error", message:"Reset failed" });
+  }
 });
 
 /* ===================== Conversations & Messages ===================== */
@@ -501,7 +548,6 @@ app.get("/api/conversations", async (req,res)=>{
   try{
     const s = readSession(req);
     if(!s?.email) return res.status(401).json({error:"unauthenticated"});
-    // Either filter works; keep by email for compatibility
     const { rows } = await pool.query(
       `select id, title, archived, created_at, updated_at
          from conversations
@@ -519,7 +565,6 @@ app.post("/api/conversations", async (req,res)=>{
     const s = readSession(req);
     if(!s?.email) return res.status(401).json({error:"unauthenticated"});
     const { title="New chat" } = req.body || {};
-    // Insert with BOTH user_email and user_id to satisfy legacy NOT NULL constraints
     const { rows } = await pool.query(
       `insert into conversations(user_email, user_id, title)
        select $1, u.id, $2
