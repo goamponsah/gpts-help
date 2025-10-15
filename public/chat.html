@@ -135,6 +135,316 @@
     });
 
     /* ---------- rest of script unchanged ---------- */
+     /* Conversation list */
+    async function loadConversations(selectId=null){
+      const list = await api.listConvs();
+      convListEl.innerHTML='';
+      list.forEach(c=>{ convTitleCache[c.id] = c.title; });
+      list.filter(c=>!c.archived).forEach(c=>{
+        const row=el('div',{class:`conv ${c.id===selectId?'active':''}`});
+        const title=el('div',{class:'conv-title'},c.title);
+        const menuBtn=el('button',{class:'conv-menu-btn',title:'Options','aria-label':'Conversation options'},'⋯');
+        const menu=el('div',{class:'menu'});
+        const bShare=el('button',{},'Share');
+        const bRename=el('button',{},'Rename');
+        const bArchive=el('button',{},'Archive');
+        const bDelete=el('button',{},'Delete');
+
+        bShare.addEventListener('click',(e)=>{ e.stopPropagation(); menu.classList.remove('open'); openShareModal(c.id); });
+        bRename.addEventListener('click',async (e)=>{
+          e.stopPropagation(); menu.classList.remove('open');
+          const input=el('input',{value:c.title,style:'width:100%; background:#12131a; color:#e7eaf1; border:1px solid #232634; border-radius:6px; padding:6px 8px;'});
+          row.replaceChild(input,title); input.focus();
+          const commit=async ()=>{ const t=(input.value||'New chat').trim(); await api.renameConv(c.id,t); convTitleCache[c.id]=t; pendingAutoTitle.delete(c.id); await loadConversations(c.id); };
+          input.addEventListener('keydown',ke=>{ if(ke.key==='Enter') commit(); if(ke.key==='Escape') loadConversations(c.id); });
+          input.addEventListener('blur',commit);
+        });
+        bArchive.addEventListener('click', async (e)=>{ e.stopPropagation(); menu.classList.remove('open'); await api.archiveConv(c.id,true); if(currentConvId===c.id){ currentConvId=null; clearMessages(); } await loadConversations(); });
+        bDelete.addEventListener('click', async (e)=>{ e.stopPropagation(); menu.classList.remove('open'); if(confirm('Delete this chat?')){ await api.deleteConv(c.id); if(currentConvId===c.id){ currentConvId=null; clearMessages(); } await loadConversations(); } });
+
+        menu.appendChild(bShare); menu.appendChild(bRename); menu.appendChild(bArchive); menu.appendChild(bDelete);
+        menuBtn.addEventListener('click',e=>{ e.stopPropagation(); document.querySelectorAll('.menu.open').forEach(m=>{ if(m!==menu)m.classList.remove('open'); }); menu.classList.toggle('open'); });
+        row.addEventListener('click',async ()=>{ currentConvId=c.id; document.querySelectorAll('.conv').forEach(n=>n.classList.remove('active')); row.classList.add('active'); await showConversation(c.id); });
+
+        row.appendChild(title); row.appendChild(menuBtn); row.appendChild(menu);
+        convListEl.appendChild(row);
+      });
+      document.addEventListener('click', (e)=>{ if(!e.target.closest('.menu') && !e.target.closest('.conv-menu-btn')){ document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open')); } }, {capture:false});
+    }
+    async function showConversation(id){
+      clearMessages();
+      const r = await api.getConvMsgs(id);
+      (r.messages||[]).forEach(m=> renderMessage(m.role==='user'?'user':'assistant', m.content));
+      scrollToBottom();
+    }
+
+    /* Auto-resize + Enter to send */
+    function autoresize(){
+      promptEl.style.height='auto';
+      promptEl.style.height=Math.min(120,promptEl.scrollHeight)+'px';
+      updateComposerPad();
+    }
+    promptEl.addEventListener('input', autoresize);
+    promptEl.addEventListener('keydown', (e)=>{ if(e.key==='Enter' && !e.shiftKey && !e.isComposing){ e.preventDefault(); if(!sendBtn.disabled) composerEl.requestSubmit(); } });
+
+    function shouldAutoTitleFor(convId){
+      if (!convId) return true;
+      if (pendingAutoTitle.has(convId)) return true;
+      const t = (convTitleCache[convId]||'').trim().toLowerCase();
+      return t === 'new chat' || t === 'untitled' || t === '';
+    }
+
+    function renderQuotaMessage(message, link){
+      const safeMsg = message || "You've reached the free limit.";
+      const url = link || "/index.html#pricing";
+      const md = `${safeMsg}\n\n[Upgrade now](${url})`;
+      renderMessage('assistant', md);
+    }
+    function renderVerifyMessage(){
+      renderMessage('assistant','**Please verify your email to continue.**\n\nWe sent a verification link to your inbox. Open that email and click the button, then come back here.');
+    }
+
+    /* Submit text */
+    document.getElementById('composer').addEventListener('submit', async (e)=>{
+      e.preventDefault(); if(readOnly) return;
+      const text=(promptEl.value||'').trim(); if(!text) return;
+
+      // block if unverified
+      try{
+        const me = await api.me();
+        if(me?.status==='ok' && me.user?.email && !me.user?.verified){
+          renderVerifyMessage(); promptEl.value=''; autoresize(); return;
+        }
+      }catch{}
+
+      renderMessage('user', text, now()); scrollToBottom();
+      sendBtn.disabled=true; photoBtn.disabled=true; promptEl.disabled=true; statusEl.textContent='Thinking…';
+      try{
+        const payload={ message:text, gptType:'math' };
+        if(currentConvId) payload.conversationId=currentConvId;
+        const res=await api.chat(payload);
+
+        if(!currentConvId && res.conversationId){
+          currentConvId=res.conversationId;
+          convTitleCache[currentConvId] = 'New chat';
+          pendingAutoTitle.add(currentConvId);
+          await loadConversations(currentConvId);
+        }
+
+        if (shouldAutoTitleFor(currentConvId) && text){
+          const autoTitle=makeTitleFrom(text);
+          try{ await api.renameConv(currentConvId, autoTitle); convTitleCache[currentConvId]=autoTitle; pendingAutoTitle.delete(currentConvId); await loadConversations(currentConvId); }catch{}
+        }
+
+        if(res.__status === 403 && (res.status==='verify_required' || res.message?.toLowerCase().includes('verify'))){
+          renderVerifyMessage();
+        } else if(res.__status === 402){
+          renderQuotaMessage(res.message, res.upgradeLink);
+        } else if (res.__status && res.__status !== 200){
+          renderMessage('assistant', res.message || 'Sorry, something went wrong. Please try again.');
+        } else {
+          renderMessage('assistant', typeof res?.response === 'string' ? res.response : '');
+        }
+        scrollToBottom();
+      }catch{
+        renderMessage('assistant','Sorry, something went wrong. Please try again.'); scrollToBottom();
+      }finally{
+        promptEl.value=''; autoresize();
+        sendBtn.disabled=false; photoBtn.disabled=false; promptEl.disabled=false; promptEl.focus(); statusEl.textContent='';
+      }
+    });
+
+    /* Photo Solve */
+    photoBtn.addEventListener('click',()=> !readOnly && photoFile.click());
+    photoFile.addEventListener('change', async ()=>{
+      if(readOnly) return;
+      const file = photoFile.files && photoFile.files[0]; if(!file) return;
+
+      try{
+        const me = await api.me();
+        if(me?.status==='ok' && me.user?.email && !me.user?.verified){
+          renderVerifyMessage(); photoFile.value=''; return;
+        }
+      }catch{}
+
+      const okTypes=['image/png','image/jpeg','image/jpg','image/webp'];
+      if(!okTypes.includes(file.type)){ alert('Please choose a PNG, JPG, or WEBP image.'); photoFile.value=''; return; }
+      if(file.size>6*1024*1024){ alert('Image is larger than 6MB.'); photoFile.value=''; return; }
+
+      const note = prompt('Optional: add a short note. Leave blank if not needed.') || '';
+      const objUrl=URL.createObjectURL(file);
+      renderImageMessage(note ? `📷 (with note) ${note}` : '📷 Photo uploaded', objUrl); scrollToBottom();
+
+      sendBtn.disabled=true; photoBtn.disabled=true; promptEl.disabled=true; statusEl.textContent='Solving…';
+      try{
+        const fd=new FormData();
+        fd.append('image', file);
+        fd.append('gptType', 'math');
+        if(note) fd.append('attempt', note);
+        if(currentConvId) fd.append('conversationId', currentConvId);
+
+        const wasNew = !currentConvId;
+        const res=await api.photoSolve(fd);
+
+        if(wasNew && res.conversationId){
+          currentConvId=res.conversationId;
+          convTitleCache[currentConvId] = 'New chat';
+          pendingAutoTitle.add(currentConvId);
+          await loadConversations(currentConvId);
+        }
+        if (shouldAutoTitleFor(currentConvId)){
+          const autoTitle=makeTitleFrom(note||'Photo','Photo:');
+          try{ await api.renameConv(currentConvId, autoTitle); convTitleCache[currentConvId]=autoTitle; pendingAutoTitle.delete(currentConvId); await loadConversations(currentConvId); }catch{}
+        }
+
+        if(res.__status === 403 && (res.status==='verify_required' || res.message?.toLowerCase().includes('verify'))){
+          renderVerifyMessage();
+        } else if(res.__status === 402){
+          renderQuotaMessage(res.message, res.upgradeLink);
+        } else if (res.__status && res.__status !== 200){
+          renderMessage('assistant', res.message || 'Photo solve failed. Please try again.');
+        } else {
+          const out = (typeof res?.response === 'string') ? res.response : 'No response text returned.';
+          renderMessage('assistant', out);
+        }
+        scrollToBottom();
+      }catch{
+        renderMessage('assistant','Photo solve failed. Please try another image.'); scrollToBottom();
+      }finally{
+        URL.revokeObjectURL(objUrl); photoFile.value='';
+        sendBtn.disabled=false; photoBtn.disabled=false; promptEl.disabled=false; promptEl.focus(); statusEl.textContent='';
+      }
+    });
+
+    /* New chat */
+    newChatBtn.addEventListener('click', async ()=>{
+      if(readOnly) return;
+      const c=await api.createConv('New chat');
+      currentConvId=c.id;
+      convTitleCache[currentConvId]='New chat';
+      pendingAutoTitle.add(currentConvId);
+      await loadConversations(currentConvId);
+      clearMessages();
+      promptEl.focus();
+    });
+
+    /* User menu */
+    function toggleUserMenu(force){
+      const open = force ?? !userMenu.classList.contains('open');
+      userMenu.classList.toggle('open', open);
+      userCard.setAttribute('aria-expanded', String(open));
+    }
+    userCard.addEventListener('click', ()=> toggleUserMenu());
+    userCard.addEventListener('keydown', (e)=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); toggleUserMenu(); } });
+    document.addEventListener('click', (e)=>{ if(!e.target.closest('#userCard') && !e.target.closest('#userMenu')) toggleUserMenu(false); });
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') toggleUserMenu(false); });
+    umUpgrade.addEventListener('click', ()=>{ location.href='/index.html#pricing'; });
+    umLogout.addEventListener('click', async ()=>{ try{ await api.logout(); }catch{} location.replace('/index.html'); });
+
+    /* Read-only shared links */
+    async function enterReadOnlyView(token){
+      readOnly = true;
+      document.querySelector('.sidebar').style.display='none';
+      composerEl.style.display='none';
+      roBanner.classList.add('show');
+      updateComposerPad();
+      clearMessages();
+      try{
+        const data = await api.getShared(token);
+        if(!data?.messages){ renderMessage('assistant', 'This shared link is invalid or has been revoked.'); return; }
+        document.title = (data.title || 'Shared chat') + ' — GPTs Help';
+        (data.messages||[]).forEach(m=> renderMessage(m.role==='user'?'user':'assistant', m.content));
+        scrollToBottom();
+      }catch{ renderMessage('assistant','Could not load shared conversation.'); }
+    }
+
+    /* Name/initials helpers */
+    function nameFromEmail(email){
+      const local = (email||'').split('@')[0];
+      const pretty = local.replace(/[._-]+/g,' ').trim().split(' ').map(s=>s ? s[0].toUpperCase()+s.slice(1) : '').join(' ');
+      return pretty || email || 'User';
+    }
+    function initialsFrom(s){
+      const base = (s||'').trim();
+      const pick = base.includes('@') ? nameFromEmail(base) : base || 'User';
+      const parts = pick.split(' ').filter(Boolean);
+      const a = (parts[0]||'U')[0] || 'U';
+      const b = (parts[1]||'')[0] || '';
+      const val = (a + b).toUpperCase();
+      return val || 'U';
+    }
+    function planLabelize(plan){
+      const p=(plan||'FREE').toString().toUpperCase();
+      return p[0]+p.slice(1).toLowerCase();
+    }
+    function setUserUI(email, plan){
+      const displayName = email ? nameFromEmail(email) : 'User';
+      const initials = initialsFrom(email || displayName);
+      const label = planLabelize(plan||'FREE');
+      userNameEl.textContent = displayName;
+      userPlanEl.textContent = label;
+      userAvatar.textContent  = initials;
+      umName.textContent   = displayName;
+      umEmail.textContent  = email || '';
+      umAvatar.textContent = initials;
+      umPlanBadge.textContent = label;
+      userCard.title = `${displayName} • ${label}`;
+    }
+
+    /* Auth + live plan refresh */
+    async function guardAuth(){
+      try{
+        const me = await api.me();
+        if (me.status !== 'ok' || !me.user?.email){
+          const emailLS = localStorage.getItem('userEmail');
+          if (!emailLS) { location.replace('/index.html'); return false; }
+          setUserUI(emailLS, 'FREE'); return true;
+        }
+        setUserUI(me.user.email, me.user.plan || 'FREE'); return true;
+      }catch{
+        const emailLS = localStorage.getItem('userEmail');
+        if (!emailLS) { location.replace('/index.html'); return false; }
+        setUserUI(emailLS, 'FREE'); return true;
+      }
+    }
+    async function refreshPlan(){
+      try{
+        const me = await api.me();
+        if (me?.user?.email){
+          const newLabel = planLabelize(me.user.plan||'FREE');
+          if (userPlanEl.textContent !== newLabel){
+            setUserUI(me.user.email, me.user.plan||'FREE');
+          }
+        }
+      }catch{}
+    }
+
+    /* Init */
+    (async function init(){
+      const p=new URLSearchParams(location.search);
+      const shareToken=p.get('share');
+      if(shareToken){ await enterReadOnlyView(shareToken); return; }
+
+      const ok=await guardAuth(); if(!ok) return;
+
+      // Keep plan fresh
+      document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) refreshPlan(); });
+      window.addEventListener('focus', refreshPlan);
+      setInterval(refreshPlan, 15000);
+
+      const fromUrl = p.get('c');
+      await loadConversations(fromUrl?Number(fromUrl):null);
+      if(fromUrl){ currentConvId=Number(fromUrl); await showConversation(currentConvId); }
+
+      (function autoresizeInit(){ const e = document.getElementById('prompt'); e.style.height='auto'; e.style.height=Math.min(120,e.scrollHeight)+'px'; })();
+      updateComposerPad();
+      maybeShowWelcome();
+      document.getElementById('prompt').focus();
+    })();
+  </script>
+</body>
+</html>
+
   </script>
 </body>
 </html>
