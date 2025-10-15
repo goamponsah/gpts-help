@@ -57,7 +57,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-/* ===================== Schema (auto-migrate) ===================== */
+/* ===================== Schema (auto-migrate, legacy-safe) ===================== */
 async function ensureSchema() {
   // Core tables
   await pool.query(`
@@ -126,19 +126,17 @@ async function ensureSchema() {
   if (!haveUsers.has("reset_token"))    await addUsers(`alter table users add column reset_token text`);
   if (!haveUsers.has("reset_expires"))  await addUsers(`alter table users add column reset_expires timestamptz`);
 
-  // Conversations / messages / share links
+  /* ---------- Conversations / Messages / Shares ---------- */
+
+  // Create conversations table if missing (minimal first)
   await pool.query(`
     create table if not exists conversations (
-      id           bigserial primary key,
-      user_email   text not null,
-      title        text not null default 'New chat',
-      archived     boolean not null default false,
-      created_at   timestamptz not null default now(),
-      updated_at   timestamptz not null default now()
+      id bigserial primary key
+      -- other columns normalized below
     );
   `);
 
-  // Rename legacy "email" -> "user_email"
+  // 1) Rename legacy "email" -> "user_email" if needed (BEFORE FKs)
   await pool.query(`
     DO $$
     BEGIN
@@ -154,11 +152,37 @@ async function ensureSchema() {
     END $$;
   `);
 
-  // Add FK if missing
+  // 2) Ensure required columns exist
+  await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS user_email   text;`);
+  await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS title        text not null default 'New chat';`);
+  await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS archived     boolean not null default false;`);
+  await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS created_at   timestamptz not null default now();`);
+  await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS updated_at   timestamptz not null default now();`);
+
+  // 3) If both email & user_email exist (rare), backfill user_email where null
   await pool.query(`
     DO $$
     BEGIN
-      IF NOT EXISTS (
+      IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='conversations' AND column_name='email')
+         AND EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='conversations' AND column_name='user_email')
+      THEN
+        EXECUTE 'UPDATE conversations SET user_email = COALESCE(user_email, email) WHERE user_email IS NULL';
+      END IF;
+    END $$;
+  `);
+
+  // 4) Indexes (idempotent)
+  await pool.query(`create index if not exists idx_conversations_user_email on conversations(user_email);`);
+  await pool.query(`create index if not exists idx_conversations_archived   on conversations(archived);`);
+
+  // 5) Add FK only if column exists and FK missing
+  await pool.query(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name='conversations' AND column_name='user_email'
+      ) AND NOT EXISTS (
         SELECT 1
         FROM information_schema.table_constraints tc
         JOIN information_schema.key_column_usage kcu
@@ -174,10 +198,8 @@ async function ensureSchema() {
     END $$;
   `);
 
+  // Messages table
   await pool.query(`
-    create index if not exists idx_conversations_user_email on conversations(user_email);
-    create index if not exists idx_conversations_archived on conversations(archived);
-
     create table if not exists messages (
       id              bigserial primary key,
       conversation_id bigint not null references conversations(id) on delete cascade,
@@ -185,8 +207,11 @@ async function ensureSchema() {
       content         text not null,
       created_at      timestamptz not null default now()
     );
-    create index if not exists idx_messages_conversation_id on messages(conversation_id);
+  `);
+  await pool.query(`create index if not exists idx_messages_conversation_id on messages(conversation_id);`);
 
+  // Share links table
+  await pool.query(`
     create table if not exists conversation_shares (
       id              bigserial primary key,
       conversation_id bigint not null references conversations(id) on delete cascade,
@@ -534,7 +559,7 @@ app.get("/api/conversations/:id", async (req,res)=>{
 
 /* ===================== Shareable Links ===================== */
 
-// Create a share token (idempotent-ish)
+// Create a share token
 app.post("/api/conversations/:id/share", async (req,res)=>{
   try{
     const s = readSession(req);
@@ -556,7 +581,7 @@ app.post("/api/conversations/:id/share", async (req,res)=>{
   }catch(e){ console.error(e); res.status(500).json({error:"failed"}); }
 });
 
-// Read shared conversation
+// Read shared conversation (public)
 app.get("/api/share/:token", async (req,res)=>{
   try{
     const { token } = req.params;
@@ -693,12 +718,12 @@ app.post("/api/photo-solve", upload.single("image"), async (req,res)=>{
       ? `Solve this math problem step-by-step. Note: ${attempt}`
       : `Solve this math problem step-by-step.`;
 
-    // store a synthetic "user" message describing the photo solve request
+    // store synthetic user message (note that an image was attached)
     await pool.query(`insert into messages(conversation_id, role, content) values($1,'user',$2)`,
       [convId, `${userPrompt}\n\n[Photo attached]`]);
 
     const system = "You are Math GPT. Be precise and show steps. If the image is unclear, state assumptions.";
-    // Call OpenAI with image input (vision via content array)
+    // Vision chat with image_url content
     const r = await fetch("https://api.openai.com/v1/chat/completions",{
       method:"POST",
       headers:{ Authorization:`Bearer ${OPENAI_API_KEY}`, "Content-Type":"application/json" },
@@ -759,15 +784,13 @@ app.post("/api/paystack/verify", async (req,res)=>{
       return res.status(400).json({status:"error", message:"Payment not successful"});
     }
 
-    // If using Plans on Paystack, plan object exists; match against your env codes
+    // If using Plans on Paystack, map plan codes
     const planCode = data.plan || data?.subscription?.plan || data?.authorization?.plan || null;
     let newPlan = null;
     if(planCode){
       if(PLAN_CODE_PLUS_MONTHLY && planCode === PLAN_CODE_PLUS_MONTHLY) newPlan = "PLUS";
       if(PLAN_CODE_PRO_ANNUAL  && planCode === PLAN_CODE_PRO_ANNUAL ) newPlan = "PRO";
     }
-
-    // Fallback: if no plan code returned, you may map by amount/currency if desired.
 
     if(newPlan){
       await pool.query(`update users set plan=$2, updated_at=now() where email=$1`,[s.email,newPlan]);
