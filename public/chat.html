@@ -260,13 +260,11 @@
 
     const convTitleCache = {};
     const pendingAutoTitle = new Set();
-    let menusClickBound = false; // prevent duplicate global listeners
 
     function updatePlaceholder(){
-      const current = gptTypeEl.options[gptTypeEl.selectedIndex]?.text || 'Math GPT';
-      promptEl.placeholder = `Message ${current}…`;
-      promptEl.setAttribute('aria-label', `Message ${current}`);
-      promptEl.setAttribute('title', `Message ${current}`);
+      promptEl.placeholder = `Message Math GPT…`;
+      promptEl.setAttribute('aria-label', `Message Math GPT`);
+      promptEl.setAttribute('title', `Message Math GPT`);
     }
     gptTypeEl.addEventListener('change', updatePlaceholder); updatePlaceholder();
 
@@ -361,24 +359,32 @@
       convTitleCache[id] = title;
       const node = convListEl.querySelector(`.conv[data-id="${id}"] .conv-title`);
       if (node) node.textContent = title;
-      if (currentConvId === id) document.title = `${title} — GPTs Help`;
+      if (currentConvId === id) {
+        document.title = `${title} — GPTs Help`;
+      }
     }
 
+    // ⬇️ Updated: restrict auto-title to brand-new or explicitly pending chats
     function shouldAutoTitleFor(convId){
       if (!convId) return true;
-      if (pendingAutoTitle.has(convId)) return true;
-      const t = (convTitleCache[convId]||'').trim().toLowerCase();
-      return t === 'new chat' || t === 'untitled' || t === '';
+      const t = (convTitleCache[convId] || '').trim().toLowerCase();
+      const isDefault = (t === 'new chat' || t === 'untitled' || t === '');
+      return pendingAutoTitle.has(convId) || isDefault;
     }
 
+    // ⬇️ Updated: once we set it once, we clear the pending flag so future messages don't retitle
     async function maybeAutoTitle(convId, sourceText, prefix = ""){
       if (!convId) return;
       if (!shouldAutoTitleFor(convId)) return;
+
       const autoTitle = makeTitleFrom(sourceText, prefix);
-      if (!autoTitle || autoTitle.toLowerCase() === (convTitleCache[convId]||'').trim().toLowerCase()) return;
+      const current = (convTitleCache[convId] || '').trim();
+      if (!autoTitle || autoTitle.toLowerCase() === current.toLowerCase()) return;
+
       try{
         await api.renameConv(convId, autoTitle);
         setConvTitleLocal(convId, autoTitle);
+        pendingAutoTitle.delete(convId); // 🔑 stop further auto-renames
       }catch(e){
         console.warn('Auto-title rename failed', e);
       }
@@ -407,7 +413,7 @@
             const t=(input.value||'New chat').trim();
             await api.renameConv(c.id,t);
             setConvTitleLocal(c.id, t);
-            pendingAutoTitle.delete(c.id);
+            pendingAutoTitle.delete(c.id); // manual rename disables future auto-title
             await loadConversations(c.id);
           };
           input.addEventListener('keydown',ke=>{ if(ke.key==='Enter') commit(); if(ke.key==='Escape') loadConversations(c.id); });
@@ -423,16 +429,7 @@
         row.appendChild(title); row.appendChild(menuBtn); row.appendChild(menu);
         convListEl.appendChild(row);
       });
-
-      // bind global outside-click ONCE
-      if (!menusClickBound) {
-        document.addEventListener('click', (e)=>{
-          if(!e.target.closest('.menu') && !e.target.closest('.conv-menu-btn')){
-            document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open'));
-          }
-        }, {capture:false});
-        menusClickBound = true;
-      }
+      document.addEventListener('click', (e)=>{ if(!e.target.closest('.menu') && !e.target.closest('.conv-menu-btn')){ document.querySelectorAll('.menu.open').forEach(m=>m.classList.remove('open')); } }, {capture:false});
     }
 
     async function showConversation(id){
@@ -477,7 +474,7 @@
       renderMessage('user', text, now()); scrollToBottom();
       sendBtn.disabled=true; photoBtn.disabled=true; promptEl.disabled=true; statusEl.textContent='Thinking…';
       try{
-        const payload={ message:text, gptType: gptTypeEl.value || 'math' };
+        const payload={ message:text, gptType:'math' };
         if(currentConvId) payload.conversationId=currentConvId;
         const res=await api.chat(payload);
 
@@ -488,7 +485,7 @@
           await loadConversations(currentConvId);
         }
 
-        // immediate auto-title update
+        // ✅ immediate auto-title for the very first message only
         await maybeAutoTitle(currentConvId, text);
 
         if(res.__status === 403 && (res.status==='verify_required' || res.message?.toLowerCase().includes('verify'))){
@@ -534,7 +531,7 @@
       try{
         const fd=new FormData();
         fd.append('image', file);
-        fd.append('gptType', gptTypeEl.value || 'math');
+        fd.append('gptType', 'math');
         if(note) fd.append('attempt', note);
         if(currentConvId) fd.append('conversationId', currentConvId);
 
@@ -548,7 +545,7 @@
           await loadConversations(currentConvId);
         }
 
-        // auto-title for photos
+        // ✅ auto-title once for photos
         await maybeAutoTitle(currentConvId, note || 'Photo', 'Photo:');
 
         if(res.__status === 403 && (res.status==='verify_required' || res.message?.toLowerCase().includes('verify'))){
