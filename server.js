@@ -446,6 +446,7 @@ app.post("/api/resend-verify", async (req,res)=>{
 });
 
 // forgot password
+// forgot password
 app.post("/api/forgot-password", async (req,res)=>{
   try{
     const { email } = req.body || {};
@@ -454,9 +455,10 @@ app.post("/api/forgot-password", async (req,res)=>{
     // Don't leak user existence
     if(u){
       const token = crypto.randomBytes(24).toString("hex");
-      const until = new Date(Date.now() + 2*3600e3);
+      const until = new Date(Date.now() + 2*3600e3); // 2 hours
       await pool.query(`update users set reset_token=$2, reset_expires=$3 where email=$1`,[email,token,until]);
-      const link = `${req.headers.origin || FRONTEND_ORIGIN || ''}/reset.html?token=${token}`;
+      // NOTE: point to reset-password.html and use ?t=
+      const link = `${req.headers.origin || FRONTEND_ORIGIN || ''}/reset-password.html?t=${encodeURIComponent(token)}`;
       await resendSend({to:email,subject:"Reset your GPTs Help password",html:resetEmailHtml(link)});
     }
     res.json({ status:"ok" });
