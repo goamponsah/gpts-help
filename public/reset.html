@@ -41,7 +41,7 @@
       <div class="ok hidden" id="reqOk"></div>
     </div>
 
-    <!-- Step 2: Set new password -->
+    <!-- Step 2: Set new password (shown automatically when link contains a token) -->
     <div id="stepReset" class="hidden">
       <p class="muted" id="tokenInfo"></p>
       <label for="pw1">New password</label>
@@ -72,7 +72,8 @@
     }
 
     const qs = new URLSearchParams(location.search);
-    const token = qs.get('t');
+    // Accept either ?t=... or ?token=...
+    const token = qs.get('t') || qs.get('token');
 
     const stepRequest = document.getElementById('stepRequest');
     const stepReset = document.getElementById('stepReset');
@@ -80,13 +81,15 @@
     const reqBtn = document.getElementById('reqBtn');
     const setBtn = document.getElementById('setBtn');
 
-    // If a token is present, show reset form
+    // If a token is present, skip email step and show reset form only
     if (token) {
       stepRequest.classList.add('hidden');
       stepReset.classList.remove('hidden');
       tokenInfo.textContent = 'Reset link detected. Create a new password below.';
+      // Focus into the new password field for a smoother UX
+      setTimeout(()=> document.getElementById('pw1').focus(), 50);
 
-      // Validate token (non-blocking) — server should return {valid: true|false}
+      // Optional non-blocking token validation
       fetch('/api/reset/validate?token=' + encodeURIComponent(token), {credentials:'include'})
         .then(r => r.ok ? r.json() : {valid:false})
         .then(j => {
@@ -95,10 +98,10 @@
             setBtn.disabled = true;
           }
         })
-        .catch(()=>{ /* ignore network hiccup, user can try submit */ });
+        .catch(()=>{}); // ignore network hiccups here
     }
 
-    // --- Step 1: Request reset link ---
+    // --- Step 1: Request reset link (only when no token in URL) ---
     reqBtn.addEventListener('click', requestReset);
     document.getElementById('email').addEventListener('keydown', (e)=>{
       if(e.key === 'Enter'){ e.preventDefault(); requestReset(); }
@@ -124,8 +127,6 @@
         const j = await r.json().catch(()=>({}));
         ok.classList.remove('hidden');
         ok.textContent = 'If an account exists for ' + email + ', a reset link has been created. Check your email.';
-
-        // Optional dev shortcut if the server returns a direct link (no email provider)
         if (j && j.devLink) {
           const a = document.createElement('a'); a.href = j.devLink; a.textContent = 'Open your reset link';
           a.style.display='inline-block'; a.style.marginTop='.5rem';
@@ -138,7 +139,7 @@
       }
     }
 
-    // --- Step 2: Confirm new password ---
+    // --- Step 2: Confirm new password (token path) ---
     setBtn.addEventListener('click', confirmReset);
     document.getElementById('pw2').addEventListener('keydown', (e)=>{
       if(e.key === 'Enter'){ e.preventDefault(); confirmReset(); }
@@ -168,7 +169,6 @@
         if (j && (j.status === 'ok' || j.success === true)) {
           ok.classList.remove('hidden');
           ok.textContent = 'Password updated. You are now signed in.';
-          // small pause, then go to chat
           setTimeout(()=> location.href='/chat.html', 900);
         } else {
           err.textContent = (j && (j.message || j.error)) || 'Could not reset password.';
