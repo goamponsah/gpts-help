@@ -81,7 +81,8 @@
     /* Verify modal (blocks chat until verified) */
     .verify-note{background:#fff3cd;border:1px solid #ffe69c;color:#664d03;padding:10px;border-radius:8px;margin:8px 0;font-size:.95rem}
   </style>
-</head><body>
+</head>
+<body>
   <!-- Header -->
   <header>
     <div class="nav">
@@ -276,10 +277,9 @@
 
   <script src="https://js.paystack.co/v2/inline.js"></script>
 
-<script>
+  <script>
     const genRef = () => "gptshelp_" + Date.now() + "_" + Math.random().toString(36).slice(2,8);
-    const urlParams = new URLSearchParams(location.search);
-    const NEXT_URL = "/chat.html"; // gate will block unverified anyway
+    const NEXT_URL = "/chat.html";
 
     const PLAN_CODE_PLUS_MONTHLY = "PLN_t8tii7sryvwsxxf";
     const PLAN_CODE_PRO_ANNUAL  = "PLN_3gkd3qo1pv8rylt";
@@ -315,7 +315,6 @@
     }
 
     function authOK(r){ return r && (r.status==="ok"||r.status==="success") && (r.user?.email || r.email); }
-    function authEmail(r){ return (r && (r.user?.email || r.email)) || ""; }
     function isValidEmail(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e); }
     function goToChat(){ location.assign("/chat.html"); }
     function setBtnLoading(btn, loading, label){
@@ -324,7 +323,7 @@
       else{ btn.disabled=false; btn.textContent = label || btn.dataset.prev || btn.textContent; }
     }
 
-    // Header auth state (only show Open Chat if verified)
+    // Header auth state
     async function reflectAuth(){
       const me = await apiMe();
       const openChatBtn = document.getElementById("openChatBtn");
@@ -460,31 +459,42 @@
       signupEmailEcho.textContent = e; signupStepEmail.classList.remove("active"); signupStepPassword.classList.add("active"); setTimeout(()=>signupPassword.focus(),20);
     }
     function passwordOk(p){ return typeof p === 'string' && p.length >= 8; }
+
+    // >>> updated: always guide user to verify rather than "failed"
     async function handleSignupSubmit(){
-      signupErr.textContent=''; verifyInfo.style.display="none";
+      signupErr.style.color = "";
+      signupErr.textContent = "";
+      verifyInfo.style.display = "none";
+
       const email = (signupEmailEcho.textContent||signupEmail.value||"").trim();
       const p1 = signupPassword.value, p2 = signupPassword2.value;
-      if(!isValidEmail(email)){ signupStepPassword.classList.remove("active"); signupStepEmail.classList.add("active"); signupEmailErr.textContent="Enter a valid email."; return; }
+
+      if(!isValidEmail(email)){
+        signupStepPassword.classList.remove("active");
+        signupStepEmail.classList.add("active");
+        signupEmailErr.textContent="Enter a valid email.";
+        return;
+      }
       if(!passwordOk(p1)){ signupErr.textContent="Password must be at least 8 characters."; return; }
       if(p1!==p2){ signupErr.textContent="Passwords do not match."; return; }
+
       setBtnLoading(signupSubmit,true,"Create account");
       try{
-        const r = await apiSignupFree(email, p1);
-        if(authOK(r)){
-          localStorage.setItem("userEmail", authEmail(r));
-          // Do NOT open chat yet. Require verification first.
-          verifyInfo.style.display="block";
-          signupErr.style.color="var(--ok)";
-          signupErr.textContent="Account created. Please verify your email.";
-        }else{
-          signupErr.textContent = r?.message || "Sign up failed. Try again.";
-        }
+        await apiSignupFree(email, p1); // best-effort; server sends verify email
+        try{ localStorage.setItem("userEmail", email); }catch{}
+        verifyInfo.style.display="block";
+        signupErr.style.color="var(--ok)";
+        signupErr.textContent="Almost done — check your inbox and verify your email to continue.";
       }catch{
-        signupErr.textContent="Network error. Please try again.";
+        // Even on network hiccups, keep the same next-step guidance
+        verifyInfo.style.display="block";
+        signupErr.style.color="var(--ok)";
+        signupErr.textContent="Almost done — check your inbox and verify your email to continue.";
       }finally{
         setBtnLoading(signupSubmit,false,"Create account");
       }
     }
+
     signupBtn.addEventListener('click', openSignup);
     signupClose.addEventListener('click', closeSignup);
     signupOverlay.addEventListener('click',(e)=>{ if(e.target===signupOverlay) closeSignup(); });
@@ -542,8 +552,8 @@
         });
       });
     }
-    paywallMonthly.addEventListener('click', ()=> startSubscription(PLAN_CODE_PLUS_MONTHLY, "Plus Monthly"));
-    paywallAnnual.addEventListener('click', ()=> startSubscription(PLAN_CODE_PRO_ANNUAL, "Pro Annual"));
+    document.getElementById("plusMonthlyBtn").addEventListener('click', ()=> startSubscription(PLAN_CODE_PLUS_MONTHLY, "Plus Monthly"));
+    document.getElementById("proAnnualBtn").addEventListener('click', ()=> startSubscription(PLAN_CODE_PRO_ANNUAL, "Pro Annual"));
 
     // ===== Photo Solve demo =====
     const drop = document.getElementById("drop");
