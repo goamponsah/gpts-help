@@ -73,7 +73,6 @@
     .bubble code{background:#0b0d12;padding:2px 6px;border-radius:6px;border:1px solid var(--border)}
     .bubble pre{background:#0b0d12;padding:10px;border-radius:10px;border:1px solid var(--border);overflow:auto}
 
-    /* Composer */
     .composer{position:fixed;left:var(--sidebar-w);right:0;bottom:0;z-index:30;border-top:1px solid var(--border);background:linear-gradient(#0e0f13,#0f1117);padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px))}
     @media (max-width:900px){ .composer{ left:0 } }
     .row{max-width:900px;margin:0 auto;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
@@ -82,14 +81,12 @@
     .meta-row{display:flex;gap:8px;align-items:center;color:var(--muted);font-size:11px;margin:2px 2px 4px 6px}
     select{background:#0f1117;color:var(--text);border:1px solid var(--border);border-radius:8px;padding:4px 6px;font-size:11px}
     textarea{width:100%;resize:none;min-height:24px;max-height:120px;background:transparent;color:var(--text);outline:none;border:0;font:inherit;line-height:1.45;padding:0 4px 2px 6px}
-    .controls{display:inline-flex;gap:6px;align-items:center}
+    .controls{display:inline-flex;gap:6px}
     .icon-btn{width:36px;height:36px;display:inline-flex;align-items:center;justify-content:center;border-radius:9999px;border:1px solid var(--border);background:#141722;color:#dfe3ec;cursor:pointer;font-size:16px;line-height:1}
     .icon-btn.primary{background:var(--brand);color:#fff;border-color:transparent}
     .send-mobile{background:var(--cta);color:#04110a;border-color:transparent}
     .icon-btn:disabled{opacity:.6;cursor:not-allowed}
-    .note{width:180px;max-width:40vw;background:#0f1117;border:1px solid var(--border);border-radius:9999px;color:var(--text);padding:8px 10px;font-size:12px}
 
-    /* Welcome on small screens */
     .welcome{display:none;place-items:center;text-align:center;padding:40px 16px 120px}
     .welcome h1{font-size:32px;margin:12px 0 18px}
     .quick{display:grid;gap:12px;grid-template-columns:1fr 1fr;max-width:560px;margin:0 auto}
@@ -100,11 +97,11 @@
 
     .overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000}
     .overlay.open{display:flex}
-    .modal{width:min(560px,92vw);background:#0f1117;border:1px solid var(--border);border-radius:16px;padding:18px;box-shadow:0 18px 40px rgba(0,0,0,.45)}
+    .modal{width:min(560px,92vw);background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:18px;box-shadow:0 18px 40px rgba(0,0,0,.45)}
     .modal-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
     .modal-title{font-weight:600}
     .modal-sub{color:var(--muted);font-size:13px;margin-bottom:12px}
-    .modal-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;background:var(--menu-bg)}
+    .modal-row{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;background:var(--pill)}
     .modal input[type="text"]{width:100%;padding:12px 14px;border:1px solid var(--border);border-radius:9999px;background:#0e0f13;color:#e7eaf1;font-size:14px}
     .btn{border:1px solid var(--border);background:#141722;color:#e7eaf1;border-radius:9999px;padding:10px 14px;cursor:pointer;font-size:14px}
     .btn.primary{background:var(--brand);color:#fff;border-color:transparent}
@@ -112,14 +109,26 @@
     .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);padding:10px 14px;font-size:13px;background:#141722;color:#e7eaf1;border:1px solid var(--border);border-radius:9999px;display:none;z-index:1100}
     .toast.show{display:block}
 
-    /* Bubble + toolbar stacked */
-    .msg{display:flex !important; flex-direction:column !important; align-items:flex-start !important;}
-    .bubble-block{display:inline-flex;flex-direction:column;align-items:flex-start;max-width:68ch;}
-    .actions{margin:8px 0 0 0 !important;padding:2px 4px;display:flex;gap:8px;align-items:center;opacity:.95}
-    .action-btn{background:transparent;border:1px solid var(--border);color:#cfd5e6;border-radius:8px;padding:6px 8px;font-size:12px;cursor:pointer}
-    .action-btn:hover{background:#171a25}
-    .action-sep{display:inline-block;width:1px;height:18px;background:#2a2e40;opacity:.6}
-    .action-emoji{opacity:.9;margin-right:6px}
+    /* ===== Message action bar (below assistant replies) ===== */
+    .msg-actions{
+      margin-top:8px;
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .msg-actions .act{
+      background:transparent;
+      color:inherit;
+      border:1px solid var(--border);
+      border-radius:8px;
+      padding:6px 8px;
+      font-size:12px;
+      cursor:pointer;
+    }
+    .msg-actions .sep{
+      width:1px;height:18px;background:rgba(255,255,255,.12);
+    }
   </style>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
@@ -193,7 +202,6 @@
         </div>
       </div>
       <div class="controls">
-        <input id="photoNote" class="note" placeholder="Note (optional)" title="Optional note for photo"/>
         <button class="icon-btn" id="photoBtn" type="button" title="Photo Solve" aria-label="Photo Solve">📷</button>
         <button class="icon-btn primary send-mobile" id="sendBtn" type="submit" title="Send" aria-label="Send">➤</button>
         <input type="file" id="photoFile" accept="image/png,image/jpeg,image/jpg,image/webp" hidden />
@@ -217,7 +225,6 @@
   </div>
 
   <div class="toast" id="toast">Link copied to clipboard</div>
-
   <script>
     function setVh(){ const vh = window.innerHeight * 0.01; document.documentElement.style.setProperty('--vh', `${vh*100}px`); }
     setVh(); window.addEventListener('resize', setVh);
@@ -244,7 +251,6 @@
     const sendBtn = document.getElementById('sendBtn');
     const photoBtn = document.getElementById('photoBtn');
     const photoFile = document.getElementById('photoFile');
-    const photoNote = document.getElementById('photoNote');
     const gptTypeEl = document.getElementById('gptType');
     const statusEl = document.getElementById('status');
     const newChatBtn = document.getElementById('newChatBtn');
@@ -274,7 +280,7 @@
     let readOnly = false;
 
     const convTitleCache = {};
-    const pendingAutoTitle = new Set();
+    const pendingAutoTitle = new Set(); // only title once per new conversation
 
     function updatePlaceholder(){
       promptEl.placeholder = `Message Math GPT…`;
@@ -312,109 +318,80 @@
       return prefix?`${prefix} ${t}`:t;
     }
 
-    /* ====== RENDER MESSAGE (bubble + actions) ====== */
-    let _msgAutoId = 1;
+    // ====== TTS controller (Speak/Pause/Resume per reply; single active) ======
+    const tts = { utter:null, bubble:null, btn:null };
+    function ttsReset(){ if(tts.btn) tts.btn.innerHTML='🔊 Speak'; tts.utter=null; tts.bubble=null; tts.btn=null; }
+    function toggleSpeakFor(bubble, btn){
+      const text = bubble?.innerText || bubble?.textContent || '';
+      if(!text) return;
 
-    // TTS state (so we can pause/resume/cancel cleanly)
-    const tts = { utter:null, bubble:null };
-
-    function speakToggleForBubble(bubble, btn){
-      try{
-        const text = bubble?.innerText || bubble?.textContent || '';
-        if(!text) return;
-
-        // If already speaking this bubble
-        if (tts.utter && tts.bubble === bubble) {
-          if (speechSynthesis.paused) {
-            speechSynthesis.resume();
-            if (btn) btn.innerHTML = '<span class="action-emoji">⏸</span>Pause';
-            return;
-          }
-          if (speechSynthesis.speaking) {
-            speechSynthesis.pause();
-            if (btn) btn.innerHTML = '<span class="action-emoji">🔊</span>Resume';
-            return;
-          }
+      if(tts.utter && tts.bubble === bubble){
+        if(speechSynthesis.paused){
+          speechSynthesis.resume(); btn.innerHTML='⏸ Pause';
+        }else if(speechSynthesis.speaking){
+          speechSynthesis.pause(); btn.innerHTML='🔊 Resume';
+        }else{
+          speechSynthesis.cancel(); ttsReset(); toggleSpeakFor(bubble, btn);
         }
-
-        // Start fresh (cancel any previous)
-        if (speechSynthesis.speaking || speechSynthesis.paused) speechSynthesis.cancel();
-
-        const u = new SpeechSynthesisUtterance(text);
-        tts.utter = u; tts.bubble = bubble;
-
-        if (btn) btn.innerHTML = '<span class="action-emoji">⏸</span>Pause';
-        u.onend = ()=>{ if(btn) btn.innerHTML = '<span class="action-emoji">🔊</span>Speak'; tts.utter=null; tts.bubble=null; };
-        u.onerror = ()=>{ if(btn) btn.innerHTML = '<span class="action-emoji">🔊</span>Speak'; tts.utter=null; tts.bubble=null; };
-
-        speechSynthesis.speak(u);
-      }catch{}
+        return;
+      }
+      if(speechSynthesis.speaking || speechSynthesis.paused){
+        speechSynthesis.cancel(); ttsReset();
+      }
+      const u = new SpeechSynthesisUtterance(text);
+      tts.utter=u; tts.bubble=bubble; tts.btn=btn;
+      btn.innerHTML='⏸ Pause';
+      u.onend=ttsReset; u.onerror=ttsReset;
+      speechSynthesis.speak(u);
     }
 
     function renderMessage(role, text, when=''){
       hideWelcome();
-
-      const row = document.createElement('div');
-      row.className = `msg ${role}`;
-
-      const block = document.createElement('div');
-      block.className = 'bubble-block';
-
-      const bubble = document.createElement('div');
-      bubble.className = 'bubble';
-      const id = 'm' + (_msgAutoId++);
-      bubble.dataset.msgId = id;
-
-      if(when){
-        const small=document.createElement('small'); small.className='meta'; small.textContent=when; bubble.appendChild(small);
-      }
+      const row=document.createElement('div'); row.className=`msg ${role}`;
+      const bubble=document.createElement('div'); bubble.className='bubble';
+      if(when){ const small=document.createElement('small'); small.className='meta'; small.textContent=when; bubble.appendChild(small); }
       if(role==='assistant'){
         const html=DOMPurify.sanitize(marked.parse(text||'',{breaks:true}));
         const wrapper=document.createElement('div'); wrapper.innerHTML=html; bubble.appendChild(wrapper);
-      } else {
-        bubble.appendChild(document.createTextNode(text||''));
-      }
+      } else { bubble.appendChild(document.createTextNode(text||'')); }
+      row.appendChild(bubble);
 
-      block.appendChild(bubble);
-
+      // === Action bar (assistant only): Copy | Speak | Share ===
       if(role==='assistant'){
-        const bar = document.createElement('div');
-        bar.className = 'actions';
-        bar.innerHTML = `
-          <button class="action-btn" data-act="copy"><span class="action-emoji">📋</span>Copy</button>
-          <span class="action-sep"></span>
-          <button class="action-btn" data-act="speak"><span class="action-emoji">🔊</span>Speak</button>
-          <span class="action-sep"></span>
-          <button class="action-btn" data-act="share"><span class="action-emoji">🔗</span>Share</button>
+        const actions = document.createElement('div');
+        actions.className = 'msg-actions';
+        actions.innerHTML = `
+          <button class="act" data-act="copy">📋 Copy</button>
+          <span class="sep"></span>
+          <button class="act" data-act="speak">🔊 Speak</button>
+          <span class="sep"></span>
+          <button class="act" data-act="share">🔗 Share</button>
         `;
-        bar.addEventListener('click', (e)=>{
-          const btn = e.target.closest('button'); if(!btn) return;
+        row.appendChild(actions);
+        actions.addEventListener('click', async (e)=>{
+          const btn = e.target.closest('button.act'); if(!btn) return;
           const act = btn.dataset.act;
-          const txt = bubble.innerText || bubble.textContent || '';
           if(act==='copy'){
-            navigator.clipboard.writeText(txt).then(()=>showToast('Copied'));
+            const txt = bubble.innerText || bubble.textContent || '';
+            try{ await navigator.clipboard.writeText(txt); showToast('Copied'); }catch{}
           }else if(act==='speak'){
-            speakToggleForBubble(bubble, btn);
+            toggleSpeakFor(bubble, btn);
           }else if(act==='share'){
             openShareModal(currentConvId);
           }
         });
-        block.appendChild(bar);
       }
 
-      row.appendChild(block);
       messagesEl.appendChild(row);
     }
-
     function renderImageMessage(caption,url){
       hideWelcome();
       const row=document.createElement('div'); row.className='msg user';
-      const block = document.createElement('div'); block.className='bubble-block';
       const bubble=document.createElement('div'); bubble.className='bubble';
       const small=document.createElement('small'); small.className='meta'; small.textContent='';
       bubble.appendChild(small); bubble.appendChild(document.createTextNode(caption||'📷 Photo uploaded'));
       if(url){ const img=document.createElement('img'); img.className='thumb'; img.src=url; img.alt='uploaded image'; bubble.appendChild(img); }
-      block.appendChild(bubble); row.appendChild(block); messagesEl.appendChild(row);
+      row.appendChild(bubble); messagesEl.appendChild(row);
     }
     function clearMessages(){ messagesEl.innerHTML=''; maybeShowWelcome(); }
     function scrollToBottom(){ messagesEl.scrollTop = messagesEl.scrollHeight; }
@@ -453,30 +430,37 @@
       }catch{ showToast('Copy failed. Select and copy manually.'); }
     });
 
-    const convTitleCache = {};
-    const pendingAutoTitle = new Set();
-
+    /* ---- LOCAL TITLE UPDATE HELPERS ---- */
     function setConvTitleLocal(id, title){
       convTitleCache[id] = title;
       const node = convListEl.querySelector(`.conv[data-id="${id}"] .conv-title`);
       if (node) node.textContent = title;
-      if (currentConvId === id) { document.title = `${title} — GPTs Help`; }
+      if (currentConvId === id) {
+        document.title = `${title} — GPTs Help`;
+      }
     }
+
     function shouldAutoTitleFor(convId){
       if (!convId) return true;
       if (pendingAutoTitle.has(convId)) return true;
       const t = (convTitleCache[convId]||'').trim().toLowerCase();
       return t === 'new chat' || t === 'untitled' || t === '';
     }
+
     async function maybeAutoTitle(convId, sourceText, prefix = ""){
       if (!convId) return;
       if (!shouldAutoTitleFor(convId)) return;
       const autoTitle = makeTitleFrom(sourceText, prefix);
-      if (!autoTitle || autoTitle.toLowerCase() === (convTitleCache[convId]||'').trim().toLowerCase()) return;
+      if (!autoTitle || autoTitle.toLowerCase() === (convTitleCache[convId]||'').trim().toLowerCase()) {
+        return;
+      }
       try{
         await api.renameConv(convId, autoTitle);
         setConvTitleLocal(convId, autoTitle);
-      }catch(e){ console.warn('Auto-title rename failed', e); }
+        pendingAutoTitle.delete(convId); // only once
+      }catch(e){
+        console.warn('Auto-title rename failed', e);
+      }
     }
 
     async function loadConversations(selectId=null){
@@ -552,6 +536,7 @@
       e.preventDefault(); if(readOnly) return;
       const text=(promptEl.value||'').trim(); if(!text) return;
 
+      // block if unverified
       try{
         const me = await api.me();
         if(me?.status==='ok' && me.user?.email && !me.user?.verified){
@@ -573,7 +558,8 @@
           await loadConversations(currentConvId);
         }
 
-        await maybeAutoTitle(currentConvId, text);
+        // 🚫 do NOT auto-title from the user prompt
+        // ✅ auto-title from the first assistant reply only (below)
 
         if(res.__status === 403 && (res.status==='verify_required' || res.message?.toLowerCase().includes('verify'))){
           renderVerifyMessage();
@@ -583,6 +569,8 @@
           renderMessage('assistant', res.message || 'Sorry, something went wrong. Please try again.');
         } else {
           renderMessage('assistant', typeof res?.response === 'string' ? res.response : '');
+          // ✅ auto-title once based on the assistant’s first reply
+          await maybeAutoTitle(currentConvId, res?.response || '');
         }
         scrollToBottom();
       }catch{
@@ -610,16 +598,15 @@
       if(!okTypes.includes(file.type)){ alert('Please choose a PNG, JPG, or WEBP image.'); photoFile.value=''; return; }
       if(file.size>6*1024*1024){ alert('Image is larger than 6MB.'); photoFile.value=''; return; }
 
-      const note = (photoNote.value||'').trim();
+      // 🔕 No popup: just show the photo message
       const objUrl=URL.createObjectURL(file);
-      renderImageMessage(note ? `📷 (note) ${note}` : '📷 Photo uploaded', objUrl); scrollToBottom();
+      renderImageMessage('📷 Photo uploaded', objUrl); scrollToBottom();
 
       sendBtn.disabled=true; photoBtn.disabled=true; promptEl.disabled=true; statusEl.textContent='Solving…';
       try{
         const fd=new FormData();
         fd.append('image', file);
         fd.append('gptType', 'math');
-        if(note) fd.append('attempt', note);
         if(currentConvId) fd.append('conversationId', currentConvId);
 
         const wasNew = !currentConvId;
@@ -632,8 +619,6 @@
           await loadConversations(currentConvId);
         }
 
-        await maybeAutoTitle(currentConvId, note || 'Photo', 'Photo:');
-
         if(res.__status === 403 && (res.status==='verify_required' || res.message?.toLowerCase().includes('verify'))){
           renderVerifyMessage();
         } else if(res.__status === 402){
@@ -643,6 +628,7 @@
         } else {
           const out = (typeof res?.response === 'string') ? res.response : 'No response text returned.';
           renderMessage('assistant', out);
+          await maybeAutoTitle(currentConvId, 'Photo: ' + out); // one-time title from assistant’s reply
         }
         scrollToBottom();
       }catch{
@@ -746,7 +732,7 @@
       try{
         const me = await api.me();
         if (me?.user?.email){
-          const newLabel = planLabelize(me.user.plan||'FREE');
+          const newLabel = ((me.user.plan||'FREE')[0] + (me.user.plan||'FREE').slice(1).toLowerCase());
           if (userPlanEl.textContent !== newLabel){
             setUserUI(me.user.email, me.user.plan||'FREE');
           }
