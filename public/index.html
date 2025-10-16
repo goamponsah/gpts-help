@@ -159,9 +159,8 @@
     <div class="nav" role="navigation" aria-label="Primary">
       <div class="brand">GPTs Help</div>
       <div class="nav-right">
-        <!-- ✅ NEW: Home tab -->
-        <a class="btn-nav" href="/" aria-label="Home">Home</a>
-        <!-- Existing tabs (unchanged) -->
+        <!-- ✅ Home tab points explicitly to the root index so it works from any page -->
+        <a class="btn-nav" href="/index.html" aria-label="Home">Home</a>
         <a class="btn-nav" href="/overview/" aria-label="Overview">Overview</a>
         <a class="btn-nav" href="/pricing/" aria-label="Pricing">Pricing</a>
         <a class="btn-nav" href="/download/" aria-label="Download">Download</a>
@@ -465,7 +464,7 @@
       loginEmailEcho.textContent=e; loginStepEmail.classList.remove("active"); loginStepPassword.classList.add("active"); setTimeout(()=>loginPassword.focus(),20);
     }
     async function handleLoginSubmit(){
-      const email = (loginEmailEcho.textContent||loginEmail.value||"").trim();
+      const email = (loginEmailEcho.textcontent||loginEmail.value||"").trim();
       const pw = loginPassword.value;
       if(!isValidEmail(email)){ loginStepPassword.classList.remove("active"); loginStepEmail.classList.add("active"); loginEmailErr.textContent="Enter a valid email."; return; }
       if(!pw){ loginErr.textContent="Enter your password."; return; }
