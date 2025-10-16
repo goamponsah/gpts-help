@@ -30,6 +30,8 @@ const {
   // Paystack
   PAYSTACK_PUBLIC_KEY,
   PAYSTACK_SECRET_KEY,
+  PAYSTACK_CALLBACK_URL,      // <-- added (already set in Railway)
+  PAYSTACK_CURRENCY,          // optional, e.g. "GHS" or "NGN"
   PLAN_CODE_PLUS_MONTHLY,
   PLAN_CODE_PRO_ANNUAL,
 } = process.env;
@@ -862,6 +864,84 @@ app.post("/api/feedback", async (req,res)=>{
 
 /* ===================== Paystack ===================== */
 
+// 1) Initialize a hosted checkout for a plan
+app.post("/api/paystack/init", async (req, res) => {
+  try {
+    const s = readSession(req);
+    if (!s?.email) return res.status(401).json({ status: "error", message: "Not signed in" });
+
+    // Accept either a raw planCode, or a label "PLUS" / "PRO"
+    const { plan, planCode } = req.body || {};
+    let code = planCode || null;
+    if (!code && plan) {
+      const p = String(plan).toUpperCase();
+      if (p === "PLUS") code = PLAN_CODE_PLUS_MONTHLY;
+      if (p === "PRO")  code = PLAN_CODE_PRO_ANNUAL;
+    }
+    if (!code) return res.status(400).json({ status: "error", message: "Missing plan" });
+
+    const callbackUrl =
+      PAYSTACK_CALLBACK_URL ||
+      `${req.protocol}://${req.get("host")}/paystack/callback`;
+
+    const initRes = await fetch("https://api.paystack.co/transaction/initialize", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email: s.email,
+        plan: code,               // Adds/charges customer for the plan
+        callback_url: callbackUrl,
+        currency: PAYSTACK_CURRENCY || undefined, // optional
+      }),
+    });
+    const j = await initRes.json();
+    if (!initRes.ok || j.status !== true) {
+      return res.status(400).json({ status: "error", message: j?.message || "Init failed" });
+    }
+    // Return the hosted checkout URL
+    res.json({
+      status: "ok",
+      authorization_url: j.data.authorization_url,
+      reference: j.data.reference,
+      access_code: j.data.access_code,
+    });
+  } catch (e) {
+    console.error("paystack init error", e);
+    res.status(500).json({ status: "error", message: "Initialization error" });
+  }
+});
+
+// 2) Paystack callback (user returns here after payment)
+app.get("/paystack/callback", async (req, res) => {
+  try {
+    const reference = (req.query.reference || req.query.trxref || "").toString();
+    if (!reference) return res.status(400).send("Missing reference");
+
+    // Reuse existing verification logic via internal call
+    const verifyRes = await fetch(`${req.protocol}://${req.get("host")}/api/paystack/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie: req.headers.cookie || "" },
+      body: JSON.stringify({ reference }),
+    });
+
+    if (verifyRes.ok) {
+      return res.redirect("/chat.html");
+    } else {
+      const j = await verifyRes.json().catch(() => ({}));
+      return res
+        .status(400)
+        .send(j?.message || "We could not verify your payment. If you were charged, please contact support.");
+    }
+  } catch (e) {
+    console.error("paystack callback error", e);
+    res.status(500).send("Callback error");
+  }
+});
+
+// 3) Verify endpoint (used by callback and by inline flow if you keep it)
 app.post("/api/paystack/verify", async (req,res)=>{
   try{
     const s = readSession(req);
