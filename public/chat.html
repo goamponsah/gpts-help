@@ -112,7 +112,7 @@
     .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);padding:10px 14px;font-size:13px;background:#141722;color:#e7eaf1;border:1px solid var(--border);border-radius:9999px;display:none;z-index:1100}
     .toast.show{display:block}
 
-    /* ========= New: keep bubble + toolbar stacked ========= */
+    /* Bubble + toolbar stacked */
     .msg{display:flex !important; flex-direction:column !important; align-items:flex-start !important;}
     .bubble-block{display:inline-flex;flex-direction:column;align-items:flex-start;max-width:68ch;}
     .actions{margin:8px 0 0 0 !important;padding:2px 4px;display:flex;gap:8px;align-items:center;opacity:.95}
@@ -312,8 +312,45 @@
       return prefix?`${prefix} ${t}`:t;
     }
 
-    /* ====== RENDER MESSAGE (bubble + actions stacked) ====== */
+    /* ====== RENDER MESSAGE (bubble + actions) ====== */
     let _msgAutoId = 1;
+
+    // TTS state (so we can pause/resume/cancel cleanly)
+    const tts = { utter:null, bubble:null };
+
+    function speakToggleForBubble(bubble, btn){
+      try{
+        const text = bubble?.innerText || bubble?.textContent || '';
+        if(!text) return;
+
+        // If already speaking this bubble
+        if (tts.utter && tts.bubble === bubble) {
+          if (speechSynthesis.paused) {
+            speechSynthesis.resume();
+            if (btn) btn.innerHTML = '<span class="action-emoji">⏸</span>Pause';
+            return;
+          }
+          if (speechSynthesis.speaking) {
+            speechSynthesis.pause();
+            if (btn) btn.innerHTML = '<span class="action-emoji">🔊</span>Resume';
+            return;
+          }
+        }
+
+        // Start fresh (cancel any previous)
+        if (speechSynthesis.speaking || speechSynthesis.paused) speechSynthesis.cancel();
+
+        const u = new SpeechSynthesisUtterance(text);
+        tts.utter = u; tts.bubble = bubble;
+
+        if (btn) btn.innerHTML = '<span class="action-emoji">⏸</span>Pause';
+        u.onend = ()=>{ if(btn) btn.innerHTML = '<span class="action-emoji">🔊</span>Speak'; tts.utter=null; tts.bubble=null; };
+        u.onerror = ()=>{ if(btn) btn.innerHTML = '<span class="action-emoji">🔊</span>Speak'; tts.utter=null; tts.bubble=null; };
+
+        speechSynthesis.speak(u);
+      }catch{}
+    }
+
     function renderMessage(role, text, when=''){
       hideWelcome();
 
@@ -346,11 +383,8 @@
         bar.innerHTML = `
           <button class="action-btn" data-act="copy"><span class="action-emoji">📋</span>Copy</button>
           <span class="action-sep"></span>
-          <button class="action-btn" data-act="up"><span class="action-emoji">👍</span></button>
-          <button class="action-btn" data-act="down"><span class="action-emoji">👎</span></button>
-          <span class="action-sep"></span>
           <button class="action-btn" data-act="speak"><span class="action-emoji">🔊</span>Speak</button>
-          <button class="action-btn" data-act="regen"><span class="action-emoji">🔄</span>Regenerate</button>
+          <span class="action-sep"></span>
           <button class="action-btn" data-act="share"><span class="action-emoji">🔗</span>Share</button>
         `;
         bar.addEventListener('click', (e)=>{
@@ -360,16 +394,9 @@
           if(act==='copy'){
             navigator.clipboard.writeText(txt).then(()=>showToast('Copied'));
           }else if(act==='speak'){
-            speakMessage(txt, btn);
-          }else if(act==='regen'){
-            regenerateFromAssistant(bubble);
+            speakToggleForBubble(bubble, btn);
           }else if(act==='share'){
             openShareModal(currentConvId);
-          }else if(act==='up' || act==='down'){
-            localFeedback.set(id, act);
-            bar.querySelectorAll('[data-act="up"],[data-act="down"]').forEach(b=>{
-              b.style.opacity = (b.dataset.act===act) ? '1' : '0.6';
-            });
           }
         });
         block.appendChild(bar);
@@ -426,7 +453,9 @@
       }catch{ showToast('Copy failed. Select and copy manually.'); }
     });
 
-    /* ---- LOCAL TITLE UPDATE HELPERS ---- */
+    const convTitleCache = {};
+    const pendingAutoTitle = new Set();
+
     function setConvTitleLocal(id, title){
       convTitleCache[id] = title;
       const node = convListEl.querySelector(`.conv[data-id="${id}"] .conv-title`);
@@ -441,7 +470,7 @@
     }
     async function maybeAutoTitle(convId, sourceText, prefix = ""){
       if (!convId) return;
-      if (!shouldAutoTitleFor(convId)) return;   /* <-- prevents renaming after first title */
+      if (!shouldAutoTitleFor(convId)) return;
       const autoTitle = makeTitleFrom(sourceText, prefix);
       if (!autoTitle || autoTitle.toLowerCase() === (convTitleCache[convId]||'').trim().toLowerCase()) return;
       try{
@@ -544,7 +573,6 @@
           await loadConversations(currentConvId);
         }
 
-        // auto-title only if still "New chat"
         await maybeAutoTitle(currentConvId, text);
 
         if(res.__status === 403 && (res.status==='verify_required' || res.message?.toLowerCase().includes('verify'))){
@@ -725,25 +753,6 @@
         }
       }catch{}
     }
-
-    // TTS helper
-    function speakMessage(text, btn){
-      try{
-        const utter = new SpeechSynthesisUtterance(text);
-        utter.onend = ()=>{ if(btn) btn.textContent='🔊 Speak'; };
-        if(btn) btn.textContent='🔊 Speaking…';
-        speechSynthesis.speak(utter);
-      }catch{}
-    }
-    function regenerateFromAssistant(bubble){
-      const txt = bubble?.innerText || '';
-      if(!txt) return;
-      promptEl.value = "Please improve and expand on the above answer.";
-      promptEl.focus();
-      showToast('Prepared a follow-up. Edit and send.');
-    }
-
-    const localFeedback = new Map();
 
     (async function init(){
       const p=new URLSearchParams(location.search);
