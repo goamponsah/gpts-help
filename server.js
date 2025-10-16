@@ -46,7 +46,7 @@ if (!RESEND_API_KEY || !RESEND_FROM) console.warn("[WARN] RESEND_* missing");
 if (!PAYSTACK_PUBLIC_KEY) console.warn("[WARN] PAYSTACK_PUBLIC_KEY missing");
 if (!PAYSTACK_SECRET_KEY) console.warn("[WARN] PAYSTACK_SECRET_KEY missing");
 
-const OPENAI_DEFAULT_MODEL = OPENAI_MODEL || "gpt-4o-mini";
+const OPENAI_MODEL = OPENAI_MODEL || "gpt-4o-mini";
 
 // CORS: allow your frontend; otherwise fall back to *
 if (FRONTEND_ORIGIN) {
