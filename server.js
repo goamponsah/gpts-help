@@ -48,8 +48,38 @@ if (FRONTEND_ORIGIN) {
 }
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, "public")));
 const upload = multer({ storage: multer.memoryStorage() });
+
+/* ---------- Static files (SEO/PWA friendly) ---------- */
+const PUB = path.join(__dirname, "public");
+
+// Correct content type for the web manifest
+app.get("/manifest.webmanifest", (req, res) => {
+  res.type("application/manifest+json");
+  res.sendFile(path.join(PUB, "manifest.webmanifest"));
+});
+
+// Expose robots.txt and sitemap.xml from /public at the root
+app.get("/robots.txt", (req, res) => res.sendFile(path.join(PUB, "robots.txt")));
+app.get("/sitemap.xml", (req, res) => res.sendFile(path.join(PUB, "sitemap.xml")));
+
+// Serve static assets with sane caching
+app.use(
+  express.static(PUB, {
+    setHeaders: (res, filePath) => {
+      const p = filePath.toLowerCase();
+      const isHTML = p.endsWith(".html");
+      const isSW = p.endsWith("/service-worker.js") || p.endsWith("\\service-worker.js") || p.endsWith("service-worker.js");
+      if (isHTML || isSW) {
+        // Don’t cache HTML or SW so updates propagate
+        res.setHeader("Cache-Control", "no-cache");
+      } else {
+        // Cache static assets aggressively
+        res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+      }
+    },
+  })
+);
 
 /* ===================== Postgres ===================== */
 const pool = new Pool({
@@ -874,4 +904,8 @@ app.post("/api/paystack/verify", async (req,res)=>{
 
 /* ===================== Server ===================== */
 const PORT = process.env.PORT || 3000;
+
+// Optional 404 for non-existent routes (static files above already handle real pages)
+app.use((req, res) => res.status(404).send("Not Found"));
+
 app.listen(PORT, ()=> console.log(`GPTs Help server running on :${PORT}`));
