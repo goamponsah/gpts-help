@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Search GPTs Help</title>
+  <link rel="canonical" href="https://gptshelp.online/search/" />
+  <meta name="description" content="Search GPTs Help for math photo solving, subscription plans, and support topics." />
+
+  <link rel="icon" href="/static/brand/favicon.ico" />
+  <link rel="apple-touch-icon" href="/static/brand/logo-192.png" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#6f42c1" />
+
+  <style>
+    body {
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: #f8f9fa;
+      color: #212529;
+      margin: 0;
+    }
+    header {
+      background: #fff;
+      border-bottom: 1px solid #eee;
+      padding: 1rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .brand {
+      font-weight: 800;
+      color: #6f42c1;
+      text-decoration: none;
+      font-size: 1.2rem;
+    }
+    main {
+      max-width: 800px;
+      margin: 2rem auto;
+      background: #fff;
+      padding: 2rem;
+      border-radius: 12px;
+      box-shadow: 0 16px 36px rgba(0,0,0,0.08);
+    }
+    h1 {
+      font-size: 1.6rem;
+      margin-top: 0;
+    }
+    form {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 1rem;
+    }
+    input[type="search"] {
+      flex: 1;
+      padding: 0.75rem 1rem;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      font-size: 1rem;
+    }
+    button {
+      background: #6f42c1;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      padding: 0.75rem 1.25rem;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .results {
+      margin-top: 2rem;
+    }
+    .result-item {
+      padding: 1rem;
+      border-bottom: 1px solid #eee;
+    }
+    .result-item a {
+      color: #6f42c1;
+      font-weight: 600;
+      text-decoration: none;
+    }
+    footer {
+      text-align: center;
+      padding: 2rem;
+      color: #6c757d;
+      margin-top: 3rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <a href="/" class="brand">GPTs Help</a>
+  </header>
+
+  <main>
+    <h1>Search GPTs Help</h1>
+    <form id="searchForm" role="search" aria-label="Search GPTs Help">
+      <input id="q" name="q" type="search" placeholder="Type your question or keyword…" value="">
+      <button type="submit">Search</button>
+    </form>
+    <div class="results" id="results"></div>
+  </main>
+
+  <footer>&copy; <span id="year"></span> GPTs Help. All rights reserved.</footer>
+
+  <script>
+    document.getElementById("year").textContent = new Date().getFullYear();
+
+    const params = new URLSearchParams(window.location.search);
+    const query = params.get("q") || "";
+    document.getElementById("q").value = query;
+
+    const resultsEl = document.getElementById("results");
+
+    const data = [
+      { title: "Home – GPTs Help", url: "/", desc: "Snap → Solve. Upload a math problem and get a step-by-step solution." },
+      { title: "Chat Page", url: "/chat.html", desc: "Chat with the GPTs Help AI for detailed math explanations." },
+      { title: "Pricing Plans", url: "/pricing/", desc: "See subscription options and plan benefits." },
+      { title: "Overview", url: "/overview/", desc: "Learn what GPTs Help does and how it works." },
+      { title: "Download App", url: "/download/", desc: "Install GPTs Help on your phone or desktop." },
+      { title: "Support", url: "/support/", desc: "Help center, account issues, and payment support." }
+    ];
+
+    function searchSite(term) {
+      if (!term) return [];
+      const q = term.toLowerCase();
+      return data.filter(item => 
+        item.title.toLowerCase().includes(q) || 
+        item.desc.toLowerCase().includes(q)
+      );
+    }
+
+    function renderResults(list) {
+      if (list.length === 0) {
+        resultsEl.innerHTML = query ? `<p>No results found for "<strong>${query}</strong>".</p>` : "";
+        return;
+      }
+      resultsEl.innerHTML = list.map(
+        i => `<div class="result-item">
+          <a href="${i.url}">${i.title}</a>
+          <div>${i.desc}</div>
+        </div>`
+      ).join("");
+    }
+
+    renderResults(searchSite(query));
+
+    document.getElementById("searchForm").addEventListener("submit", e => {
+      e.preventDefault();
+      const term = document.getElementById("q").value.trim();
+      const newURL = `/search/?q=${encodeURIComponent(term)}`;
+      history.replaceState({}, "", newURL);
+      renderResults(searchSite(term));
+    });
+  </script>
+</body>
+</html>
