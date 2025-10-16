@@ -1,0 +1,35 @@
+{
+  "name": "GPTs Help",
+  "short_name": "GPTs Help",
+  "description": "Snap → Solve. Learn math with AI: photo-solve problems and get step-by-step solutions.",
+  "id": "https://gptshelp.online/",
+  "start_url": "/chat.html?utm_source=a2hs",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "theme_color": "#6f42c1",
+  "background_color": "#f8f9fa",
+  "categories": ["education", "productivity"],
+  "dir": "ltr",
+  "lang": "en",
+  "icons": [
+    { "src": "/static/brand/logo-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/static/brand/logo-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/static/brand/logo-192-maskable.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/static/brand/logo-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Open Chat",
+      "short_name": "Chat",
+      "url": "/chat.html?src=shortcut",
+      "icons": [{ "src": "/static/brand/shortcut-chat.png", "sizes": "96x96", "type": "image/png" }]
+    },
+    {
+      "name": "Pricing",
+      "short_name": "Pricing",
+      "url": "/pricing?src=shortcut",
+      "icons": [{ "src": "/static/brand/shortcut-pricing.png", "sizes": "96x96", "type": "image/png" }]
+    }
+  ]
+}
