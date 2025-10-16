@@ -265,6 +265,406 @@
   <script src="https://js.paystack.co/v2/inline.js"></script>
   <script>
     /* --- Keep your JS exactly as in your previous version --- */
+     // ---------- Constants ----------
+    const genRef = () => "gptshelp_" + Date.now() + "_" + Math.random().toString(36).slice(2,8);
+    const NEXT_URL = "/chat.html";
+
+    // Your Paystack plan codes (must match dashboard)
+    const PLAN_CODE_PLUS_MONTHLY = "PLN_t8tii7sryvwsxxf";
+    const PLAN_CODE_PRO_ANNUAL  = "PLN_3gkd3qo1pv8rylt";
+
+    // ---------- Config load & gating ----------
+    let PAYSTACK_PUBLIC_KEY = null;
+    const payButtons = [];
+    function setPayButtonsEnabled(enabled){
+      payButtons.forEach(b => b && (b.disabled = !enabled));
+    }
+    async function loadConfig(){
+      try{
+        const r = await fetch("/api/public-config");
+        const cfg = await r.json();
+        PAYSTACK_PUBLIC_KEY = cfg.paystackPublicKey || null;
+      }catch{
+        PAYSTACK_PUBLIC_KEY = null;
+      }
+      setPayButtonsEnabled(!!PAYSTACK_PUBLIC_KEY);
+    }
+
+    // ---------- API helpers ----------
+    const J = r => r.json();
+    async function apiMe(){ try{ return await fetch("/api/me",{credentials:"include"}).then(J); }catch{return{}} }
+    async function apiLogin(email, password){
+      const r = await fetch("/api/login",{method:"POST",headers:{ "Content-Type":"application/json" },credentials:"include",body:JSON.stringify({email,password})});
+      return r.json();
+    }
+    async function apiSignupFree(email, password){
+      const r = await fetch("/api/signup-free",{method:"POST",headers:{ "Content-Type":"application/json" },credentials:"include",body:JSON.stringify({email,password})});
+      return r.json();
+    }
+    async function apiForgot(email){
+      const r = await fetch("/api/forgot-password",{method:"POST",headers:{ "Content-Type":"application/json" },credentials:"include",body:JSON.stringify({email})});
+      return r.json();
+    }
+    async function apiResendVerify(){
+      const r = await fetch("/api/resend-verify",{method:"POST",credentials:"include"});
+      return r.json();
+    }
+
+    function authOK(r){ return r && (r.status==="ok"||r.status==="success") && (r.user?.email || r.email); }
+    function isValidEmail(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e); }
+    function goToChat(){ location.assign("/chat.html"); }
+    function setBtnLoading(btn, loading, label){
+      if(!btn) return;
+      if(loading){ btn.disabled=true; btn.dataset.prev = btn.textContent; btn.innerHTML = '<span class="spinner"></span> ' + (label || btn.textContent || 'Working…'); }
+      else{ btn.disabled=false; btn.textContent = label || btn.dataset.prev || btn.textContent; }
+    }
+
+    // ---------- Header auth state ----------
+    async function reflectAuth(){
+      const me = await apiMe();
+      const openChatBtn = document.getElementById("openChatBtn");
+      const loginBtn = document.getElementById("loginBtn");
+      const signupBtn = document.getElementById("signupBtn");
+      if(me?.status==="ok" && me.user?.email){
+        if(me.user.verified){
+          openChatBtn.style.display="inline-block";
+          openChatBtn.onclick = goToChat;
+        }else{
+          openChatBtn.style.display="inline-block";
+          openChatBtn.onclick = () => { alert("Please verify your email first. We’ve sent you a link."); apiResendVerify().catch(()=>{}); };
+        }
+        loginBtn.textContent="Switch account";
+        signupBtn.textContent="New account";
+      }else{
+        openChatBtn.style.display="none";
+        loginBtn.textContent="Log in";
+        signupBtn.textContent="Sign up for free";
+      }
+    }
+
+    // ---------- Login modal ----------
+    const loginOverlay = document.getElementById("loginOverlay");
+    const loginBtnEl = document.getElementById("loginBtn");
+    const loginClose = document.getElementById("loginClose");
+    const loginStepEmail = document.getElementById("loginStepEmail");
+    const loginStepPassword = document.getElementById("loginStepPassword");
+    const loginEmail = document.getElementById("loginEmail");
+    const loginEmailErr = document.getElementById("loginEmailErr");
+    const loginEmailContinue = document.getElementById("loginEmailContinue");
+    const loginEmailEcho = document.getElementById("loginEmailEcho");
+    const loginChangeEmail = document.getElementById("loginChangeEmail");
+    const loginPassword = document.getElementById("loginPassword");
+    const loginErr = document.getElementById("loginErr");
+    const loginSubmit = document.getElementById("loginSubmit");
+    const loginGoSignup = document.getElementById("loginGoSignup");
+    const forgotLink = document.getElementById("forgotLink");
+
+    function openLogin(){
+      loginEmailErr.textContent=''; loginErr.textContent='';
+      loginOverlay.classList.add("open"); loginOverlay.setAttribute("aria-hidden","false");
+      loginStepEmail.classList.add("active"); loginStepPassword.classList.remove("active");
+      setTimeout(()=>loginEmail.focus(),20);
+    }
+    function closeLogin(){ loginOverlay.classList.remove("open"); loginOverlay.setAttribute("aria-hidden","true"); }
+    function handleLoginEmailContinue(){
+      const e = loginEmail.value.trim(); loginEmailErr.textContent='';
+      if(!isValidEmail(e)){ loginEmailErr.textContent="Enter a valid email."; return; }
+      loginEmailEcho.textContent=e; loginStepEmail.classList.remove("active"); loginStepPassword.classList.add("active"); setTimeout(()=>loginPassword.focus(),20);
+    }
+    async function handleLoginSubmit(){
+      const email = (loginEmailEcho.textContent||loginEmail.value||"").trim();
+      const pw = loginPassword.value;
+      if(!isValidEmail(email)){ loginStepPassword.classList.remove("active"); loginStepEmail.classList.add("active"); loginEmailErr.textContent="Enter a valid email."; return; }
+      if(!pw){ loginErr.textContent="Enter your password."; return; }
+      setBtnLoading(loginSubmit,true,"Log in");
+      try{
+        const r = await apiLogin(email, pw);
+        if(authOK(r)){
+          const me = await apiMe();
+          try{ localStorage.setItem("userEmail", email); }catch{}
+          if(me?.user?.verified){ location.replace(NEXT_URL); }
+          else{
+            loginErr.style.color = "var(--ok)";
+            loginErr.textContent = "Login ok. Please verify your email — we’ve sent a link.";
+            await apiResendVerify().catch(()=>{});
+          }
+        }else{
+          loginErr.textContent = r?.message || "Invalid email or password.";
+        }
+      }catch{
+        loginErr.textContent = "Network error. Please try again.";
+      }finally{
+        setBtnLoading(loginSubmit,false,"Log in");
+      }
+    }
+    loginBtnEl.addEventListener('click', openLogin);
+    loginClose.addEventListener('click', closeLogin);
+    loginOverlay.addEventListener('click',(e)=>{ if(e.target===loginOverlay) closeLogin(); });
+    document.addEventListener('keydown',(e)=>{ if(e.key==="Escape" && loginOverlay.classList.contains("open")) closeLogin(); });
+    loginEmailContinue.addEventListener('click', handleLoginEmailContinue);
+    loginEmail.addEventListener('keydown',(e)=>{ if(e.key==='Enter') handleLoginEmailContinue(); });
+    loginChangeEmail.addEventListener('click', ()=>{ loginStepPassword.classList.remove("active"); loginStepEmail.classList.add("active"); setTimeout(()=>loginEmail.focus(),20); });
+    loginSubmit.addEventListener('click', handleLoginSubmit);
+    loginPassword.addEventListener('keydown',(e)=>{ if(e.key==='Enter') handleLoginSubmit(); });
+    loginGoSignup.addEventListener('click',(e)=>{ e.preventDefault(); closeLogin(); openSignup(); });
+    forgotLink.addEventListener('click', async (e)=>{
+      e.preventDefault();
+      const email = (loginEmailEcho.textContent||loginEmail.value||"").trim();
+      if(!isValidEmail(email)){ loginEmailErr.textContent="Enter your email above first."; return; }
+      loginErr.style.color=""; loginErr.textContent="";
+      setBtnLoading(loginSubmit,true,"Sending…");
+      try{
+        await apiForgot(email);
+        loginErr.style.color="var(--ok)";
+        loginErr.textContent="Reset link sent. Check your email.";
+      }catch{
+        loginErr.textContent="Could not send reset email.";
+      }finally{
+        setBtnLoading(loginSubmit,false,"Log in");
+      }
+    });
+
+    // ---------- Signup modal (verify gate) ----------
+    const signupOverlay = document.getElementById("signupOverlay");
+    const signupBtn = document.getElementById("signupBtn");
+    const signupClose = document.getElementById("signupClose");
+    const signupStepEmail = document.getElementById("signupStepEmail");
+    const signupStepPassword = document.getElementById("signupStepPassword");
+    const signupEmail = document.getElementById("signupEmail");
+    const signupEmailErr = document.getElementById("signupEmailErr");
+    const signupEmailContinue = document.getElementById("signupEmailContinue");
+    const signupEmailEcho = document.getElementById("signupEmailEcho");
+    const signupChangeEmail = document.getElementById("signupChangeEmail");
+    const signupPassword = document.getElementById("signupPassword");
+    const signupPassword2 = document.getElementById("signupPassword2");
+    const signupErr = document.getElementById("signupErr");
+    const signupSubmit = document.getElementById("signupSubmit");
+    const signupGoLogin = document.getElementById("signupGoLogin");
+    const verifyInfo = document.getElementById("verifyInfo");
+    const resendVerifyBtn = document.getElementById("resendVerifyBtn");
+
+    function openSignup(){
+      signupEmailErr.textContent=''; signupErr.textContent=''; verifyInfo.style.display="none";
+      signupOverlay.classList.add("open"); signupOverlay.setAttribute("aria-hidden","false");
+      signupStepEmail.classList.add("active"); signupStepPassword.classList.remove("active");
+      setTimeout(()=>signupEmail.focus(),20);
+    }
+    function closeSignup(){ signupOverlay.classList.remove("open"); signupOverlay.setAttribute("aria-hidden","true"); }
+    function handleSignupEmailContinue(){
+      const e = signupEmail.value.trim(); signupEmailErr.textContent='';
+      if(!isValidEmail(e)){ signupEmailErr.textContent="Enter a valid email."; return; }
+      signupEmailEcho.textContent = e; signupStepEmail.classList.remove("active"); signupStepPassword.classList.add("active"); setTimeout(()=>signupPassword.focus(),20);
+    }
+    function passwordOk(p){ return typeof p === 'string' && p.length >= 8; }
+
+    async function handleSignupSubmit(){
+      signupErr.style.color = "";
+      signupErr.textContent = "";
+      verifyInfo.style.display = "none";
+
+      const email = (signupEmailEcho.textContent||signupEmail.value||"").trim();
+      const p1 = signupPassword.value, p2 = signupPassword2.value;
+
+      if(!isValidEmail(email)){
+        signupStepPassword.classList.remove("active");
+        signupStepEmail.classList.add("active");
+        signupEmailErr.textContent="Enter a valid email.";
+        return;
+      }
+      if(!passwordOk(p1)){ signupErr.textContent="Password must be at least 8 characters."; return; }
+      if(p1!==p2){ signupErr.textContent="Passwords do not match."; return; }
+
+      setBtnLoading(signupSubmit,true,"Create account");
+      try{
+        await apiSignupFree(email, p1);
+        try{ localStorage.setItem("userEmail", email); }catch{}
+        verifyInfo.style.display="block";
+        signupErr.style.color="var(--ok)";
+        signupErr.textContent="Almost done — check your inbox and verify your email to continue.";
+      }catch{
+        verifyInfo.style.display="block";
+        signupErr.style.color="var(--ok)";
+        signupErr.textContent="Almost done — check your inbox and verify your email to continue.";
+      }finally{
+        setBtnLoading(signupSubmit,false,"Create account");
+      }
+    }
+
+    signupBtn.addEventListener('click', openSignup);
+    signupClose.addEventListener('click', closeSignup);
+    signupOverlay.addEventListener('click',(e)=>{ if(e.target===signupOverlay) closeSignup(); });
+    document.addEventListener('keydown',(e)=>{ if(e.key==="Escape" && signupOverlay.classList.contains("open")) closeSignup(); });
+    signupEmailContinue.addEventListener('click', handleSignupEmailContinue);
+    signupEmail.addEventListener('keydown',(e)=>{ if(e.key==='Enter') handleSignupEmailContinue(); });
+    signupChangeEmail.addEventListener('click', ()=>{ signupStepPassword.classList.remove("active"); signupStepEmail.classList.add("active"); setTimeout(()=>signupEmail.focus(),20); });
+    signupSubmit.addEventListener('click', handleSignupSubmit);
+    signupPassword2.addEventListener('keydown',(e)=>{ if(e.key==='Enter') handleSignupSubmit(); });
+    signupGoLogin.addEventListener('click',(e)=>{ e.preventDefault(); closeSignup(); openLogin(); });
+    resendVerifyBtn.addEventListener('click', async ()=>{
+      resendVerifyBtn.disabled = true;
+      try{ await apiResendVerify(); resendVerifyBtn.textContent = "Sent!"; setTimeout(()=>resendVerifyBtn.textContent="Resend email",1500); }
+      catch{ resendVerifyBtn.textContent = "Failed"; setTimeout(()=>resendVerifyBtn.textContent="Resend email",1500); }
+      finally{ resendVerifyBtn.disabled = false; }
+    });
+
+    // ---------- Paywall ----------
+    const paywallOverlay = document.getElementById("paywallOverlay");
+    const paywallClose = document.getElementById("paywallClose");
+    const paywallMonthly = document.getElementById("paywallMonthly");
+    const paywallAnnual = document.getElementById("paywallAnnual");
+    function openPaywall(){ paywallOverlay.classList.add("open"); paywallOverlay.setAttribute("aria-hidden","false"); }
+    function closePaywall(){ paywallOverlay.classList.remove("open"); paywallOverlay.setAttribute("aria-hidden","true"); }
+    paywallClose.addEventListener('click', closePaywall);
+    paywallOverlay.addEventListener('click', (e)=>{ if(e.target===paywallOverlay) closePaywall(); });
+
+    function startSubscription(planCode, label){
+      if(!PAYSTACK_PUBLIC_KEY){ alert("Payment key not loaded yet. Please try again."); return; }
+      apiMe().then(me=>{
+        if(!(me?.status==="ok" && me.user?.email)){ openLogin(); return; }
+        const email = me.user.email;
+
+        const popup = new PaystackPop();
+        popup.newTransaction({
+          key: PAYSTACK_PUBLIC_KEY,
+          email,
+          // IMPORTANT: when using a Paystack PLAN, do not send 'amount' or force 'currency':
+          // The plan defines amount & currency on Paystack dashboard.
+          plan: planCode,
+          reference: genRef(),
+          callback: (response) => {
+            fetch("/api/paystack/verify", {
+              method:"POST",
+              headers:{ "Content-Type":"application/json" },
+              credentials:"include",
+              body:JSON.stringify({ reference: response.reference })
+            })
+            .then(r=>r.json())
+            .then(r=>{
+              if(r.status==="success" || r.status==="ok"){
+                alert(label + " subscription activated!");
+                closePaywall();
+                location.href="/chat.html";
+              }else{
+                alert((r.message || "Verification failed.") + " Ref: " + response.reference);
+              }
+            })
+            .catch(()=> alert("Verification request failed. Ref: " + response.reference));
+          },
+          onCancel: () => {}
+        });
+      });
+    }
+
+    // ---------- Photo Solve demo ----------
+    const drop = document.getElementById("drop");
+    const pickBtn = document.getElementById("pickBtn");
+    const fileInput = document.getElementById("fileInput");
+    const preview = document.getElementById("preview");
+    const solveBtn = document.getElementById("solveBtn");
+    const clearBtn = document.getElementById("clearBtn");
+    const demoActions = document.getElementById("demoActions");
+    const resultEl = document.getElementById("result");
+    let selectedFile = null;
+
+    ['dragenter','dragover'].forEach(evt => drop.addEventListener(evt, e=>{ e.preventDefault(); e.stopPropagation(); drop.classList.add('drag'); }));
+    ['dragleave','drop'].forEach(evt => drop.addEventListener(evt, e=>{ e.preventDefault(); e.stopPropagation(); drop.classList.remove('drag'); }));
+    drop.addEventListener('drop', (e)=>{ const f = e.dataTransfer.files?.[0]; if (f) handlePickedFile(f); });
+    pickBtn.addEventListener('click', ()=> fileInput.click());
+    fileInput.addEventListener('change', ()=> { const f = fileInput.files?.[0]; if (f) handlePickedFile(f); });
+
+    function handlePickedFile(file){
+      if(!['image/png','image/jpeg','image/jpg','image/webp'].includes(file.type)){ alert('Choose a PNG, JPG, or WEBP image.'); return; }
+      if(file.size > 6*1024*1024){ alert('Image is larger than 6MB.'); return; }
+      selectedFile = file;
+      preview.innerHTML = '';
+      const url = URL.createObjectURL(file);
+      const img = new Image(); img.onload = () => URL.revokeObjectURL(url); img.src = url; preview.appendChild(img);
+      demoActions.style.display = 'flex'; resultEl.textContent = 'Ready. Click “Solve Now”.';
+    }
+
+    function photoCountKey(email){ return `photoCount:${email}`; }
+    function getPhotoCount(email){ try{ return parseInt(localStorage.getItem(photoCountKey(email))||'0',10) || 0; }catch{ return 0; } }
+    function bumpPhotoCount(email){ try{ const n = getPhotoCount(email)+1; localStorage.setItem(photoCountKey(email), String(n)); }catch{} }
+
+    async function solveNow(){
+      if(!selectedFile){ alert('Pick an image first.'); return; }
+      const me = await apiMe();
+      if(!(me?.status==="ok" && me.user?.email)){ openSignup(); return; }
+      if(!me.user.verified){ alert("Please verify your email first. We’ve sent you a link."); await apiResendVerify().catch(()=>{}); return; }
+
+      const email = me.user.email;
+      const plan = (me.user.plan || 'FREE').toUpperCase();
+
+      if(plan === 'FREE'){
+        const used = getPhotoCount(email);
+        if(used >= 2){ openPaywall(); return; }
+      }
+
+      resultEl.textContent = '⏳ Solving…';
+      setBtnLoading(solveBtn,true,'Solving…');
+
+      try{
+        const fd = new FormData();
+        fd.append('image', selectedFile);
+        fd.append('gptType', 'math');
+
+        const r = await fetch('/api/photo-solve', { method:'POST', credentials:'include', body: fd });
+        const j = await r.json();
+
+        if(r.status === 403 && j.status === "verify_required"){
+          alert("Please verify your email to use Photo Solve.");
+          return;
+        }
+        if(r.status === 402){
+          openPaywall(); return;
+        }
+        if(!r.ok || j.error){
+          resultEl.textContent = 'Sorry, photo solve failed. Please try again.'; return;
+        }
+
+        if(plan === 'FREE') bumpPhotoCount(email);
+        resultEl.textContent = j.response || 'No response text returned.';
+      }catch{
+        resultEl.textContent = 'Sorry, network error. Please try again.';
+      }finally{
+        setBtnLoading(solveBtn,false,'Solve Now');
+      }
+    }
+    solveBtn.addEventListener('click', solveNow);
+    clearBtn.addEventListener('click', ()=>{ selectedFile=null; preview.innerHTML=''; demoActions.style.display='none'; resultEl.textContent='Upload a math question to see the step-by-step solution here.'; fileInput.value=''; });
+
+    // ---------- Plan buttons (single binding only) ----------
+    document.getElementById("plusMonthlyBtn").addEventListener('click', ()=> startSubscription(PLAN_CODE_PLUS_MONTHLY, "Plus Monthly"));
+    document.getElementById("proAnnualBtn").addEventListener('click', ()=> startSubscription(PLAN_CODE_PRO_ANNUAL, "Pro Annual"));
+    paywallMonthly.addEventListener('click', ()=> startSubscription(PLAN_CODE_PLUS_MONTHLY, "Plus Monthly"));
+    paywallAnnual.addEventListener('click', ()=> startSubscription(PLAN_CODE_PRO_ANNUAL, "Pro Annual"));
+
+    // ---------- Start Free ----------
+    document.getElementById("startFreeBtn").addEventListener('click', ()=>{
+      apiMe().then(me=>{
+        if(me?.status==="ok" && me.user?.email){
+          if(me.user.verified) location.assign("/chat.html");
+          else { alert("Please verify your email first. We’ve sent you a link."); apiResendVerify().catch(()=>{}); }
+        } else openSignup();
+      });
+    });
+
+    // ---------- Init ----------
+    document.getElementById("year").textContent = new Date().getFullYear();
+
+    window.addEventListener('DOMContentLoaded', ()=>{
+      // collect pay buttons for gating
+      payButtons.push(
+        document.getElementById("plusMonthlyBtn"),
+        document.getElementById("proAnnualBtn"),
+        document.getElementById("paywallMonthly"),
+        document.getElementById("paywallAnnual")
+      );
+      setPayButtonsEnabled(false);
+      loadConfig();
+      reflectAuth();
+    });
+
   </script>
 
   <noscript>
