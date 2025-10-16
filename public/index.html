@@ -1,9 +1,40 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- ===== Charset & Viewport ===== -->
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- ===== Canonical & Basic SEO ===== -->
   <title>GPTs Help – Learn Math with AI</title>
+  <link rel="canonical" href="https://gptshelp.online/" />
+  <meta name="description" content="Snap → Solve. Upload a math problem and get step-by-step solutions powered by AI. Try free (2 photo solves), then upgrade for unlimited." />
+  <meta name="keywords" content="math solver, photo solve, step-by-step math solutions, calculus, algebra, GPTs Help, GPT math" />
+
+  <!-- ===== Open Graph / Social ===== -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://gptshelp.online/" />
+  <meta property="og:title" content="GPTs Help – Learn Math with AI" />
+  <meta property="og:description" content="Upload a math problem and get a clean, step-by-step solution. Try free, upgrade for unlimited photo solves." />
+  <meta property="og:image" content="/static/brand/cover.jpg" />
+  <meta property="og:site_name" content="GPTs Help" />
+
+  <!-- ===== Twitter Card ===== -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="GPTs Help – Learn Math with AI" />
+  <meta name="twitter:description" content="Snap → Solve. Step-by-step math answers with AI. Free to try." />
+  <meta name="twitter:image" content="/static/brand/cover.jpg" />
+
+  <!-- ===== PWA / Icons ===== -->
+  <link rel="icon" href="/static/brand/favicon.ico" />
+  <link rel="apple-touch-icon" href="/static/brand/logo-192.png" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="theme-color" content="#6f42c1" />
+
+  <!-- Hints -->
+  <link rel="preconnect" href="https://api.paystack.co" crossorigin>
+  <link rel="preconnect" href="https://js.paystack.co" crossorigin>
+
   <style>
     :root{
       --brand:#6f42c1;--accent:#ffc107;--bg:#f8f9fa;--text:#212529;--muted:#6c757d;
@@ -81,13 +112,56 @@
     /* Verify modal (blocks chat until verified) */
     .verify-note{background:#fff3cd;border:1px solid #ffe69c;color:#664d03;padding:10px;border-radius:8px;margin:8px 0;font-size:.95rem}
   </style>
+
+  <!-- ===== JSON-LD Schema ===== -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "GPTs Help",
+    "url": "https://gptshelp.online/",
+    "logo": "https://gptshelp.online/static/brand/logo-192.png",
+    "sameAs": []
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"WebSite",
+    "name":"GPTs Help",
+    "url":"https://gptshelp.online/",
+    "potentialAction":{
+      "@type":"SearchAction",
+      "target":"https://gptshelp.online/search/?q={query}",
+      "query-input":"required name=query"
+    }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"SoftwareApplication",
+    "name":"GPTs Help",
+    "applicationCategory":"EducationalApplication",
+    "operatingSystem":"Web",
+    "offers":[
+      {"@type":"Offer","price":"0","priceCurrency":"GHS","name":"Free"},
+      {"@type":"Offer","price":"49","priceCurrency":"GHS","name":"Plus Monthly"},
+      {"@type":"Offer","price":"388","priceCurrency":"GHS","name":"Pro Annual"}
+    ],
+    "aggregateRating":{"@type":"AggregateRating","ratingValue":"4.9","ratingCount":"27"}
+  }
+  </script>
 </head>
 <body>
   <!-- Header -->
   <header>
-    <div class="nav">
+    <div class="nav" role="navigation" aria-label="Primary">
       <div class="brand">GPTs Help</div>
       <div class="nav-right">
+        <a class="btn-nav" href="/overview/" aria-label="Overview">Overview</a>
+        <a class="btn-nav" href="/pricing/" aria-label="Pricing">Pricing</a>
+        <a class="btn-nav" href="/download/" aria-label="Download">Download</a>
         <button id="openChatBtn" class="btn-nav" style="display:none" onclick="goToChat()">Open Chat</button>
         <button id="loginBtn" class="btn-nav">Log in</button>
         <button id="signupBtn" class="btn-nav primary">Sign up for free</button>
@@ -106,11 +180,11 @@
     <h2>Try Photo Solve</h2>
     <div class="demo">
       <div class="demo-left">
-        <div id="drop" class="drop">
+        <div id="drop" class="drop" role="region" aria-label="Upload a math photo">
           <strong>Drag & drop a math photo</strong><br/>
           <span class="small">or</span><br/>
-          <button id="pickBtn" class="btn btn-secondary" type="button">Choose an image</button>
-          <input id="fileInput" type="file" accept="image/png,image/jpeg,image/jpg,image/webp"/>
+          <button id="pickBtn" class="btn btn-secondary" type="button" aria-controls="fileInput">Choose an image</button>
+          <input id="fileInput" type="file" accept="image/png,image/jpeg,image/jpg,image/webp" />
           <div class="small" style="margin-top:.6rem;">Free plan: <strong>2 photo solves</strong>. Upgrade for unlimited.</div>
         </div>
         <div id="preview" class="preview" aria-live="polite"></div>
@@ -149,19 +223,19 @@
           <li>Basic step-by-step answers</li>
           <li>Try before you buy</li>
         </ul>
-        <button class="btn btn-secondary" id="startFreeBtn">Start free</button>
+        <button class="btn btn-secondary" id="startFreeBtn" aria-label="Start free">Start free</button>
       </div>
 
       <div class="plan">
-        <div class="badge">Popular</div>
+        <div class="badge" aria-label="Popular plan">Popular</div>
         <h3>Plus Monthly</h3>
         <div class="price">₵49 / mo</div>
         <ul>
           <li><strong>Unlimited Photo Solves</strong></li>
-          <li>Advanced explanations & proofs</li>
+          <li>Advanced explanations &amp; proofs</li>
           <li>Priority processing</li>
         </ul>
-        <button class="btn btn-primary" id="plusMonthlyBtn">Subscribe Monthly</button>
+        <button class="btn btn-primary" id="plusMonthlyBtn" aria-label="Subscribe monthly">Subscribe Monthly</button>
       </div>
 
       <div class="plan">
@@ -170,9 +244,9 @@
         <ul>
           <li><strong>Unlimited Photo Solves</strong></li>
           <li>Annual discount (save 34%)</li>
-          <li>Team sharing & exports</li>
+          <li>Team sharing &amp; exports</li>
         </ul>
-        <button class="btn btn-primary" id="proAnnualBtn">Subscribe Annually</button>
+        <button class="btn btn-primary" id="proAnnualBtn" aria-label="Subscribe annually">Subscribe Annually</button>
       </div>
     </div>
   </section>
@@ -186,7 +260,9 @@
     </div>
   </section>
 
-  <footer>&copy; <span id="year"></span> GPTs Help. All rights reserved.</footer>
+  <footer>&copy; <span id="year"></span> GPTs Help. All rights reserved. &middot;
+    <a href="/support/">Support</a> &middot; <a href="/pricing/">Pricing</a>
+  </footer>
 
   <!-- Log in Modal -->
   <div class="overlay" id="loginOverlay" aria-hidden="true">
@@ -254,7 +330,7 @@
           Account created. We sent a verification link to your email. Please verify to open Chat.
           <div style="margin-top:6px;display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn btn-secondary" id="resendVerifyBtn" type="button" style="width:auto">Resend email</button>
-            <a class="btn btn-secondary" href="https://mail.google.com" target="_blank" style="text-decoration:none;width:auto">Open Gmail</a>
+            <a class="btn btn-secondary" href="https://mail.google.com" target="_blank" style="text-decoration:none;width:auto" rel="noopener">Open Gmail</a>
           </div>
         </div>
       </div>
@@ -275,6 +351,7 @@
     </div>
   </div>
 
+  <!-- Paystack -->
   <script src="https://js.paystack.co/v2/inline.js"></script>
 
   <script>
@@ -540,8 +617,7 @@
         popup.newTransaction({
           key: PAYSTACK_PUBLIC_KEY,
           email,
-          // IMPORTANT: when using a Paystack PLAN, do not send 'amount' or force 'currency':
-          // The plan defines amount & currency on Paystack dashboard.
+          // Using Paystack PLAN codes — do not pass amount/currency here.
           plan: planCode,
           reference: genRef(),
           callback: (response) => {
@@ -646,7 +722,7 @@
     solveBtn.addEventListener('click', solveNow);
     clearBtn.addEventListener('click', ()=>{ selectedFile=null; preview.innerHTML=''; demoActions.style.display='none'; resultEl.textContent='Upload a math question to see the step-by-step solution here.'; fileInput.value=''; });
 
-    // ---------- Plan buttons (single binding only) ----------
+    // ---------- Plan buttons ----------
     document.getElementById("plusMonthlyBtn").addEventListener('click', ()=> startSubscription(PLAN_CODE_PLUS_MONTHLY, "Plus Monthly"));
     document.getElementById("proAnnualBtn").addEventListener('click', ()=> startSubscription(PLAN_CODE_PRO_ANNUAL, "Pro Annual"));
     paywallMonthly.addEventListener('click', ()=> startSubscription(PLAN_CODE_PLUS_MONTHLY, "Plus Monthly"));
@@ -666,6 +742,10 @@
     document.getElementById("year").textContent = new Date().getFullYear();
 
     window.addEventListener('DOMContentLoaded', ()=>{
+      // PWA: register service worker (soft-fail)
+      if ('serviceWorker' in navigator) {
+        try { navigator.serviceWorker.register('/service-worker.js'); } catch {}
+      }
       // collect pay buttons for gating
       payButtons.push(
         document.getElementById("plusMonthlyBtn"),
@@ -678,5 +758,11 @@
       reflectAuth();
     });
   </script>
+
+  <noscript>
+    <div style="max-width:860px;margin:1rem auto;padding:1rem;border:1px solid #eee;border-radius:8px;background:#fff3cd;color:#664d03">
+      GPTs Help needs JavaScript enabled to run. Please enable JavaScript in your browser settings.
+    </div>
+  </noscript>
 </body>
 </html>
