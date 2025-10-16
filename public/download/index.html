@@ -1,53 +1,70 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Download — GPTs Help</title>
-<title>Download MathGPT — Learn Anywhere</title>
-<meta name="description" content="Download the MathGPT web app and solve problems offline. Get instant answers, explanations, and progress tracking.">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-<meta property="og:type" content="website">
-<meta property="og:title" content="Download MathGPT App">
-<meta property="og:description" content="Get MathGPT on your device for instant math help, even offline.">
-<meta property="og:url" content="https://gptshelp.online/download/">
-<meta property="og:image" content="https://gptshelp.online/static/brand/cover.jpg">
+  <title>Download MathGPT — Learn Anywhere</title>
+  <meta name="description" content="Download the MathGPT web app and solve problems anywhere. Works in your browser with optional install.">
 
-<meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Download MathGPT — AI Math Assistant">
-<meta name="twitter:description" content="Solve math problems on the go. Works on all devices.">
-<meta name="twitter:image" content="https://gptshelp.online/static/brand/cover.jpg">
-  <link rel="canonical" href="https://gptshelp.online/download">
-  <meta name="description" content="Ways to use GPTs Help: web app now; mobile and desktop coming soon.">
-  <meta name="theme-color" content="#6f42c1"><link rel="icon" href="/static/brand/favicon.ico">
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Download MathGPT App" />
+  <meta property="og:description" content="Get MathGPT on your device for instant math help." />
+  <meta property="og:url" content="https://gptshelp.online/download/" />
+  <meta property="og:image" content="https://gptshelp.online/static/brand/cover.jpg" />
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Download MathGPT — AI Math Assistant" />
+  <meta name="twitter:description" content="Solve math problems on the go. Works on all devices." />
+  <meta name="twitter:image" content="https://gptshelp.online/static/brand/cover.jpg" />
+
+  <link rel="canonical" href="https://gptshelp.online/download/" />
+  <meta name="theme-color" content="#6f42c1" />
+  <link rel="icon" href="/static/brand/favicon.ico" />
+  <link rel="apple-touch-icon" href="/static/brand/logo-192.png" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+
   <style>
-    :root{--brand:#6f42c1;--bg:#f8f9fa;--text:#212529;--muted:#6c757d;--panel:#fff;--border:#eee;--shadow:0 16px 36px rgba(0,0,0,.08)}
-    *{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
+    :root{
+      --brand:#6f42c1;--bg:#f8f9fa;--text:#212529;--muted:#6c757d;
+      --panel:#fff;--border:#eee;--shadow:0 16px 36px rgba(0,0,0,.08)
+    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
     a{color:var(--brand);text-decoration:none}
     header{background:#fff;border-bottom:1px solid #eee}
     .nav{max-width:1200px;margin:0 auto;padding:1rem 2rem;display:flex;align-items:center;justify-content:space-between}
-    .brand{font-weight:800}.nav-right{display:flex;gap:.5rem}
+    .brand{font-weight:800}
+    .nav-right{display:flex;gap:.5rem}
     .btn{border:1px solid var(--border);background:#fff;color:var(--brand);padding:.55rem .9rem;border-radius:10px;cursor:pointer;font-weight:600}
     .btn.primary{background:var(--brand);color:#fff;border-color:transparent}
     main{max-width:980px;margin:0 auto;padding:2rem}
+    h1{margin:.25rem 0 1rem}
     .card{background:#fff;border:1px solid #eee;border-radius:12px;padding:1.25rem;margin:1rem 0;box-shadow:var(--shadow)}
     .soon{display:inline-block;background:#e9d8fd;color:#3b1e86;padding:.2rem .5rem;border-radius:999px;font-size:.8rem;margin-left:.5rem}
+    .muted{color:var(--muted)}
     footer{text-align:center;padding:2rem;color:var(--muted);margin-top:2rem;border-top:1px solid #eee}
+    .row{display:flex;gap:.5rem;flex-wrap:wrap}
   </style>
+
+  <!-- Breadcrumbs -->
   <script type="application/ld+json">
   {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[
     {"@type":"ListItem","position":1,"name":"Home","item":"https://gptshelp.online/"},
-    {"@type":"ListItem","position":2,"name":"Download","item":"https://gptshelp.online/download"}
+    {"@type":"ListItem","position":2,"name":"Download","item":"https://gptshelp.online/download/"}
   ]}
   </script>
 </head>
 <body>
   <header>
-    <div class="nav">
+    <div class="nav" role="navigation" aria-label="Primary">
       <a class="brand" href="/">GPTs Help</a>
       <div class="nav-right">
-        <a class="btn" href="/overview">Overview</a>
-        <a class="btn" href="/pricing">Pricing</a>
-        <a class="btn" href="/support">Support</a>
+        <a class="btn" href="/overview/">Overview</a>
+        <a class="btn" href="/pricing/">Pricing</a>
+        <a class="btn" href="/support/">Support</a>
         <a class="btn primary" href="/chat.html">Open Chat</a>
       </div>
     </div>
@@ -55,26 +72,80 @@
 
   <main>
     <h1>Download</h1>
+
+    <div class="card" id="pwaCard" style="display:none">
+      <h3>Install Web App (PWA)</h3>
+      <p>Add MathGPT to your home screen or dock for a native-like experience.</p>
+      <div class="row">
+        <button class="btn primary" id="installBtn" type="button">Install Web App</button>
+        <button class="btn" id="howBtn" type="button">How it works</button>
+      </div>
+      <p id="pwaHint" class="muted" style="margin-top:.5rem;display:none">
+        Tip: If the button doesn’t appear, use your browser’s menu → “Install app” / “Add to Home Screen”.
+      </p>
+    </div>
+
     <div class="card">
       <h3>Web App</h3>
       <p>Use GPTs Help right now in your browser.</p>
       <p><a class="btn primary" href="/chat.html">Open Chat</a></p>
     </div>
+
     <div class="card">
       <h3>Android <span class="soon">Coming soon</span></h3>
-      <p>Install from Google Play when available. We’ll announce on <a href="https://x.com/gptshelp" target="_blank">X</a>.</p>
+      <p>Install from Google Play when available. We’ll announce on
+        <a href="https://x.com/gptshelp" target="_blank" rel="noopener">X</a>.
+      </p>
     </div>
+
     <div class="card">
       <h3>iOS <span class="soon">Coming soon</span></h3>
       <p>App Store listing is planned after Android.</p>
     </div>
+
     <div class="card">
       <h3>Desktop <span class="soon">Coming soon</span></h3>
-      <p>Mac & Windows wrappers for fast photo uploads.</p>
+      <p>Mac &amp; Windows wrappers for fast photo uploads.</p>
     </div>
   </main>
 
   <footer>&copy; <span id="y"></span> GPTs Help</footer>
-  <script>document.getElementById('y').textContent=new Date().getFullYear()</script>
+
+  <script>
+    // Year
+    document.getElementById('y').textContent = new Date().getFullYear();
+
+    // Register service worker (soft-fail)
+    if ('serviceWorker' in navigator) {
+      try { navigator.serviceWorker.register('/service-worker.js'); } catch {}
+    }
+
+    // Simple PWA install flow
+    let deferredPrompt = null;
+    const pwaCard = document.getElementById('pwaCard');
+    const installBtn = document.getElementById('installBtn');
+    const howBtn = document.getElementById('howBtn');
+    const pwaHint = document.getElementById('pwaHint');
+
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      pwaCard.style.display = 'block';
+    });
+
+    installBtn?.addEventListener('click', async () => {
+      if (!deferredPrompt) { pwaHint.style.display = 'block'; return; }
+      deferredPrompt.prompt();
+      try { await deferredPrompt.userChoice; } catch {}
+      deferredPrompt = null;
+    });
+
+    howBtn?.addEventListener('click', () => {
+      pwaHint.style.display = 'block';
+    });
+
+    // If no prompt fires (e.g., iOS Safari), still show guidance
+    setTimeout(() => { if (!deferredPrompt) pwaCard.style.display = 'block'; }, 1200);
+  </script>
 </body>
 </html>
