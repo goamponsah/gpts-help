@@ -16,6 +16,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 
+// Railway / proxy awareness (needed for correct https detection)
+app.set("trust proxy", 1);
+
 const {
   DATABASE_URL,
   JWT_SECRET,
@@ -30,8 +33,8 @@ const {
   // Paystack
   PAYSTACK_PUBLIC_KEY,
   PAYSTACK_SECRET_KEY,
-  PAYSTACK_CALLBACK_URL,      // <-- added (already set in Railway)
-  PAYSTACK_CURRENCY,          // optional, e.g. "GHS" or "NGN"
+  PAYSTACK_CALLBACK_URL,
+  PAYSTACK_CURRENCY,
   PLAN_CODE_PLUS_MONTHLY,
   PLAN_CODE_PRO_ANNUAL,
 } = process.env;
@@ -45,38 +48,55 @@ if (!PAYSTACK_SECRET_KEY) console.warn("[WARN] PAYSTACK_SECRET_KEY missing");
 
 const OPENAI_DEFAULT_MODEL = OPENAI_MODEL || "gpt-4o-mini";
 
+// CORS: allow your frontend; otherwise fall back to *
 if (FRONTEND_ORIGIN) {
   app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
+} else {
+  app.use(cors({ origin: "*", credentials: true }));
 }
+
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 const upload = multer({ storage: multer.memoryStorage() });
 
+/* ---------- Light headers for bots & assets ---------- */
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", FRONTEND_ORIGIN || "*");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  next();
+});
+
 /* ---------- Static files (SEO/PWA friendly) ---------- */
 const PUB = path.join(__dirname, "public");
 
-// Correct content type for the web manifest
+// Explicit well-known files at root
+app.get("/robots.txt", (req, res) => {
+  res.type("text/plain");
+  res.sendFile(path.join(PUB, "robots.txt"));
+});
+app.get("/sitemap.xml", (req, res) => {
+  res.type("application/xml");
+  res.sendFile(path.join(PUB, "sitemap.xml"));
+});
 app.get("/manifest.webmanifest", (req, res) => {
   res.type("application/manifest+json");
   res.sendFile(path.join(PUB, "manifest.webmanifest"));
 });
 
-// Expose robots.txt and sitemap.xml from /public at the root
-app.get("/robots.txt", (req, res) => res.sendFile(path.join(PUB, "robots.txt")));
-app.get("/sitemap.xml", (req, res) => res.sendFile(path.join(PUB, "sitemap.xml")));
-
-// Serve static assets with sane caching
+// Serve all of /public (HTML no-cache, assets long-cache)
 app.use(
   express.static(PUB, {
     setHeaders: (res, filePath) => {
       const p = filePath.toLowerCase();
-      const isHTML = p.endsWith(".html");
-      const isSW = p.endsWith("/service-worker.js") || p.endsWith("\\service-worker.js") || p.endsWith("service-worker.js");
-      if (isHTML || isSW) {
-        // Don’t cache HTML or SW so updates propagate
-        res.setHeader("Cache-Control", "no-cache");
+      const noCache =
+        p.endsWith(".html") ||
+        p.endsWith("service-worker.js") ||
+        p.endsWith("/service-worker.js") ||
+        p.endsWith("\\service-worker.js");
+
+      if (noCache) {
+        res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       } else {
-        // Cache static assets aggressively
         res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
       }
     },
@@ -160,10 +180,8 @@ async function ensureSchema() {
 
   /* ---------- Conversations / Messages / Shares ---------- */
 
-  // Create conversations table if missing (minimal, then normalize below)
   await pool.query(`create table if not exists conversations ( id bigserial primary key );`);
 
-  // 1) Rename legacy "email" -> "user_email" if needed (BEFORE FKs)
   await pool.query(`
     DO $$
     BEGIN
@@ -179,7 +197,6 @@ async function ensureSchema() {
     END $$;
   `);
 
-  // 2) Ensure required columns exist (including user_id for legacy DBs that require it)
   await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS user_email   text;`);
   await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS user_id      bigint;`);
   await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS title        text not null default 'New chat';`);
@@ -187,7 +204,6 @@ async function ensureSchema() {
   await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS created_at   timestamptz not null default now();`);
   await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS updated_at   timestamptz not null default now();`);
 
-  // 3) Backfill user_id from user_email if missing
   await pool.query(`
     UPDATE conversations c
        SET user_id = u.id
@@ -196,12 +212,10 @@ async function ensureSchema() {
        AND c.user_email = u.email
   `);
 
-  // 4) Indexes (idempotent)
   await pool.query(`create index if not exists idx_conversations_user_email on conversations(user_email);`);
   await pool.query(`create index if not exists idx_conversations_user_id    on conversations(user_id);`);
   await pool.query(`create index if not exists idx_conversations_archived   on conversations(archived);`);
 
-  // 5) Add FKs only if missing
   await pool.query(`
     DO $$
     BEGIN
@@ -241,7 +255,6 @@ async function ensureSchema() {
     END $$;
   `);
 
-  // Messages table
   await pool.query(`
     create table if not exists messages (
       id              bigserial primary key,
@@ -253,7 +266,6 @@ async function ensureSchema() {
   `);
   await pool.query(`create index if not exists idx_messages_conversation_id on messages(conversation_id);`);
 
-  // Share links table
   await pool.query(`
     create table if not exists conversation_shares (
       id              bigserial primary key,
@@ -263,7 +275,6 @@ async function ensureSchema() {
     );
   `);
 
-  // Feedback table (for like/dislike)
   await pool.query(`
     create table if not exists message_feedback (
       id bigserial primary key,
@@ -276,7 +287,6 @@ async function ensureSchema() {
   `);
   await pool.query(`create index if not exists idx_feedback_conv on message_feedback(conversation_id);`);
 
-  // Trigger to update conversations.updated_at
   await pool.query(`
     DO $$
     BEGIN
@@ -310,7 +320,7 @@ function cookieOpts() {
     secure: true,
     sameSite: cross ? "None" : "Lax",
     path: "/",
-    maxAge: 30*24*60*60*1000
+    maxAge: 30 * 24 * 60 * 60 * 1000,
   };
 }
 function setSessionCookie(res, payload) {
@@ -427,7 +437,8 @@ app.post("/api/signup-free", async (req,res)=>{
     await pool.query(`
       update users set verify_token=$2, verify_expires=$3, verified=false where email=$1
     `,[email,token,until]);
-    const link = `${req.headers.origin || FRONTEND_ORIGIN || ''}/api/verify-email?token=${token}`;
+    const origin = req.headers.origin || FRONTEND_ORIGIN || `${req.protocol}://${req.get("host")}`;
+    const link = `${origin}/api/verify-email?token=${token}`;
     await resendSend({to:email,subject:"Verify your GPTs Help email",html:verificationEmailHtml(link)});
     setSessionCookie(res,{email,plan:u.plan});
     res.json({ ok:true });
@@ -477,7 +488,8 @@ app.post("/api/resend-verify", async (req,res)=>{
     const token = crypto.randomBytes(24).toString("hex");
     const until = new Date(Date.now() + 24*3600e3);
     await pool.query(`update users set verify_token=$2, verify_expires=$3 where email=$1`,[s.email,token,until]);
-    const link = `${req.headers.origin || FRONTEND_ORIGIN || ''}/api/verify-email?token=${token}`;
+    const origin = req.headers.origin || FRONTEND_ORIGIN || `${req.protocol}://${req.get("host")}`;
+    const link = `${origin}/api/verify-email?token=${token}`;
     await resendSend({to:s.email,subject:"Verify your GPTs Help email",html:verificationEmailHtml(link)});
     res.json({ status:"ok" });
   }catch(e){ console.error(e); res.status(500).json({status:"error"}); }
@@ -494,7 +506,8 @@ app.post("/api/forgot-password", async (req,res)=>{
       const token = crypto.randomBytes(24).toString("hex");
       const until = new Date(Date.now() + 2*3600e3);
       await pool.query(`update users set reset_token=$2, reset_expires=$3 where email=$1`,[email,token,until]);
-      const link = `${req.headers.origin || FRONTEND_ORIGIN || ''}/reset-password.html?token=${token}`;
+      const origin = req.headers.origin || FRONTEND_ORIGIN || `${req.protocol}://${req.get("host")}`;
+      const link = `${origin}/reset-password.html?token=${token}`;
       await resendSend({to:email,subject:"Reset your GPTs Help password",html:resetEmailHtml(link)});
     }
     res.json({ status:"ok" });
@@ -803,12 +816,10 @@ app.post("/api/photo-solve", upload.single("image"), async (req,res)=>{
       ? `Solve this math problem step-by-step. Note: ${attempt}`
       : `Solve this math problem step-by-step.`;
 
-    // store synthetic user message (note that an image was attached)
     await pool.query(`insert into messages(conversation_id, role, content) values($1,'user',$2)`,
       [convId, `${userPrompt}\n\n[Photo attached]`]);
 
     const system = "You are Math GPT. Be precise and show steps. If the image is unclear, state assumptions.";
-    // Vision chat with image_url content
     const r = await fetch("https://api.openai.com/v1/chat/completions",{
       method:"POST",
       headers:{ Authorization:`Bearer ${OPENAI_API_KEY}`, "Content-Type":"application/json" },
@@ -847,7 +858,6 @@ app.post("/api/photo-solve", upload.single("image"), async (req,res)=>{
 });
 
 /* ===================== Feedback (like/dislike) ===================== */
-
 app.post("/api/feedback", async (req,res)=>{
   try{
     const s = readSession(req);
@@ -870,7 +880,6 @@ app.post("/api/paystack/init", async (req, res) => {
     const s = readSession(req);
     if (!s?.email) return res.status(401).json({ status: "error", message: "Not signed in" });
 
-    // Accept either a raw planCode, or a label "PLUS" / "PRO"
     const { plan, planCode } = req.body || {};
     let code = planCode || null;
     if (!code && plan) {
@@ -892,16 +901,15 @@ app.post("/api/paystack/init", async (req, res) => {
       },
       body: JSON.stringify({
         email: s.email,
-        plan: code,               // Adds/charges customer for the plan
+        plan: code,
         callback_url: callbackUrl,
-        currency: PAYSTACK_CURRENCY || undefined, // optional
+        currency: PAYSTACK_CURRENCY || undefined,
       }),
     });
     const j = await initRes.json();
     if (!initRes.ok || j.status !== true) {
       return res.status(400).json({ status: "error", message: j?.message || "Init failed" });
     }
-    // Return the hosted checkout URL
     res.json({
       status: "ok",
       authorization_url: j.data.authorization_url,
@@ -920,7 +928,6 @@ app.get("/paystack/callback", async (req, res) => {
     const reference = (req.query.reference || req.query.trxref || "").toString();
     if (!reference) return res.status(400).send("Missing reference");
 
-    // Reuse existing verification logic via internal call
     const verifyRes = await fetch(`${req.protocol}://${req.get("host")}/api/paystack/verify`, {
       method: "POST",
       headers: { "Content-Type": "application/json", cookie: req.headers.cookie || "" },
@@ -941,7 +948,7 @@ app.get("/paystack/callback", async (req, res) => {
   }
 });
 
-// 3) Verify endpoint (used by callback and by inline flow if you keep it)
+// 3) Verify endpoint
 app.post("/api/paystack/verify", async (req,res)=>{
   try{
     const s = readSession(req);
@@ -962,7 +969,6 @@ app.post("/api/paystack/verify", async (req,res)=>{
       return res.status(400).json({status:"error", message:"Payment not successful"});
     }
 
-    // If using Plans on Paystack, map plan codes
     const planCode = data.plan || data?.subscription?.plan || data?.authorization?.plan || null;
     let newPlan = null;
     if(planCode){
