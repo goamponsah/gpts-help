@@ -4,37 +4,70 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <title>MathGPT Pricing — Plans</title>
-  <meta name="description" content="Choose a plan and subscribe. Price is managed in Paystack dashboard. After payment, you’ll be redirected to Chat.">
+  <title>MathGPT Pricing — Free, Plus, and Pro Plans</title>
+  <meta name="description" content="Choose your MathGPT plan. Prices are set in USD, and we show estimated local currency at checkout. One-time payment; renew any time." />
 
   <link rel="canonical" href="https://gptshelp.online/pricing/" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="MathGPT Pricing — Unlock Unlimited Photo Solves" />
+  <meta property="og:description" content="Explore Free, Plus, and Pro plans. One-time payment with card or available local methods; renew manually when you want." />
+  <meta property="og:url" content="https://gptshelp.online/pricing/" />
+  <meta property="og:image" content="https://gptshelp.online/static/brand/shortcut-pricing.png" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="MathGPT Pricing — Free, Plus, and Pro" />
+  <meta name="twitter:description" content="Pay once in USD (we show a local estimate) — no auto-renew. Renew manually any time." />
+  <meta name="twitter:image" content="https://gptshelp.online/static/brand/shortcut-pricing.png" />
+
   <meta name="theme-color" content="#6f42c1" />
   <link rel="icon" href="/static/brand/favicon.ico" />
   <link rel="apple-touch-icon" href="/static/brand/logo-192.png" />
   <link rel="manifest" href="/manifest.webmanifest" />
 
   <style>
-    :root{--brand:#6f42c1;--bg:#f8f9fa;--text:#212529;--muted:#6c757d;--border:#eee;--shadow:0 16px 36px rgba(0,0,0,.08)}
-    *{box-sizing:border-box}
-    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
-    a{color:var(--brand);text-decoration:none}
-    header{background:#fff;border-bottom:1px solid #eee}
-    .nav{max-width:1200px;margin:0 auto;padding:1rem 2rem;display:flex;align-items:center;justify-content:space-between}
-    .brand{font-weight:800}
-    .nav-right{display:flex;gap:.5rem}
-    .btn{border:1px solid var(--border);background:#fff;color:var(--brand);padding:.55rem .9rem;border-radius:10px;cursor:pointer;font-weight:600}
-    .btn.primary{background:var(--brand);color:#fff;border-color:transparent}
+    :root { --brand:#6f42c1; --bg:#f8f9fa; --text:#212529; --muted:#6c757d; --border:#eee; --shadow:0 16px 36px rgba(0,0,0,.08) }
+    * { box-sizing: border-box }
+    body { margin:0; font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif; background:var(--bg); color:var(--text) }
+    a { color:var(--brand); text-decoration:none }
+    header { background:#fff; border-bottom:1px solid #eee }
+    .nav { max-width:1200px; margin:0 auto; padding:1rem 2rem; display:flex; align-items:center; justify-content:space-between }
+    .brand { font-weight:800 }
+    .nav-right { display:flex; gap:.5rem }
+    .btn { border:1px solid var(--border); background:#fff; color:var(--brand); padding:.55rem .9rem; border-radius:10px; cursor:pointer; font-weight:600 }
+    .btn.primary { background:var(--brand); color:#fff; border-color:transparent }
+    main { max-width:1200px; margin:0 auto; padding:2rem }
+    h1 { margin-top:.2rem }
+    .plans { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:1.5rem; margin-top:1.25rem }
+    .plan { background:#fff; border:1px solid #eee; border-radius:14px; padding:2rem; text-align:center; box-shadow:var(--shadow); position:relative }
+    .price { font-size:1.5rem; color:var(--brand); margin:.5rem 0 .25rem }
+    .sub { color:var(--muted); font-size:.95rem; margin-bottom:.75rem }
+    ul { list-style:none; padding:0; color:var(--muted); text-align:left; margin:1rem 0 }
+    li { margin:.35rem 0 }
+    .notice { margin:1rem 0 0; padding:.9rem 1rem; border-radius:10px; background:#fff3cd; color:#664d03; border:1px solid #ffecb5; display:none }
+    footer { text-align:center; padding:2rem; color:var(--muted); margin-top:2rem; border-top:1px solid #eee }
     .btn[disabled]{opacity:.7;cursor:progress}
-    main{max-width:1200px;margin:0 auto;padding:2rem}
-    h1{margin-top:.2rem}
-    .plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.5rem;margin-top:1.25rem}
-    .plan{background:#fff;border:1px solid #eee;border-radius:14px;padding:2rem;text-align:center;box-shadow:var(--shadow);position:relative}
-    .plan ul{list-style:none;padding:0;color:var(--muted);text-align:left;margin:1rem 0}
-    .plan li{margin:.35rem 0}
-    .badge{position:absolute;top:12px;right:12px;background:var(--brand);color:#fff;font-size:.75rem;padding:.25rem .5rem;border-radius:999px}
-    .notice{margin:1rem 0 0;padding:.9rem 1rem;border-radius:10px;background:#fff3cd;color:#664d03;border:1px solid #ffecb5;display:none}
-    footer{text-align:center;padding:2rem;color:var(--muted);margin-top:2rem;border-top:1px solid #eee}
   </style>
+
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"BreadcrumbList",
+    "itemListElement":[
+      {"@type":"ListItem","position":1,"name":"Home","item":"https://gptshelp.online/"},
+      {"@type":"ListItem","position":2,"name":"Pricing","item":"https://gptshelp.online/pricing/"}
+    ]
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"Product",
+    "name":"MathGPT Subscription (One-time Access)",
+    "description":"Pay once in USD, see a local currency estimate, and renew manually whenever you want.",
+    "brand":{"@type":"Brand","name":"GPTs Help"}
+  }
+  </script>
 </head>
 <body>
   <header>
@@ -51,13 +84,15 @@
 
   <main>
     <h1>Pricing</h1>
-    <p style="color:#6c757d;margin:.25rem 0 1rem">Final prices are managed in the Paystack dashboard. You’ll confirm on Paystack and return to Chat.</p>
+    <p>Prices are set in USD. We’ll show an estimated local price. Payments are one-time — renew manually any time.</p>
 
     <div id="notice" class="notice" role="status" aria-live="polite"></div>
 
     <div class="plans">
       <div class="plan">
         <h3>Free</h3>
+        <div class="price">USD $0</div>
+        <div class="sub">Try 2 photo solves</div>
         <ul>
           <li><strong>2 Photo Solves</strong></li>
           <li>Basic step-by-step answers</li>
@@ -67,24 +102,27 @@
       </div>
 
       <div class="plan">
-        <div class="badge">Popular</div>
-        <h3>Plus (subscription)</h3>
+        <h3>Plus</h3>
+        <div class="price" id="plusUSD">USD $—</div>
+        <div class="sub" id="plusLocal">≈ —</div>
         <ul>
           <li><strong>Unlimited Photo Solves</strong></li>
-          <li>Advanced explanations &amp; proofs</li>
+          <li>Advanced explanations & proofs</li>
           <li>Priority processing</li>
         </ul>
-        <button id="btnPlus" class="btn primary" type="button">Subscribe to Plus</button>
+        <button id="btnPlus" class="btn primary" type="button">Subscribe (one-time)</button>
       </div>
 
       <div class="plan">
-        <h3>Pro (subscription)</h3>
+        <h3>Pro</h3>
+        <div class="price" id="proUSD">USD $—</div>
+        <div class="sub" id="proLocal">≈ —</div>
         <ul>
           <li><strong>Unlimited Photo Solves</strong></li>
-          <li>Team features &amp; exports</li>
-          <li>Best value annually</li>
+          <li>Team sharing & exports</li>
+          <li>Best value</li>
         </ul>
-        <button id="btnPro" class="btn primary" type="button">Subscribe to Pro</button>
+        <button id="btnPro" class="btn primary" type="button">Subscribe (one-time)</button>
       </div>
     </div>
   </main>
@@ -93,42 +131,105 @@
 
   <script>
     document.getElementById('y').textContent = new Date().getFullYear();
-
     const notice = document.getElementById('notice');
     function show(msg){ notice.textContent = msg; notice.style.display = 'block'; }
-    function clearNotice(){ notice.textContent = ''; notice.style.display = 'none'; }
+    function clearNotice(){ notice.style.display = 'none'; notice.textContent = ''; }
 
-    async function startCheckout(plan) {
+    const elPlusUSD = document.getElementById('plusUSD');
+    const elProUSD  = document.getElementById('proUSD');
+    const elPlusLoc = document.getElementById('plusLocal');
+    const elProLoc  = document.getElementById('proLocal');
+
+    // Guess target currency from browser locale (fallback USD)
+    function guessCurrency(){
+      try{
+        const parts = new Intl.NumberFormat().resolvedOptions();
+        // crude mapping; tweak as needed
+        const loc = (parts.locale || '').toLowerCase();
+        if (loc.includes('gh')) return 'GHS';
+        if (loc.includes('ng')) return 'NGN';
+        if (loc.includes('za')) return 'ZAR';
+        if (loc.includes('ke')) return 'KES';
+        if (loc.includes('us')) return 'USD';
+        if (loc.includes('gb') || loc.includes('en-uk')) return 'GBP';
+        if (loc.includes('eu') || loc.includes('de') || loc.includes('fr') || loc.includes('es') || loc.includes('it')) return 'EUR';
+      }catch{}
+      return 'USD';
+    }
+    const userCurrency = guessCurrency();
+
+    // Format money
+    function fmt(n, cur){
+      try{ return new Intl.NumberFormat(undefined, { style:'currency', currency:cur }).format(n); }
+      catch{ return `${cur} ${n.toFixed(2)}`; }
+    }
+
+    async function loadPricesAndFX(){
+      try{
+        const cfgRes = await fetch('/api/public-config', { credentials:'include' });
+        const cfg = await cfgRes.json();
+        const plusUSD = Number(cfg?.prices?.plusUsd || 0);
+        const proUSD  = Number(cfg?.prices?.proUsd  || 0);
+
+        elPlusUSD.textContent = `USD ${fmt(plusUSD, 'USD')}`;
+        elProUSD.textContent  = `USD ${fmt(proUSD, 'USD')}`;
+
+        if (userCurrency === 'USD') {
+          elPlusLoc.textContent = '≈ USD ' + fmt(plusUSD, 'USD');
+          elProLoc.textContent  = '≈ USD ' + fmt(proUSD, 'USD');
+          return;
+        }
+
+        // Live FX (no key): exchangerate.host
+        const fxRes = await fetch(`https://api.exchangerate.host/latest?base=USD&symbols=${encodeURIComponent(userCurrency)}`);
+        const fx = await fxRes.json();
+        const rate = Number(fx?.rates?.[userCurrency] || 0);
+        if (rate > 0) {
+          elPlusLoc.textContent = `≈ ${fmt(plusUSD * rate, userCurrency)}`;
+          elProLoc.textContent  = `≈ ${fmt(proUSD  * rate, userCurrency)}`;
+        } else {
+          elPlusLoc.textContent = '≈ USD ' + fmt(plusUSD, 'USD');
+          elProLoc.textContent  = '≈ USD ' + fmt(proUSD, 'USD');
+        }
+      } catch {
+        // FX failed → show USD only
+        elPlusLoc.textContent = '≈ USD —';
+        elProLoc.textContent  = '≈ USD —';
+      }
+    }
+
+    loadPricesAndFX();
+
+    async function startCheckout(plan){
       clearNotice();
       const btn = plan === 'PLUS' ? document.getElementById('btnPlus') : document.getElementById('btnPro');
       btn.disabled = true;
-
-      try {
+      try{
         const res = await fetch('/api/paystack/init', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
+          method:'POST',
+          headers:{ 'Content-Type':'application/json' },
+          credentials:'include',
           body: JSON.stringify({ plan })
         });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          if (res.status === 401) throw new Error('Please sign in first. Open Chat to create an account, verify your email, then return here.');
+        const data = await res.json().catch(()=> ({}));
+        if(!res.ok){
+          if(res.status === 401) throw new Error('Please sign in first. Open Chat to create an account and verify your email.');
           throw new Error(data?.message || 'Could not start checkout.');
         }
-        if (data?.authorization_url) {
-          window.location.href = data.authorization_url; // Paystack will handle payment & return
+        if(data?.authorization_url){
+          window.location.href = data.authorization_url;
           return;
         }
-        throw new Error('Missing authorization URL.');
-      } catch (e) {
+        throw new Error('Missing authorization URL from server.');
+      }catch(e){
         show(e.message || 'Something went wrong.');
-      } finally {
+      }finally{
         btn.disabled = false;
       }
     }
 
-    document.getElementById('btnPlus').addEventListener('click', () => startCheckout('PLUS'));
-    document.getElementById('btnPro').addEventListener('click', () => startCheckout('PRO'));
+    document.getElementById('btnPlus').addEventListener('click', ()=> startCheckout('PLUS'));
+    document.getElementById('btnPro').addEventListener('click',  ()=> startCheckout('PRO'));
   </script>
 </body>
 </html>
