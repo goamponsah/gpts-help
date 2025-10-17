@@ -6,12 +6,14 @@
 
   <title>MathGPT Pricing — Free, Plus, and Pro Plans</title>
   <meta name="description" content="Choose your MathGPT plan: Free for basic step-by-step math solutions, Plus for unlimited photo solves, or Pro for team sharing and exports.">
+  <meta name="robots" content="index,follow" />
 
   <!-- Canonical (trailing slash version) -->
   <link rel="canonical" href="https://gptshelp.online/pricing/" />
 
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="GPTs Help" />
   <meta property="og:title" content="MathGPT Pricing — Unlock Unlimited Photo Solves" />
   <meta property="og:description" content="Explore Free, Plus, and Pro plans. Upgrade to unlock unlimited AI math explanations and exports." />
   <meta property="og:url" content="https://gptshelp.online/pricing/" />
@@ -43,86 +45,33 @@
     a{color:var(--brand);text-decoration:none}
     header{background:#fff;border-bottom:1px solid #eee}
     .nav{
-      max-width:1200px;
-      margin:0 auto;
-      padding:1rem 2rem;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
+      max-width:1200px;margin:0 auto;padding:1rem 2rem;display:flex;align-items:center;justify-content:space-between
     }
     .brand{font-weight:800}
     .nav-right{display:flex;gap:.5rem}
     .btn{
-      border:1px solid var(--border);
-      background:#fff;
-      color:var(--brand);
-      padding:.55rem .9rem;
-      border-radius:10px;
-      cursor:pointer;
-      font-weight:600;
+      border:1px solid var(--border);background:#fff;color:var(--brand);
+      padding:.55rem .9rem;border-radius:10px;cursor:pointer;font-weight:600
     }
-    .btn.primary{
-      background:var(--brand);
-      color:#fff;
-      border-color:transparent;
-    }
-    main{
-      max-width:1200px;
-      margin:0 auto;
-      padding:2rem;
-    }
+    .btn.primary{background:var(--brand);color:#fff;border-color:transparent}
+    .btn[disabled]{opacity:.7;cursor:progress}
+    main{max-width:1200px;margin:0 auto;padding:2rem}
     h1{margin-top:.2rem}
-    .plans{
-      display:grid;
-      grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
-      gap:1.5rem;
-      margin-top:1.25rem;
-    }
+    .plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.5rem;margin-top:1.25rem}
     .plan{
-      background:#fff;
-      border:1px solid #eee;
-      border-radius:14px;
-      padding:2rem;
-      text-align:center;
-      box-shadow:var(--shadow);
-      position:relative;
+      background:#fff;border:1px solid #eee;border-radius:14px;padding:2rem;text-align:center;
+      box-shadow:var(--shadow);position:relative
     }
     .price{font-size:2rem;color:var(--brand);margin:.5rem 0 1rem}
-    .plan ul{
-      list-style:none;
-      padding:0;
-      color:var(--muted);
-      text-align:left;
-      margin:1rem 0;
-    }
+    .plan ul{list-style:none;padding:0;color:var(--muted);text-align:left;margin:1rem 0}
     .plan li{margin:.35rem 0}
-    .badge{
-      position:absolute;
-      top:12px;
-      right:12px;
-      background:var(--brand);
-      color:#fff;
-      font-size:.75rem;
-      padding:.25rem .5rem;
-      border-radius:999px;
-    }
+    .badge{position:absolute;top:12px;right:12px;background:var(--brand);color:#fff;font-size:.75rem;padding:.25rem .5rem;border-radius:999px}
     .notice{
-      margin:1rem 0 0;
-      padding:.9rem 1rem;
-      border-radius:10px;
-      background:#fff3cd;
-      color:#664d03;
-      border:1px solid #ffecb5;
-      display:none;
+      margin:1rem 0 0;padding:.9rem 1rem;border-radius:10px;background:#fff3cd;color:#664d03;border:1px solid #ffecb5;
+      display:none
     }
-    footer{
-      text-align:center;
-      padding:2rem;
-      color:var(--muted);
-      margin-top:2rem;
-      border-top:1px solid #eee;
-    }
-    .btn[disabled]{opacity:.7;cursor:progress}
+    footer{text-align:center;padding:2rem;color:var(--muted);margin-top:2rem;border-top:1px solid #eee}
+    noscript{display:block;margin:1rem 0;color:#b42318;background:#fee4e2;border:1px solid #fecdca;padding:.75rem;border-radius:10px}
   </style>
 
   <!-- Breadcrumb Schema -->
@@ -153,7 +102,7 @@
   }
   </script>
 
-  <!-- Optional site search schema for richer features -->
+  <!-- Site Search Schema (optional but nice) -->
   <script type="application/ld+json">
   {
     "@context":"https://schema.org",
@@ -185,6 +134,7 @@
     <h1>Pricing</h1>
     <p>Start free and upgrade anytime to unlock unlimited photo solves.</p>
 
+    <noscript>JavaScript is required for checkout. Please enable JavaScript and reload this page.</noscript>
     <div id="notice" class="notice" role="status" aria-live="polite"></div>
 
     <div class="plans">
@@ -205,10 +155,10 @@
         <div class="price">₵49 / mo</div>
         <ul>
           <li><strong>Unlimited Photo Solves</strong></li>
-          <li>Advanced explanations & proofs</li>
+          <li>Advanced explanations &amp; proofs</li>
           <li>Priority processing</li>
         </ul>
-        <button id="btnPlus" class="btn primary" type="button">Subscribe Monthly</button>
+        <button id="btnPlus" class="btn primary" type="button" aria-label="Subscribe to Plus Monthly">Subscribe Monthly</button>
       </div>
 
       <div class="plan">
@@ -217,9 +167,9 @@
         <ul>
           <li><strong>Unlimited Photo Solves</strong></li>
           <li>Save 34% yearly</li>
-          <li>Team sharing & exports</li>
+          <li>Team sharing &amp; exports</li>
         </ul>
-        <button id="btnPro" class="btn primary" type="button">Subscribe Annually</button>
+        <button id="btnPro" class="btn primary" type="button" aria-label="Subscribe to Pro Annual">Subscribe Annually</button>
       </div>
     </div>
   </main>
@@ -227,8 +177,10 @@
   <footer>&copy; <span id="y"></span> GPTs Help</footer>
 
   <script>
+    // Footer year
     document.getElementById('y').textContent = new Date().getFullYear();
 
+    // Small notice helper
     const notice = document.getElementById('notice');
     function show(msg) {
       notice.textContent = msg;
@@ -243,6 +195,7 @@
       clearNotice();
       const btn = plan === 'PLUS' ? document.getElementById('btnPlus') : document.getElementById('btnPro');
       btn.disabled = true;
+      btn.setAttribute('aria-busy', 'true');
 
       try {
         const res = await fetch('/api/paystack/init', {
@@ -255,7 +208,6 @@
         const data = await res.json().catch(() => ({}));
 
         if (!res.ok) {
-          // Helpful messages based on server responses
           if (res.status === 401) {
             throw new Error('Please sign in first. Open Chat to create an account, verify your email, then return here.');
           }
@@ -264,8 +216,7 @@
         }
 
         if (data && data.authorization_url) {
-          // Redirect user to Paystack hosted checkout
-          window.location.href = data.authorization_url;
+          window.location.href = data.authorization_url; // Paystack hosted checkout
           return;
         }
 
@@ -274,6 +225,7 @@
         show(e.message || 'Something went wrong.');
       } finally {
         btn.disabled = false;
+        btn.removeAttribute('aria-busy');
       }
     }
 
@@ -282,4 +234,3 @@
   </script>
 </body>
 </html>
-```0
