@@ -16,7 +16,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 
-// Railway / proxy awareness (for correct https detection)
+// Railway / proxy awareness (needed for correct https + cookies)
 app.set("trust proxy", 1);
 
 const {
@@ -33,14 +33,16 @@ const {
   // Paystack
   PAYSTACK_PUBLIC_KEY,
   PAYSTACK_SECRET_KEY,
-  PAYSTACK_CALLBACK_URL,     // you asked to use https://gptshelp.online/payment-success
-  PAYSTACK_CURRENCY,         // e.g. "GHS" (recommended to set)
-  PLAN_CODE_PLUS_MONTHLY,    // Paystack plan code for PLUS (recurring card)
-  PLAN_CODE_PRO_ANNUAL,      // Paystack plan code for PRO  (recurring card)
+  PAYSTACK_CALLBACK_URL,      // we will override with fixed page below as requested
+  PAYSTACK_CURRENCY,          // e.g. "GHS" or "NGN" (optional)
+  PLAN_CODE_PLUS_MONTHLY,     // legacy recurring plans (optional)
+  PLAN_CODE_PRO_ANNUAL,       // legacy recurring plans (optional)
 
-  // One-time amounts in GHS (optional; default fallback below)
+  // One-time pricing in MAJOR units (no decimals needed here; we convert to minor)
   AMOUNT_PLUS_GHS,
   AMOUNT_PRO_GHS,
+  AMOUNT_PLUS,                // fallback variable name if you prefer generic
+  AMOUNT_PRO,                 // fallback variable name if you prefer generic
 } = process.env;
 
 if (!DATABASE_URL) console.error("[ERROR] DATABASE_URL not set");
@@ -58,9 +60,17 @@ if (FRONTEND_ORIGIN) {
 } else {
   app.use(cors({ origin: "*", credentials: true }));
 }
+
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 const upload = multer({ storage: multer.memoryStorage() });
+
+/* ---------- Light headers for bots & assets ---------- */
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", FRONTEND_ORIGIN || "*");
+  res.setHeader("Access-Control-Allow-Credentials", "true");
+  next();
+});
 
 /* ---------- Static files (SEO/PWA friendly) ---------- */
 const PUB = path.join(__dirname, "public");
@@ -89,6 +99,7 @@ app.use(
         p.endsWith("service-worker.js") ||
         p.endsWith("/service-worker.js") ||
         p.endsWith("\\service-worker.js");
+
       if (noCache) {
         res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       } else {
@@ -106,6 +117,7 @@ const pool = new Pool({
 
 /* ===================== Schema (auto-migrate, legacy-safe) ===================== */
 async function ensureSchema() {
+  // Core tables
   await pool.query(`
     create table if not exists users (
       id bigserial primary key,
@@ -134,7 +146,7 @@ async function ensureSchema() {
     );
   `);
 
-  // Legacy column renames
+  // Legacy migrations for device_quotas
   await pool.query(`
     DO $$
     BEGIN
@@ -160,8 +172,10 @@ async function ensureSchema() {
     END $$;
   `);
 
-  // safety add
-  const qUsers = await pool.query(`select column_name from information_schema.columns where table_name='users'`);
+  // Safety add columns on users
+  const qUsers = await pool.query(`
+    select column_name from information_schema.columns where table_name='users'
+  `);
   const haveUsers = new Set(qUsers.rows.map(r => r.column_name));
   async function addUsers(sql){ try { await pool.query(sql); } catch {} }
   if (!haveUsers.has("verified"))       await addUsers(`alter table users add column verified boolean not null default false`);
@@ -170,8 +184,10 @@ async function ensureSchema() {
   if (!haveUsers.has("reset_token"))    await addUsers(`alter table users add column reset_token text`);
   if (!haveUsers.has("reset_expires"))  await addUsers(`alter table users add column reset_expires timestamptz`);
 
-  // Conversations / messages / shares
+  /* ---------- Conversations / Messages / Shares ---------- */
+
   await pool.query(`create table if not exists conversations ( id bigserial primary key );`);
+
   await pool.query(`
     DO $$
     BEGIN
@@ -186,12 +202,14 @@ async function ensureSchema() {
       END IF;
     END $$;
   `);
+
   await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS user_email   text;`);
   await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS user_id      bigint;`);
   await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS title        text not null default 'New chat';`);
   await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS archived     boolean not null default false;`);
   await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS created_at   timestamptz not null default now();`);
   await pool.query(`ALTER TABLE conversations ADD COLUMN IF NOT EXISTS updated_at   timestamptz not null default now();`);
+
   await pool.query(`
     UPDATE conversations c
        SET user_id = u.id
@@ -199,6 +217,7 @@ async function ensureSchema() {
      WHERE c.user_id IS NULL
        AND c.user_email = u.email
   `);
+
   await pool.query(`create index if not exists idx_conversations_user_email on conversations(user_email);`);
   await pool.query(`create index if not exists idx_conversations_user_id    on conversations(user_id);`);
   await pool.query(`create index if not exists idx_conversations_archived   on conversations(archived);`);
@@ -307,7 +326,7 @@ function cookieOpts() {
     secure: true,
     sameSite: cross ? "None" : "Lax",
     path: "/",
-    maxAge: 30*24*60*60*1000
+    maxAge: 30 * 24 * 60 * 60 * 1000,
   };
 }
 function setSessionCookie(res, payload) {
@@ -397,9 +416,13 @@ async function bumpQuota(deviceHash,kind){
 }
 
 /* ===================== Auth APIs ===================== */
+
+// public-config (for Paystack public key)
 app.get("/api/public-config", (req,res)=>{
   res.json({ paystackPublicKey: PAYSTACK_PUBLIC_KEY || null });
 });
+
+// me
 app.get("/api/me", async (req,res)=>{
   const s = readSession(req);
   if(!s?.email) return res.json({ status:"anon" });
@@ -407,6 +430,8 @@ app.get("/api/me", async (req,res)=>{
   if(!u) return res.json({ status:"anon" });
   res.json({ status:"ok", user:{ email:u.email, plan:u.plan, verified:u.verified }});
 });
+
+// signup
 app.post("/api/signup-free", async (req,res)=>{
   try{
     const {email,password} = req.body || {};
@@ -415,7 +440,9 @@ app.post("/api/signup-free", async (req,res)=>{
     if(password && password.length>=8) await setUserPassword(email,password);
     const token = crypto.randomBytes(24).toString("hex");
     const until = new Date(Date.now() + 24*3600e3);
-    await pool.query(`update users set verify_token=$2, verify_expires=$3, verified=false where email=$1`,[email,token,until]);
+    await pool.query(`
+      update users set verify_token=$2, verify_expires=$3, verified=false where email=$1
+    `,[email,token,until]);
     const origin = req.headers.origin || FRONTEND_ORIGIN || `${req.protocol}://${req.get("host")}`;
     const link = `${origin}/api/verify-email?token=${token}`;
     await resendSend({to:email,subject:"Verify your GPTs Help email",html:verificationEmailHtml(link)});
@@ -423,6 +450,8 @@ app.post("/api/signup-free", async (req,res)=>{
     res.json({ ok:true });
   }catch(e){ console.error(e); res.status(500).json({error:"Signup failed"}); }
 });
+
+// verify email (redirects to chat)
 app.get("/api/verify-email", async (req,res)=>{
   try{
     const { token } = req.query || {};
@@ -436,6 +465,8 @@ app.get("/api/verify-email", async (req,res)=>{
     res.redirect("/chat.html");
   }catch(e){ console.error(e); res.status(500).send("Verification failed"); }
 });
+
+// login
 app.post("/api/login", async (req,res)=>{
   try{
     const { email, password } = req.body || {};
@@ -448,10 +479,14 @@ app.post("/api/login", async (req,res)=>{
     res.json({ status:"ok", user:{ email:u.email, plan:u.plan, verified:u.verified }});
   }catch(e){ console.error("login error",e); res.status(500).json({status:"error", message:"Login failed"}); }
 });
+
+// logout
 app.post("/api/logout", async (req,res)=>{
   try{ clearSession(res); }catch{}
   res.json({ status:"ok" });
 });
+
+// resend verify
 app.post("/api/resend-verify", async (req,res)=>{
   try{
     const s = readSession(req);
@@ -465,11 +500,14 @@ app.post("/api/resend-verify", async (req,res)=>{
     res.json({ status:"ok" });
   }catch(e){ console.error(e); res.status(500).json({status:"error"}); }
 });
+
+// forgot password -> create token & email link
 app.post("/api/forgot-password", async (req,res)=>{
   try{
     const { email } = req.body || {};
     if(!email) return res.status(400).json({status:"error", message:"Email required"});
     const u = await getUserByEmail(email);
+    // Don't leak user existence
     if(u){
       const token = crypto.randomBytes(24).toString("hex");
       const until = new Date(Date.now() + 2*3600e3);
@@ -481,6 +519,8 @@ app.post("/api/forgot-password", async (req,res)=>{
     res.json({ status:"ok" });
   }catch(e){ console.error(e); res.status(500).json({status:"error"}); }
 });
+
+// validate reset token (for UI gating)
 app.get("/api/reset/validate", async (req,res)=>{
   try{
     const token = (req.query?.token || "").toString();
@@ -492,6 +532,8 @@ app.get("/api/reset/validate", async (req,res)=>{
     res.json({ valid: !!r.rowCount });
   }catch(e){ console.error(e); res.json({ valid:false }); }
 });
+
+// confirm reset (set new password, sign in)
 app.post("/api/reset/confirm", async (req,res)=>{
   try{
     const { token, newPassword } = req.body || {};
@@ -515,11 +557,14 @@ app.post("/api/reset/confirm", async (req,res)=>{
 });
 
 /* ===================== Conversations & Messages ===================== */
+
+// helper to get user id fast
 async function getUserIdByEmail(email){
   const r = await pool.query(`select id from users where email=$1`,[email]);
   return r.rows?.[0]?.id || null;
 }
 
+// List conversations
 app.get("/api/conversations", async (req,res)=>{
   try{
     const s = readSession(req);
@@ -534,6 +579,8 @@ app.get("/api/conversations", async (req,res)=>{
     res.json(rows);
   }catch(e){ console.error(e); res.status(500).json({error:"failed"}); }
 });
+
+// Create conversation
 app.post("/api/conversations", async (req,res)=>{
   try{
     const s = readSession(req);
@@ -550,6 +597,8 @@ app.post("/api/conversations", async (req,res)=>{
     res.json(rows[0]);
   }catch(e){ console.error(e); res.status(500).json({error:"failed"}); }
 });
+
+// Update conversation (rename / archive)
 app.patch("/api/conversations/:id", async (req,res)=>{
   try{
     const s = readSession(req);
@@ -573,6 +622,8 @@ app.patch("/api/conversations/:id", async (req,res)=>{
     res.json(rows[0]);
   }catch(e){ console.error(e); res.status(500).json({error:"failed"}); }
 });
+
+// Delete conversation
 app.delete("/api/conversations/:id", async (req,res)=>{
   try{
     const s = readSession(req);
@@ -582,6 +633,8 @@ app.delete("/api/conversations/:id", async (req,res)=>{
     res.json({ status:"ok" });
   }catch(e){ console.error(e); res.status(500).json({error:"failed"}); }
 });
+
+// Get conversation messages
 app.get("/api/conversations/:id", async (req,res)=>{
   try{
     const s = readSession(req);
@@ -601,6 +654,8 @@ app.get("/api/conversations/:id", async (req,res)=>{
 });
 
 /* ===================== Shareable Links ===================== */
+
+// Create a share token
 app.post("/api/conversations/:id/share", async (req,res)=>{
   try{
     const s = readSession(req);
@@ -609,6 +664,7 @@ app.post("/api/conversations/:id/share", async (req,res)=>{
     const own = await pool.query(`select 1 from conversations where id=$1 and user_email=$2`,[id,s.email]);
     if(!own.rowCount) return res.status(404).json({error:"not found"});
 
+    // reuse existing if any
     let tokenRow = await pool.query(`select token from conversation_shares where conversation_id=$1`,[id]);
     if(!tokenRow.rowCount){
       const token = crypto.randomBytes(16).toString("hex");
@@ -620,6 +676,8 @@ app.post("/api/conversations/:id/share", async (req,res)=>{
     res.json({ token: tokenRow.rows[0].token });
   }catch(e){ console.error(e); res.status(500).json({error:"failed"}); }
 });
+
+// Read shared conversation (public)
 app.get("/api/share/:token", async (req,res)=>{
   try{
     const { token } = req.params;
@@ -640,6 +698,8 @@ app.get("/api/share/:token", async (req,res)=>{
 });
 
 /* ===================== Chat & Photo Solve ===================== */
+
+// OpenAI helpers
 async function openaiChat(messages){
   const r = await fetch("https://api.openai.com/v1/chat/completions",{
     method:"POST",
@@ -661,6 +721,7 @@ async function openaiChat(messages){
   return data?.choices?.[0]?.message?.content || "";
 }
 
+// Chat (text)
 app.post("/api/chat", async (req,res)=>{
   try{
     const s = readSession(req);
@@ -679,6 +740,7 @@ app.post("/api/chat", async (req,res)=>{
     const { message, conversationId } = req.body || {};
     if(!message || typeof message!=="string") return res.status(400).json({error:"message required"});
 
+    // ensure conversation
     let convId = conversationId;
     if(!convId){
       const r = await pool.query(
@@ -694,6 +756,7 @@ app.post("/api/chat", async (req,res)=>{
       await pool.query(`update conversations set updated_at=now() where id=$1 and user_email=$2`,[convId,s.email]);
     }
 
+    // store user message
     await pool.query(`insert into messages(conversation_id, role, content) values($1,'user',$2)`,[convId, message]);
 
     const system = "You are Math GPT. Solve step-by-step clearly.";
@@ -702,6 +765,7 @@ app.post("/api/chat", async (req,res)=>{
       { role:"user", content: message }
     ]);
 
+    // store assistant message
     await pool.query(`insert into messages(conversation_id, role, content) values($1,'assistant',$2)`,[convId, answer]);
 
     if((u.plan||"FREE").toUpperCase()==="FREE") await bumpQuota(deviceHash,"text");
@@ -713,6 +777,7 @@ app.post("/api/chat", async (req,res)=>{
   }
 });
 
+// Photo solve (image -> reasoning)
 app.post("/api/photo-solve", upload.single("image"), async (req,res)=>{
   try{
     const s = readSession(req);
@@ -737,6 +802,7 @@ app.post("/api/photo-solve", upload.single("image"), async (req,res)=>{
 
     const { attempt="", conversationId } = req.body || {};
 
+    // ensure conversation
     let convId = conversationId;
     if(!convId){
       const r = await pool.query(
@@ -797,95 +863,117 @@ app.post("/api/photo-solve", upload.single("image"), async (req,res)=>{
   }
 });
 
-/* ===================== Paystack ===================== */
-/** Utility: convert a "GHS" string/number to minor units (pesewas integer). */
-function toMinorUnits(ghs) {
-  const n = typeof ghs === "string" ? Number(ghs) : ghs;
-  if (!Number.isFinite(n)) return null;
-  // Avoid float rounding: 49 -> 4900, 388 -> 38800
-  return Math.round(n * 100);
-}
-/** Quick, consistent callback URL */
-function callbackURL(req) {
-  // You asked to use this path specifically:
-  const url = PAYSTACK_CALLBACK_URL || "https://gptshelp.online/payment-success";
-  return url;
-}
+/* ===================== Feedback (like/dislike) ===================== */
+app.post("/api/feedback", async (req,res)=>{
+  try{
+    const s = readSession(req);
+    const { conversationId, messageIndex, kind } = req.body || {};
+    if(kind!=='like' && kind!=='dislike') return res.status(400).json({error:'bad kind'});
+    await pool.query(
+      `insert into message_feedback(conversation_id,message_index,kind,user_email)
+       values ($1,$2,$3,$4)`,
+      [conversationId ?? null, messageIndex ?? null, kind, s?.email || null]
+    );
+    res.json({status:'ok'});
+  }catch(e){ console.error("feedback error",e); res.status(500).json({error:'feedback failed'}); }
+});
 
-/**
- * POST /api/paystack/init
- * Body:
- *  - plan: "PLUS" | "PRO"
- *  - mode: "subscription" | "one_time"  (default "subscription")
- *
- * subscription => uses Paystack Plan code (card, auto-renew)
- * one_time     => amount + channels ["mobile_money","card"] (manual renew)
- */
+/* ===================== Paystack ===================== */
+
+// Log summary on boot for quick diagnostics
+(function paystackStartupLog(){
+  const currency = PAYSTACK_CURRENCY || "default";
+  const amtPlus = AMOUNT_PLUS_GHS || AMOUNT_PLUS || "";
+  const amtPro  = AMOUNT_PRO_GHS  || AMOUNT_PRO  || "";
+  console.log("[PAYSTACK] startup", JSON.stringify({
+    has_public_key: !!PAYSTACK_PUBLIC_KEY,
+    has_secret_key: !!PAYSTACK_SECRET_KEY,
+    has_plus_plan: !!PLAN_CODE_PLUS_MONTHLY,
+    has_pro_plan:  !!PLAN_CODE_PRO_ANNUAL,
+    currency,
+    amount_plus: amtPlus ? String(amtPlus) : "unset",
+    amount_pro:  amtPro  ? String(amtPro)  : "unset",
+  }));
+})();
+
+// 1) Initialize a hosted checkout (supports one-time MoMo/Card OR legacy plan mode)
 app.post("/api/paystack/init", async (req, res) => {
   try {
     const s = readSession(req);
     if (!s?.email) return res.status(401).json({ status: "error", message: "Not signed in" });
 
-    const { plan, planCode, mode } = req.body || {};
-    const label = String(plan || "").toUpperCase(); // "PLUS" | "PRO"
-    const flow  = (mode || "subscription").toLowerCase(); // default
+    const {
+      plan,          // "PLUS" | "PRO"
+      planCode,      // legacy plan code (optional)
+      mode           // "one_time" | undefined (legacy)
+    } = req.body || {};
 
-    // Common metadata for easier Verify mapping
-    const meta = {
-      plan_label: label || undefined,
-      site: "gptshelp.online",
-      mode: flow
-    };
+    // Use fixed callback page as requested
+    const callbackUrl = "https://gptshelp.online/payment-success";
 
-    // Log startup env summarised
-    if (process.env.NODE_ENV !== "production") {
-      console.log("[PAYSTACK] startup", JSON.stringify({
-        has_public_key: !!PAYSTACK_PUBLIC_KEY,
-        has_secret_key: !!PAYSTACK_SECRET_KEY,
-        has_plus_plan: !!PLAN_CODE_PLUS_MONTHLY,
-        has_pro_plan: !!PLAN_CODE_PRO_ANNUAL,
-        currency: PAYSTACK_CURRENCY || "default",
-        amount_plus: AMOUNT_PLUS_GHS ? "env" : "unset",
-        amount_pro : AMOUNT_PRO_GHS  ? "env" : "unset"
-      }));
-    }
+    // ONE-TIME (MoMo + Card) MODE
+    if (mode === "one_time") {
+      const currency = PAYSTACK_CURRENCY || "GHS";
 
-    // === Flow A: subscription (card auto-renew via Plan code)
-    if (flow === "subscription") {
-      let code = planCode || null;
-      if (!code && label) {
-        if (label === "PLUS") code = PLAN_CODE_PLUS_MONTHLY;
-        if (label === "PRO")  code = PLAN_CODE_PRO_ANNUAL;
+      // Accept either *_GHS or generic AMOUNT_* envs
+      const plusMajor = Number(AMOUNT_PLUS_GHS || AMOUNT_PLUS || 0);
+      const proMajor  = Number(AMOUNT_PRO_GHS  || AMOUNT_PRO  || 0);
+
+      let major = null;
+      const planUpper = String(plan || "").toUpperCase();
+      if (planUpper === "PLUS") major = plusMajor;
+      if (planUpper === "PRO")  major = proMajor;
+
+      if (!major || major <= 0) {
+        return res.status(400).json({ status: "error", message: "Invalid amount config for selected plan" });
       }
-      if (!code) return res.status(400).json({ status: "error", message: "Missing plan code" });
 
-      const body = {
+      const amountMinor = Math.round(major * 100);
+
+      const initBody = {
         email: s.email,
-        plan: code, // Paystack Plan code
-        callback_url: callbackURL(req),
-        currency: PAYSTACK_CURRENCY || undefined,
-        metadata: meta,
+        amount: amountMinor,
+        currency,
+        channels: ["mobile_money","card"],
+        callback_url: callbackUrl,
+        metadata: {
+          plan_label: planUpper,
+          site: "gptshelp.online"
+        }
       };
 
-      console.log("[PAYSTACK][INIT][SUBSCRIPTION] request ->", JSON.stringify(body));
+      // DEBUG log (no secrets)
+      console.log("[PAYSTACK][INIT] request ->", JSON.stringify({
+        amount_minor: amountMinor,
+        currency,
+        channels: initBody.channels,
+        callback_url: callbackUrl,
+        metadata: initBody.metadata
+      }));
+
       const initRes = await fetch("https://api.paystack.co/transaction/initialize", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(body),
+        body: JSON.stringify(initBody),
       });
 
-      const text = await initRes.text().catch(()=>"");
-      let parsed = {};
-      try { parsed = JSON.parse(text); } catch {}
-      console.log("[PAYSTACK][INIT][SUBSCRIPTION] response -> status=%s ok=%s\ntext=%s",
-        initRes.status, initRes.ok, text);
+      const rawText = await initRes.text().catch(()=> "");
+      let parsed;
+      try { parsed = JSON.parse(rawText); } catch { parsed = null; }
 
-      if (!initRes.ok || parsed.status !== true) {
-        return res.status(400).json({ status: "error", message: parsed?.message || "Init failed" });
+      // More verbose logs to debug "Invalid Amount Sent" etc
+      console.log("[PAYSTACK][INIT] response -> status=" + initRes.status + " ok=" + initRes.ok);
+      console.log("headers=" + JSON.stringify(Object.fromEntries(initRes.headers.entries())));
+      console.log("text=" + rawText);
+      if (parsed) console.log("json=" + JSON.stringify(parsed));
+
+      if (!initRes.ok || !parsed || parsed.status !== true) {
+        return res.status(400).json({ status: "error", message: (parsed && parsed.message) || "Init failed" });
       }
+
       return res.json({
         status: "ok",
         authorization_url: parsed.data.authorization_url,
@@ -894,49 +982,49 @@ app.post("/api/paystack/init", async (req, res) => {
       });
     }
 
-    // === Flow B: one_time (MoMo + Card) with explicit amount
-    // Pick amounts (GHS) either from env or fallback
-    const ghsPlus = AMOUNT_PLUS_GHS ? Number(AMOUNT_PLUS_GHS) : 49;
-    const ghsPro  = AMOUNT_PRO_GHS  ? Number(AMOUNT_PRO_GHS)  : 388;
-
-    let ghs = null;
-    if (label === "PLUS") ghs = ghsPlus;
-    else if (label === "PRO") ghs = ghsPro;
-
-    const amountMinor = toMinorUnits(ghs);
-    if (!amountMinor || amountMinor <= 0) {
-      return res.status(400).json({ status:"error", message:"Invalid or missing amount for one-time checkout" });
+    // LEGACY PLAN MODE (recurring; still supported)
+    let code = planCode || null;
+    if (!code && plan) {
+      const p = String(plan).toUpperCase();
+      if (p === "PLUS") code = PLAN_CODE_PLUS_MONTHLY;
+      if (p === "PRO")  code = PLAN_CODE_PRO_ANNUAL;
     }
+    if (!code) return res.status(400).json({ status: "error", message: "Missing plan" });
 
-    const body = {
+    const legacyBody = {
       email: s.email,
-      amount: amountMinor,             // integer, pesewas
-      currency: PAYSTACK_CURRENCY || "GHS",
-      channels: ["mobile_money", "card"],
-      callback_url: callbackURL(req),
-      metadata: meta,
+      plan: code,
+      callback_url: callbackUrl,
+      currency: PAYSTACK_CURRENCY || undefined,
     };
 
-    console.log("[PAYSTACK][INIT][ONE_TIME] request ->", JSON.stringify(body));
+    console.log("[PAYSTACK][INIT-LEGACY] request ->", JSON.stringify({
+      plan: code, callback_url: callbackUrl, currency: legacyBody.currency || "default"
+    }));
+
     const initRes = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify(legacyBody),
     });
 
-    const text = await initRes.text().catch(()=>"");
-    let parsed = {};
-    try { parsed = JSON.parse(text); } catch {}
-    console.log("[PAYSTACK][INIT][ONE_TIME] response -> status=%s ok=%s\ntext=%s",
-      initRes.status, initRes.ok, text);
+    const rawText = await initRes.text().catch(()=> "");
+    let parsed;
+    try { parsed = JSON.parse(rawText); } catch { parsed = null; }
 
-    if (!initRes.ok || parsed.status !== true) {
-      return res.status(400).json({ status: "error", message: parsed?.message || "Init failed" });
+    console.log("[PAYSTACK][INIT-LEGACY] response -> status=" + initRes.status + " ok=" + initRes.ok);
+    console.log("headers=" + JSON.stringify(Object.fromEntries(initRes.headers.entries())));
+    console.log("text=" + rawText);
+    if (parsed) console.log("json=" + JSON.stringify(parsed));
+
+    if (!initRes.ok || !parsed || parsed.status !== true) {
+      return res.status(400).json({ status: "error", message: (parsed && parsed.message) || "Init failed" });
     }
-    return res.json({
+
+    res.json({
       status: "ok",
       authorization_url: parsed.data.authorization_url,
       reference: parsed.data.reference,
@@ -948,14 +1036,20 @@ app.post("/api/paystack/init", async (req, res) => {
   }
 });
 
-/**
- * Client-side callback landing:
- * Paystack will redirect to https://gptshelp.online/payment-success?reference=REF...
- * Serve a static page under /public/payment-success/index.html that calls /api/paystack/verify.
- * (This server also keeps a POST /paystack/callback pattern if needed later.)
- */
+// 2) (Optional) Legacy callback endpoint (not used when you set callback_url to /payment-success page)
+app.get("/paystack/callback", async (req, res) => {
+  try {
+    const reference = (req.query.reference || req.query.trxref || "").toString();
+    if (!reference) return res.status(400).send("Missing reference");
+    // Prefer to route users to your SPA page:
+    return res.redirect(`/payment-success?reference=${encodeURIComponent(reference)}`);
+  } catch (e) {
+    console.error("paystack callback error", e);
+    res.status(500).send("Callback error");
+  }
+});
 
-// Verify endpoint used by the callback page
+// 3) Verify endpoint (handles one-time & legacy)
 app.post("/api/paystack/verify", async (req,res)=>{
   try{
     const s = readSession(req);
@@ -966,12 +1060,13 @@ app.post("/api/paystack/verify", async (req,res)=>{
     const r = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,{
       headers:{ Authorization:`Bearer ${PAYSTACK_SECRET_KEY}` }
     });
+    const rawText = await r.text().catch(()=> "");
+    let j;
+    try { j = JSON.parse(rawText); } catch { j = null; }
 
-    const text = await r.text().catch(()=> "");
-    let j = {};
-    try { j = JSON.parse(text); } catch {}
-    console.log("[PAYSTACK][VERIFY] response -> status=%s ok=%s\ntext=%s",
-      r.status, r.ok, text);
+    console.log("[PAYSTACK][VERIFY] status=" + r.status + " ok=" + r.ok);
+    console.log("text=" + rawText);
+    if (j) console.log("json=" + JSON.stringify(j));
 
     if(!r.ok || !j || j.status !== true){
       return res.status(400).json({status:"error", message:"Verification failed"});
@@ -982,22 +1077,20 @@ app.post("/api/paystack/verify", async (req,res)=>{
       return res.status(400).json({status:"error", message:"Payment not successful"});
     }
 
-    // Map plan for subscription flow (will contain plan code)
+    // ONE-TIME: plan propagated via metadata.plan_label
+    const metaPlan = (data?.metadata?.plan_label || "").toUpperCase();
+    if (metaPlan === "PLUS" || metaPlan === "PRO") {
+      await pool.query(`update users set plan=$2, updated_at=now() where email=$1`, [s.email, metaPlan]);
+      setSessionCookie(res, { email:s.email, plan:metaPlan });
+      return res.json({ status:"success", mode:"one_time", plan:metaPlan });
+    }
+
+    // LEGACY recurring: map plan codes
     const planCode = data.plan || data?.subscription?.plan || data?.authorization?.plan || null;
-
-    // Metadata we sent (contains plan_label + mode)
-    const md = data.metadata || {};
-    const label = (md.plan_label || "").toUpperCase(); // "PLUS"/"PRO"
-    const mode  = (md.mode || "").toLowerCase();       // "subscription"/"one_time"
-
     let newPlan = null;
-
-    if (planCode) {
+    if(planCode){
       if(PLAN_CODE_PLUS_MONTHLY && planCode === PLAN_CODE_PLUS_MONTHLY) newPlan = "PLUS";
       if(PLAN_CODE_PRO_ANNUAL  && planCode === PLAN_CODE_PRO_ANNUAL ) newPlan = "PRO";
-    } else if (mode === "one_time") {
-      // one-time success → grant plan by label for fixed period (DB holds plan string only here)
-      if (label === "PLUS" || label === "PRO") newPlan = label;
     }
 
     if(newPlan){
@@ -1005,7 +1098,7 @@ app.post("/api/paystack/verify", async (req,res)=>{
       setSessionCookie(res, { email:s.email, plan:newPlan });
     }
 
-    res.json({ status:"success", plan:newPlan || undefined, mode });
+    res.json({ status:"success", mode:"legacy", plan:newPlan || undefined });
   }catch(e){
     console.error("paystack verify error",e);
     res.status(500).json({status:"error", message:"Verification error"});
@@ -1014,5 +1107,9 @@ app.post("/api/paystack/verify", async (req,res)=>{
 
 /* ===================== Server ===================== */
 const PORT = process.env.PORT || 3000;
+
+// Optional 404 for non-existent routes (static files above already handle real pages)
 app.use((req, res) => res.status(404).send("Not Found"));
+
 app.listen(PORT, ()=> console.log(`GPTs Help server running on :${PORT}`));
+```0
