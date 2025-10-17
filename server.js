@@ -33,12 +33,12 @@ const {
   // Paystack
   PAYSTACK_PUBLIC_KEY,
   PAYSTACK_SECRET_KEY,
-  PAYSTACK_CALLBACK_URL,
-  PAYSTACK_CURRENCY,
+  PAYSTACK_CALLBACK_URL,      // will be overridden by our default below
+  PAYSTACK_CURRENCY,          // optional, e.g., "GHS" or "NGN"
   PLAN_CODE_PLUS_MONTHLY,
   PLAN_CODE_PRO_ANNUAL,
 
-  // Optional explicit amounts in MINOR units (e.g., 4900 for ₵49.00)
+  // Optional fallback one-time amounts (minor units, e.g., pesewas)
   PAYSTACK_AMOUNT_PLUS,
   PAYSTACK_AMOUNT_PRO,
 } = process.env;
@@ -413,43 +413,6 @@ async function bumpQuota(deviceHash,kind){
   }
 }
 
-/* ---------- Paystack debug helpers (safe logging) ---------- */
-function shortHash(s) {
-  try { return crypto.createHash("sha256").update(String(s)).digest("hex").slice(0, 10); }
-  catch { return "na"; }
-}
-async function readBodySafe(res) {
-  try {
-    const text = await res.text();
-    try { return { text, json: JSON.parse(text) }; } catch { return { text, json: null }; }
-  } catch {
-    return { text: "", json: null };
-  }
-}
-function logPaystackRequest(op, payload) {
-  const clone = { ...payload };
-  if (clone.email) clone.email_hash = shortHash(clone.email), delete clone.email;
-  console.error(`[PAYSTACK][${op}] request ->`, JSON.stringify(clone));
-}
-function logPaystackResponse(op, r, body) {
-  const headers = {};
-  try { for (const [k,v] of r.headers) headers[k] = v; } catch {}
-  console.error(
-    `[PAYSTACK][${op}] response -> status=${r.status} ok=${r.ok}\nheaders=${JSON.stringify(headers)}\ntext=${body.text}\njson=${JSON.stringify(body.json)}`
-  );
-}
-
-// One-time startup snapshot (no secrets)
-console.error("[PAYSTACK] startup", JSON.stringify({
-  has_public_key: !!PAYSTACK_PUBLIC_KEY,
-  has_secret_key: !!PAYSTACK_SECRET_KEY,
-  has_plus_plan: !!PLAN_CODE_PLUS_MONTHLY,
-  has_pro_plan: !!PLAN_CODE_PRO_ANNUAL,
-  currency: PAYSTACK_CURRENCY || "default",
-  amount_plus: PAYSTACK_AMOUNT_PLUS || "unset",
-  amount_pro: PAYSTACK_AMOUNT_PRO || "unset",
-}));
-
 /* ===================== Auth APIs ===================== */
 
 // public-config (for Paystack public key)
@@ -588,9 +551,7 @@ app.post("/api/reset/confirm", async (req,res)=>{
     const u = await getUserByEmail(email);
     setSessionCookie(res, { email, plan: u?.plan || "FREE" });
     res.json({ status:"ok" });
-  }catch(e){
-    console.error("reset/confirm error",e);
-    res.status(500).json({status:"error", message:"Reset failed"}); }
+  }catch(e){ console.error("reset/confirm error",e); res.status(500).json({status:"error", message:"Reset failed"}); }
 });
 
 /* ===================== Conversations & Messages ===================== */
@@ -917,52 +878,71 @@ app.post("/api/feedback", async (req,res)=>{
 
 /* ===================== Paystack ===================== */
 
-// 1) Initialize a hosted checkout for a plan (with deep logging)
+// helpful startup log for env sanity
+console.log(
+  "[PAYSTACK] startup",
+  JSON.stringify({
+    has_public_key: !!PAYSTACK_PUBLIC_KEY,
+    has_secret_key: !!PAYSTACK_SECRET_KEY,
+    has_plus_plan: !!PLAN_CODE_PLUS_MONTHLY,
+    has_pro_plan: !!PLAN_CODE_PRO_ANNUAL,
+    currency: PAYSTACK_CURRENCY || "default",
+    amount_plus: PAYSTACK_AMOUNT_PLUS ? "set" : "unset",
+    amount_pro: PAYSTACK_AMOUNT_PRO ? "set" : "unset",
+  })
+);
+
+// 1) Initialize a hosted checkout for a plan
 app.post("/api/paystack/init", async (req, res) => {
   try {
     const s = readSession(req);
-    if (!s?.email) {
-      return res.status(401).json({ status: "error", message: "Not signed in" });
-    }
+    if (!s?.email) return res.status(401).json({ status: "error", message: "Not signed in" });
 
     const { plan, planCode } = req.body || {};
     let code = planCode || null;
-
+    let label = plan || "";
     if (!code && plan) {
       const p = String(plan).toUpperCase();
       if (p === "PLUS") code = PLAN_CODE_PLUS_MONTHLY;
       if (p === "PRO")  code = PLAN_CODE_PRO_ANNUAL;
     }
+    if (!code) return res.status(400).json({ status: "error", message: "Missing plan" });
 
-    if (!code) {
-      return res.status(400).json({ status: "error", message: "Missing plan" });
-    }
+    // *** Force your requested callback URL by default ***
+    // If you still set PAYSTACK_CALLBACK_URL in Railway, that will override this,
+    // but otherwise we'll always use /payment-success.
+    const defaultCallback = "https://gptshelp.online/payment-success";
+    const callbackUrl = PAYSTACK_CALLBACK_URL || defaultCallback;
 
-    const callbackUrl =
-      PAYSTACK_CALLBACK_URL ||
-      `${req.protocol}://${req.get("host")}/paystack/callback`;
-
-    // Optional explicit amounts (in minor units) – only sent if env is set
-    const amountPlus = Number(PAYSTACK_AMOUNT_PLUS || 0); // e.g., 4900 for ₵49.00
-    const amountPro  = Number(PAYSTACK_AMOUNT_PRO  || 0); // e.g., 38800 for ₵388.00
-    let amount = undefined;
-
-    if (String(plan || "").toUpperCase() === "PLUS" && amountPlus > 0) amount = amountPlus;
-    if (String(plan || "").toUpperCase() === "PRO"  && amountPro  > 0) amount = amountPro;
-
-    const payload = {
+    // Build body; Paystack accepts either plan OR amount (for one-time)
+    const body = {
       email: s.email,
       plan: code,
       callback_url: callbackUrl,
       currency: PAYSTACK_CURRENCY || undefined,
-      ...(amount ? { amount } : {}),
       metadata: {
-        plan_label: plan || "unknown",
+        plan_label: label,
         site: "gptshelp.online",
       },
+      // optional fallback direct amount if you set envs (minor units)
+      amount:
+        PAYSTACK_AMOUNT_PLUS && String(label).toUpperCase() === "PLUS"
+          ? Number(PAYSTACK_AMOUNT_PLUS)
+          : PAYSTACK_AMOUNT_PRO && String(label).toUpperCase() === "PRO"
+          ? Number(PAYSTACK_AMOUNT_PRO)
+          : undefined,
     };
 
-    logPaystackRequest("INIT", payload);
+    // redact very sensitive fields in logs
+    const logReq = {
+      plan: body.plan,
+      callback_url: body.callback_url,
+      metadata: body.metadata,
+      email_hash: crypto.createHash("sha1").update(s.email).digest("hex").slice(0, 10),
+      amount: body.amount,
+      currency: body.currency,
+    };
+    console.log("[PAYSTACK][INIT] request ->", JSON.stringify(logReq));
 
     const initRes = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
@@ -970,34 +950,66 @@ app.post("/api/paystack/init", async (req, res) => {
         Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
     });
 
-    const body = await readBodySafe(initRes);
-    logPaystackResponse("INIT", initRes, body);
+    const text = await initRes.text();
+    let json = null;
+    try { json = JSON.parse(text); } catch {}
+    console.log(
+      "[PAYSTACK][INIT] response ->",
+      `status=${initRes.status} ok=${initRes.ok}`,
+      "\nheaders=" + JSON.stringify(Object.fromEntries(initRes.headers.entries())),
+      "\ntext=" + text
+    );
 
-    const j = body.json;
-    if (!initRes.ok || !j || j.status !== true) {
-      return res.status(400).json({
-        status: "error",
-        message: (j && j.message) || body.text || "Init failed",
-        raw: j || null,
-      });
+    if (!initRes.ok || !json || json.status !== true) {
+      return res.status(400).json({ status: "error", message: json?.message || "Init failed", raw: json || text });
     }
 
     res.json({
       status: "ok",
-      authorization_url: j.data.authorization_url,
-      reference: j.data.reference,
-      access_code: j.data.access_code,
+      authorization_url: json.data.authorization_url,
+      reference: json.data.reference,
+      access_code: json.data.access_code,
     });
   } catch (e) {
-    console.error("[PAYSTACK][INIT] exception", e);
+    console.error("paystack init error", e);
     res.status(500).json({ status: "error", message: "Initialization error" });
   }
 });
 
-// 2) Paystack callback (user returns here after payment)
+// 2) Payment success (your requested callback landing)
+// Paystack redirects here with ?reference=...
+app.get("/payment-success", async (req, res) => {
+  try {
+    const reference = (req.query.reference || req.query.trxref || "").toString();
+    if (!reference) {
+      console.warn("[PAYSTACK][SUCCESS] missing reference");
+      return res.redirect("/chat.html?pay=missing_reference");
+    }
+
+    // Reuse verification endpoint
+    const verifyRes = await fetch(`${req.protocol}://${req.get("host")}/api/paystack/verify`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", cookie: req.headers.cookie || "" },
+      body: JSON.stringify({ reference }),
+    });
+
+    if (verifyRes.ok) {
+      return res.redirect("/chat.html?pay=success");
+    } else {
+      const j = await verifyRes.json().catch(() => ({}));
+      console.warn("[PAYSTACK][SUCCESS] verify failed", j);
+      return res.redirect("/chat.html?pay=verify_failed");
+    }
+  } catch (e) {
+    console.error("paystack /payment-success error", e);
+    res.redirect("/chat.html?pay=error");
+  }
+});
+
+// (Optional) Keep old callback route working too, just in case
 app.get("/paystack/callback", async (req, res) => {
   try {
     const reference = (req.query.reference || req.query.trxref || "").toString();
@@ -1023,7 +1035,7 @@ app.get("/paystack/callback", async (req, res) => {
   }
 });
 
-// 3) Verify endpoint (with deep logging)
+// 3) Verify endpoint
 app.post("/api/paystack/verify", async (req,res)=>{
   try{
     const s = readSession(req);
@@ -1031,51 +1043,45 @@ app.post("/api/paystack/verify", async (req,res)=>{
     const { reference } = req.body || {};
     if(!reference) return res.status(400).json({status:"error", message:"Missing reference"});
 
-    console.error(`[PAYSTACK][VERIFY] request -> ref=${reference}, email_hash=${shortHash(s.email)}`);
-
     const r = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,{
       headers:{ Authorization:`Bearer ${PAYSTACK_SECRET_KEY}` }
     });
 
-    const body = await readBodySafe(r);
-    logPaystackResponse("VERIFY", r, body);
+    const text = await r.text();
+    let j = null;
+    try { j = JSON.parse(text); } catch {}
+    console.log(
+      "[PAYSTACK][VERIFY] response ->",
+      `status=${r.status} ok=${r.ok}`,
+      "\nheaders=" + JSON.stringify(Object.fromEntries(r.headers.entries())),
+      "\ntext=" + text
+    );
 
-    const j = body.json;
     if(!r.ok || !j || j.status !== true){
-      return res.status(400).json({
-        status:"error",
-        message:(j && j.message) || body.text || "Verification failed",
-        raw: j || null,
-      });
+      return res.status(400).json({status:"error", message:"Verification failed", raw: j || text});
     }
 
     const data = j.data || {};
     if(data.status !== "success"){
-      return res.status(400).json({status:"error", message:"Payment not successful", raw:data});
+      return res.status(400).json({status:"error", message:"Payment not successful"});
     }
 
-    const planCode =
-      data.plan ||
-      (data.subscription && data.subscription.plan) ||
-      (data.authorization && data.authorization.plan) ||
-      null;
-
+    // Plan mapping
+    const planCode = data.plan || data?.subscription?.plan || data?.authorization?.plan || null;
     let newPlan = null;
     if(planCode){
       if(PLAN_CODE_PLUS_MONTHLY && planCode === PLAN_CODE_PLUS_MONTHLY) newPlan = "PLUS";
       if(PLAN_CODE_PRO_ANNUAL  && planCode === PLAN_CODE_PRO_ANNUAL ) newPlan = "PRO";
     }
 
-    console.error(`[PAYSTACK][VERIFY] resolved plan -> code=${planCode || "na"}, newPlan=${newPlan || "unchanged"}`);
-
     if(newPlan){
       await pool.query(`update users set plan=$2, updated_at=now() where email=$1`,[s.email,newPlan]);
       setSessionCookie(res, { email:s.email, plan:newPlan });
     }
 
-    res.json({ status:"success", plan:newPlan || undefined, raw:data });
+    res.json({ status:"success", plan:newPlan || undefined });
   }catch(e){
-    console.error("[PAYSTACK][VERIFY] exception",e);
+    console.error("paystack verify error",e);
     res.status(500).json({status:"error", message:"Verification error"});
   }
 });
