@@ -7,6 +7,9 @@
   <title>MathGPT Pricing — Free, Plus, and Pro Plans</title>
   <meta name="description" content="Choose your MathGPT plan: Free for basic step-by-step math solutions, Plus for unlimited photo solves, or Pro for team sharing and exports.">
 
+  <!-- Canonical (trailing slash version) -->
+  <link rel="canonical" href="https://gptshelp.online/pricing/" />
+
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
   <meta property="og:title" content="MathGPT Pricing — Unlock Unlimited Photo Solves" />
@@ -20,7 +23,6 @@
   <meta name="twitter:description" content="Get advanced AI math solutions with Plus or Pro plans. Start free today." />
   <meta name="twitter:image" content="https://gptshelp.online/static/brand/shortcut-pricing.png" />
 
-  <link rel="canonical" href="https://gptshelp.online/pricing/" />
   <meta name="theme-color" content="#6f42c1" />
   <link rel="icon" href="/static/brand/favicon.ico" />
   <link rel="apple-touch-icon" href="/static/brand/logo-192.png" />
@@ -104,6 +106,15 @@
       padding:.25rem .5rem;
       border-radius:999px;
     }
+    .notice{
+      margin:1rem 0 0;
+      padding:.9rem 1rem;
+      border-radius:10px;
+      background:#fff3cd;
+      color:#664d03;
+      border:1px solid #ffecb5;
+      display:none;
+    }
     footer{
       text-align:center;
       padding:2rem;
@@ -111,6 +122,7 @@
       margin-top:2rem;
       border-top:1px solid #eee;
     }
+    .btn[disabled]{opacity:.7;cursor:progress}
   </style>
 
   <!-- Breadcrumb Schema -->
@@ -140,6 +152,21 @@
     ]
   }
   </script>
+
+  <!-- Optional site search schema for richer features -->
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"WebSite",
+    "name":"GPTs Help",
+    "url":"https://gptshelp.online/",
+    "potentialAction":{
+      "@type":"SearchAction",
+      "target":"https://gptshelp.online/search/?q={search_term_string}",
+      "query-input":"required name=search_term_string"
+    }
+  }
+  </script>
 </head>
 <body>
   <header>
@@ -158,6 +185,8 @@
     <h1>Pricing</h1>
     <p>Start free and upgrade anytime to unlock unlimited photo solves.</p>
 
+    <div id="notice" class="notice" role="status" aria-live="polite"></div>
+
     <div class="plans">
       <div class="plan">
         <h3>Free</h3>
@@ -167,7 +196,7 @@
           <li>Basic step-by-step answers</li>
           <li>Try before you buy</li>
         </ul>
-        <a class="btn" href="/#pricing">Start Free</a>
+        <a class="btn" href="/chat.html?signup=1">Start Free</a>
       </div>
 
       <div class="plan">
@@ -179,7 +208,7 @@
           <li>Advanced explanations & proofs</li>
           <li>Priority processing</li>
         </ul>
-        <a class="btn primary" href="/#pricing">Subscribe Monthly</a>
+        <button id="btnPlus" class="btn primary" type="button">Subscribe Monthly</button>
       </div>
 
       <div class="plan">
@@ -190,12 +219,67 @@
           <li>Save 34% yearly</li>
           <li>Team sharing & exports</li>
         </ul>
-        <a class="btn primary" href="/#pricing">Subscribe Annually</a>
+        <button id="btnPro" class="btn primary" type="button">Subscribe Annually</button>
       </div>
     </div>
   </main>
 
   <footer>&copy; <span id="y"></span> GPTs Help</footer>
-  <script>document.getElementById('y').textContent = new Date().getFullYear();</script>
+
+  <script>
+    document.getElementById('y').textContent = new Date().getFullYear();
+
+    const notice = document.getElementById('notice');
+    function show(msg) {
+      notice.textContent = msg;
+      notice.style.display = 'block';
+    }
+    function clearNotice() {
+      notice.style.display = 'none';
+      notice.textContent = '';
+    }
+
+    async function startCheckout(plan) {
+      clearNotice();
+      const btn = plan === 'PLUS' ? document.getElementById('btnPlus') : document.getElementById('btnPro');
+      btn.disabled = true;
+
+      try {
+        const res = await fetch('/api/paystack/init', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include', // send session cookie for auth
+          body: JSON.stringify({ plan })
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          // Helpful messages based on server responses
+          if (res.status === 401) {
+            throw new Error('Please sign in first. Open Chat to create an account, verify your email, then return here.');
+          }
+          if (data && data.message) throw new Error(data.message);
+          throw new Error('Could not start checkout. Please try again.');
+        }
+
+        if (data && data.authorization_url) {
+          // Redirect user to Paystack hosted checkout
+          window.location.href = data.authorization_url;
+          return;
+        }
+
+        throw new Error('Missing authorization URL from server.');
+      } catch (e) {
+        show(e.message || 'Something went wrong.');
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    document.getElementById('btnPlus').addEventListener('click', () => startCheckout('PLUS'));
+    document.getElementById('btnPro').addEventListener('click', () => startCheckout('PRO'));
+  </script>
 </body>
 </html>
+```0
