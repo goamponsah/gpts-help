@@ -1,191 +1,76 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Pricing — GPTs Help</title>
+  <title>MathGPT Plans — Free, Plus, and Pro Tiers</title>
+  <meta name="description" content="Choose your MathGPT plan: Free for basic step-by-step solutions, Plus for unlimited photo solves, or Pro for team sharing and exports.">
 
-  <title>MathGPT Pricing — Free, Plus, and Pro Plans</title>
-  <meta name="description" content="Choose your MathGPT plan: Free for basic step-by-step math solutions, Plus for unlimited photo solves, or Pro for team sharing and exports.">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="MathGPT Pricing — Unlock Unlimited Photo Solves">
+  <meta property="og:description" content="Explore Free, Plus, and Pro plans. Upgrade to unlock unlimited AI math explanations and exports.">
+  <meta property="og:url" content="https://gptshelp.online/pricing/">
+  <meta property="og:image" content="https://gptshelp.online/static/brand/shortcut-pricing.png">
 
-  <!-- Canonical (trailing slash version) -->
-  <link rel="canonical" href="https://gptshelp.online/pricing/" />
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="MathGPT Pricing — Free, Plus, and Pro">
+  <meta name="twitter:description" content="Get advanced AI math solutions with Plus or Pro plans. Start free today.">
+  <meta name="twitter:image" content="https://gptshelp.online/static/brand/shortcut-pricing.png">
 
-  <!-- Open Graph -->
-  <meta property="og:type" content="website" />
-  <meta property="og:title" content="MathGPT Pricing — Unlock Unlimited Photo Solves" />
-  <meta property="og:description" content="Explore Free, Plus, and Pro plans. Upgrade to unlock unlimited AI math explanations and exports." />
-  <meta property="og:url" content="https://gptshelp.online/pricing/" />
-  <meta property="og:image" content="https://gptshelp.online/static/brand/shortcut-pricing.png" />
-
-  <!-- Twitter -->
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="MathGPT Pricing — Free, Plus, and Pro" />
-  <meta name="twitter:description" content="Get advanced AI math solutions with Plus or Pro plans. Start free today." />
-  <meta name="twitter:image" content="https://gptshelp.online/static/brand/shortcut-pricing.png" />
-
-  <meta name="theme-color" content="#6f42c1" />
-  <link rel="icon" href="/static/brand/favicon.ico" />
-  <link rel="apple-touch-icon" href="/static/brand/logo-192.png" />
-  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="canonical" href="https://gptshelp.online/pricing">
+  <meta name="theme-color" content="#6f42c1">
+  <link rel="icon" href="/static/brand/favicon.ico">
 
   <style>
-    :root {
-      --brand:#6f42c1;--accent:#ffc107;--bg:#f8f9fa;--text:#212529;--muted:#6c757d;
-      --panel:#fff;--border:#eee;--shadow:0 16px 36px rgba(0,0,0,.08)
-    }
+    :root{--brand:#6f42c1;--accent:#ffc107;--bg:#f8f9fa;--text:#212529;--muted:#6c757d;--panel:#fff;--border:#eee;--shadow:0 16px 36px rgba(0,0,0,.08)}
     *{box-sizing:border-box}
-    body{
-      margin:0;
-      font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-      background:var(--bg);
-      color:var(--text);
-    }
+    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
     a{color:var(--brand);text-decoration:none}
     header{background:#fff;border-bottom:1px solid #eee}
-    .nav{
-      max-width:1200px;
-      margin:0 auto;
-      padding:1rem 2rem;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-    }
+    .nav{max-width:1200px;margin:0 auto;padding:1rem 2rem;display:flex;align-items:center;justify-content:space-between}
     .brand{font-weight:800}
     .nav-right{display:flex;gap:.5rem}
-    .btn{
-      border:1px solid var(--border);
-      background:#fff;
-      color:var(--brand);
-      padding:.55rem .9rem;
-      border-radius:10px;
-      cursor:pointer;
-      font-weight:600;
-    }
-    .btn.primary{
-      background:var(--brand);
-      color:#fff;
-      border-color:transparent;
-    }
-    main{
-      max-width:1200px;
-      margin:0 auto;
-      padding:2rem;
-    }
+    .btn{border:1px solid var(--border);background:#fff;color:var(--brand);padding:.55rem .9rem;border-radius:10px;cursor:pointer;font-weight:600}
+    .btn.primary{background:var(--brand);color:#fff;border-color:transparent}
+    main{max-width:1200px;margin:0 auto;padding:2rem}
     h1{margin-top:.2rem}
-    .plans{
-      display:grid;
-      grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
-      gap:1.5rem;
-      margin-top:1.25rem;
-    }
-    .plan{
-      background:#fff;
-      border:1px solid #eee;
-      border-radius:14px;
-      padding:2rem;
-      text-align:center;
-      box-shadow:var(--shadow);
-      position:relative;
-    }
+    .plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.5rem;margin-top:1.25rem}
+    .plan{background:#fff;border:1px solid #eee;border-radius:14px;padding:2rem;text-align:center;box-shadow:var(--shadow);position:relative}
     .price{font-size:2rem;color:var(--brand);margin:.5rem 0 1rem}
-    .plan ul{
-      list-style:none;
-      padding:0;
-      color:var(--muted);
-      text-align:left;
-      margin:1rem 0;
-    }
-    .plan li{margin:.35rem 0}
-    .badge{
-      position:absolute;
-      top:12px;
-      right:12px;
-      background:var(--brand);
-      color:#fff;
-      font-size:.75rem;
-      padding:.25rem .5rem;
-      border-radius:999px;
-    }
-    .notice{
-      margin:1rem 0 0;
-      padding:.9rem 1rem;
-      border-radius:10px;
-      background:#fff3cd;
-      color:#664d03;
-      border:1px solid #ffecb5;
-      display:none;
-    }
-    footer{
-      text-align:center;
-      padding:2rem;
-      color:var(--muted);
-      margin-top:2rem;
-      border-top:1px solid #eee;
-    }
-    .btn[disabled]{opacity:.7;cursor:progress}
+    .plan ul{list-style:none;padding:0;color:var(--muted);text-align:left}
+    .badge{position:absolute;top:12px;right:12px;background:var(--brand);color:#fff;font-size:.75rem;padding:.25rem .5rem;border-radius:999px}
+    footer{text-align:center;padding:2rem;color:var(--muted);margin-top:2rem;border-top:1px solid #eee}
+    .note{max-width:900px;margin:12px auto 0 auto;color:#6c757d}
+    .hidden{display:none}
   </style>
 
-  <!-- Breadcrumb Schema -->
+  <!-- Breadcrumbs -->
   <script type="application/ld+json">
-  {
-    "@context":"https://schema.org",
-    "@type":"BreadcrumbList",
-    "itemListElement":[
-      {"@type":"ListItem","position":1,"name":"Home","item":"https://gptshelp.online/"},
-      {"@type":"ListItem","position":2,"name":"Pricing","item":"https://gptshelp.online/pricing/"}
-    ]
-  }
-  </script>
-
-  <!-- Product Offer Schema -->
-  <script type="application/ld+json">
-  {
-    "@context":"https://schema.org",
-    "@type":"Product",
-    "name":"MathGPT Subscription Plans",
-    "description":"Subscription plans for MathGPT, including Free, Plus Monthly, and Pro Annual tiers.",
-    "brand":{"@type":"Brand","name":"GPTs Help"},
-    "offers":[
-      {"@type":"Offer","name":"Free Plan","price":"0","priceCurrency":"GHS","availability":"https://schema.org/InStock"},
-      {"@type":"Offer","name":"Plus Monthly","price":"49","priceCurrency":"GHS","availability":"https://schema.org/InStock"},
-      {"@type":"Offer","name":"Pro Annual","price":"388","priceCurrency":"GHS","availability":"https://schema.org/InStock"}
-    ]
-  }
-  </script>
-
-  <!-- Optional site search schema for richer features -->
-  <script type="application/ld+json">
-  {
-    "@context":"https://schema.org",
-    "@type":"WebSite",
-    "name":"GPTs Help",
-    "url":"https://gptshelp.online/",
-    "potentialAction":{
-      "@type":"SearchAction",
-      "target":"https://gptshelp.online/search/?q={search_term_string}",
-      "query-input":"required name=search_term_string"
-    }
-  }
+  {"@context":"https://schema.org","@type":"BreadcrumbList","itemListElement":[
+    {"@type":"ListItem","position":1,"name":"Home","item":"https://gptshelp.online/"},
+    {"@type":"ListItem","position":2,"name":"Pricing","item":"https://gptshelp.online/pricing"}
+  ]}
   </script>
 </head>
 <body>
   <header>
-    <div class="nav" role="navigation" aria-label="Primary">
+    <div class="nav">
       <a class="brand" href="/">GPTs Help</a>
       <div class="nav-right">
-        <a class="btn" href="/overview/">Overview</a>
-        <a class="btn" href="/download/">Download</a>
-        <a class="btn" href="/support/">Support</a>
-        <a class="btn primary" href="/chat.html">Open Chat</a>
+        <a class="btn" href="/overview">Overview</a>
+        <a class="btn" href="/download">Download</a>
+        <a class="btn" href="/support">Support</a>
+        <a class="btn" href="/chat.html">Open Chat</a>
+        <a class="btn primary" href="/#pricing">Get Started</a>
       </div>
     </div>
   </header>
 
   <main>
     <h1>Pricing</h1>
-    <p>Start free and upgrade anytime to unlock unlimited photo solves.</p>
+    <p>Start free. Upgrade anytime for unlimited photo solves.</p>
 
-    <div id="notice" class="notice" role="status" aria-live="polite"></div>
+    <div id="msg" class="note hidden"></div>
 
     <div class="plans">
       <div class="plan">
@@ -196,7 +81,7 @@
           <li>Basic step-by-step answers</li>
           <li>Try before you buy</li>
         </ul>
-        <a class="btn" href="/chat.html?signup=1">Start Free</a>
+        <a class="btn" href="/#pricing">Start free</a>
       </div>
 
       <div class="plan">
@@ -208,7 +93,7 @@
           <li>Advanced explanations & proofs</li>
           <li>Priority processing</li>
         </ul>
-        <button id="btnPlus" class="btn primary" type="button">Subscribe Monthly</button>
+        <button id="plusBtn" class="btn primary" type="button">Subscribe Monthly</button>
       </div>
 
       <div class="plan">
@@ -219,67 +104,71 @@
           <li>Save 34% yearly</li>
           <li>Team sharing & exports</li>
         </ul>
-        <button id="btnPro" class="btn primary" type="button">Subscribe Annually</button>
+        <button id="proBtn" class="btn primary" type="button">Subscribe Annually</button>
       </div>
     </div>
   </main>
 
   <footer>&copy; <span id="y"></span> GPTs Help</footer>
-
   <script>
     document.getElementById('y').textContent = new Date().getFullYear();
 
-    const notice = document.getElementById('notice');
-    function show(msg) {
-      notice.textContent = msg;
-      notice.style.display = 'block';
-    }
-    function clearNotice() {
-      notice.style.display = 'none';
-      notice.textContent = '';
+    const msg = document.getElementById('msg');
+    function showMsg(text){ msg.textContent = text; msg.classList.remove('hidden'); }
+    function clearMsg(){ msg.textContent=''; msg.classList.add('hidden'); }
+
+    async function ensureSignedIn(){
+      try{
+        const r = await fetch('/api/me', { credentials: 'include' });
+        const j = await r.json().catch(()=>({}));
+        return j?.status === 'ok' && j?.user?.email;
+      }catch{ return false }
     }
 
-    async function startCheckout(plan) {
-      clearNotice();
-      const btn = plan === 'PLUS' ? document.getElementById('btnPlus') : document.getElementById('btnPro');
-      btn.disabled = true;
+    async function startCheckout(planLabel){
+      clearMsg();
+      const signedIn = await ensureSignedIn();
+      if(!signedIn){
+        showMsg('Please sign in first, then try again.');
+        // send them to the home page where sign-in happens
+        setTimeout(()=> location.href='/?next=/pricing', 800);
+        return;
+      }
 
-      try {
+      const btn = planLabel==='PLUS' ? document.getElementById('plusBtn') : document.getElementById('proBtn');
+      const original = btn.textContent;
+      btn.disabled = true; btn.textContent = 'Redirecting…';
+
+      try{
         const res = await fetch('/api/paystack/init', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          credentials: 'include', // send session cookie for auth
-          body: JSON.stringify({ plan })
+          credentials: 'include',
+          body: JSON.stringify({ plan: planLabel })
         });
+        const j = await res.json().catch(()=> ({}));
 
-        const data = await res.json().catch(() => ({}));
-
-        if (!res.ok) {
-          // Helpful messages based on server responses
-          if (res.status === 401) {
-            throw new Error('Please sign in first. Open Chat to create an account, verify your email, then return here.');
+        if(!res.ok || j.status !== 'ok' || !j.authorization_url){
+          if(res.status === 401){
+            showMsg('Please sign in, then try again.');
+            setTimeout(()=> location.href='/?next=/pricing', 800);
+          }else{
+            showMsg(j.message || 'Could not start checkout. Please try again.');
           }
-          if (data && data.message) throw new Error(data.message);
-          throw new Error('Could not start checkout. Please try again.');
-        }
-
-        if (data && data.authorization_url) {
-          // Redirect user to Paystack hosted checkout
-          window.location.href = data.authorization_url;
+          btn.disabled = false; btn.textContent = original;
           return;
         }
 
-        throw new Error('Missing authorization URL from server.');
-      } catch (e) {
-        show(e.message || 'Something went wrong.');
-      } finally {
-        btn.disabled = false;
+        // ✅ Send the user to Paystack Hosted Checkout
+        window.location.href = j.authorization_url;
+      }catch(e){
+        showMsg('Network error. Please try again.');
+        btn.disabled = false; btn.textContent = original;
       }
     }
 
-    document.getElementById('btnPlus').addEventListener('click', () => startCheckout('PLUS'));
-    document.getElementById('btnPro').addEventListener('click', () => startCheckout('PRO'));
+    document.getElementById('plusBtn').addEventListener('click', ()=> startCheckout('PLUS'));
+    document.getElementById('proBtn').addEventListener('click',  ()=> startCheckout('PRO'));
   </script>
 </body>
 </html>
-```0
