@@ -28,29 +28,27 @@ const {
   RESEND_API_KEY,
   RESEND_FROM,
 
-  // Paystack (ONE-TIME CHARGES in USD; show local estimate on UI)
+  // Paystack (ONE-TIME charges in GHS — price set in Railway env)
   PAYSTACK_PUBLIC_KEY,
   PAYSTACK_SECRET_KEY,
 
-  // (Optional) If you want to force a particular Paystack currency at charge time
-  // We'll use "USD" for one-time charges so that your amounts (Railway) are in USD.
-  FORCE_PAYSTACK_CURRENCY, // e.g. "USD" (default to USD below)
-
-  // USD prices you set in Railway (integers or decimals). e.g. 3.99, 7, 49
-  PRICE_PLUS_USD,   // required (e.g. 49)
-  PRICE_PRO_USD,    // required (e.g. 388)
+  // Set prices in MAJOR units in Railway (e.g., 49 means ₵49.00)
+  PRICE_PLUS_GHS,        // e.g. "49"
+  PRICE_PRO_GHS,         // e.g. "388"
 } = process.env;
+
+// Fixed currency: Ghana Cedi
+const CURRENCY = "GHS";
 
 if (!DATABASE_URL) console.error("[ERROR] DATABASE_URL not set");
 if (!JWT_SECRET) console.warn("[WARN] JWT_SECRET not set");
 if (!OPENAI_API_KEY) console.warn("[WARN] OPENAI_API_KEY missing");
 if (!PAYSTACK_PUBLIC_KEY) console.warn("[WARN] PAYSTACK_PUBLIC_KEY missing");
 if (!PAYSTACK_SECRET_KEY) console.warn("[WARN] PAYSTACK_SECRET_KEY missing");
-if (!PRICE_PLUS_USD || !PRICE_PRO_USD) console.warn("[WARN] USD prices not set (PRICE_PLUS_USD / PRICE_PRO_USD)");
 
 const OPENAI_DEFAULT_MODEL = OPENAI_MODEL || "gpt-4o-mini";
-const CHARGE_CURRENCY = (FORCE_PAYSTACK_CURRENCY || "USD").toUpperCase();
 
+// CORS
 if (FRONTEND_ORIGIN) {
   app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
 } else {
@@ -74,10 +72,8 @@ app.use(
     setHeaders: (res, filePath) => {
       const p = filePath.toLowerCase();
       const noCache =
-        p.endsWith(".html") ||
-        p.endsWith("service-worker.js") ||
-        p.endsWith("/service-worker.js") ||
-        p.endsWith("\\service-worker.js");
+        p.endsWith(".html") || p.endsWith("service-worker.js") ||
+        p.endsWith("/service-worker.js") || p.endsWith("\\service-worker.js");
       res.setHeader(
         "Cache-Control",
         noCache ? "no-store, no-cache, must-revalidate" : "public, max-age=31536000, immutable"
@@ -92,7 +88,7 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false },
 });
 
-/* ===================== Schema ===================== */
+/* ===================== Schema (minimal, idempotent) ===================== */
 async function ensureSchema() {
   await pool.query(`
     create table if not exists users (
@@ -137,6 +133,7 @@ async function ensureSchema() {
   await pool.query(`create index if not exists idx_conversations_user_email on conversations(user_email);`);
   await pool.query(`create index if not exists idx_conversations_user_id on conversations(user_id);`);
   await pool.query(`create index if not exists idx_conversations_archived on conversations(archived);`);
+
   await pool.query(`
     DO $$
     BEGIN
@@ -273,15 +270,15 @@ async function bumpQuota(deviceHash,kind){
 app.get("/api/public-config", (req,res)=>{
   res.json({
     paystackPublicKey: PAYSTACK_PUBLIC_KEY || null,
-    chargeCurrency: CHARGE_CURRENCY, // "USD"
+    currency: CURRENCY,
     prices: {
-      plusUsd: Number(PRICE_PLUS_USD || 0),
-      proUsd:  Number(PRICE_PRO_USD || 0),
+      plus: Number(PRICE_PLUS_GHS || 0),
+      pro:  Number(PRICE_PRO_GHS  || 0),
     }
   });
 });
 
-/* ===================== Auth APIs (same as before) ===================== */
+/* ===================== Auth APIs ===================== */
 app.get("/api/me", async (req,res)=>{
   const s = readSession(req);
   if(!s?.email) return res.json({ status:"anon" });
@@ -404,62 +401,208 @@ app.post("/api/reset/confirm", async (req,res)=>{
   }catch(e){ console.error("reset/confirm error",e); res.status(500).json({status:"error", message:"Reset failed"}); }
 });
 
-/* ===================== Paystack (ONE-TIME in USD; price from Railway) ===================== */
+/* ===================== Chat & Photo Solve (unchanged) ===================== */
 
-function usdToMinor(usd) {
-  const n = Number(usd);
+// OpenAI helpers
+async function openaiChat(messages){
+  const r = await fetch("https://api.openai.com/v1/chat/completions",{
+    method:"POST",
+    headers:{ Authorization:`Bearer ${OPENAI_API_KEY}`, "Content-Type":"application/json" },
+    body:JSON.stringify({ model: OPENAI_DEFAULT_MODEL, messages, temperature: 0.2 })
+  });
+  if(!r.ok){
+    const t = await r.text().catch(()=> "");
+    throw new Error(`OpenAI error: ${r.status} ${t}`);
+  }
+  const data = await r.json();
+  return data?.choices?.[0]?.message?.content || "";
+}
+
+app.post("/api/chat", async (req,res)=>{
+  try{
+    const s = readSession(req);
+    if(!s?.email) return res.status(401).json({error:"unauthenticated"});
+    const u = await getUserByEmail(s.email);
+    if(!u?.verified) return res.status(403).json({status:"verify_required"});
+
+    const deviceHash = ensureDevice(req,res);
+    if((u.plan||"FREE").toUpperCase()==="FREE"){
+      const q = await getQuota(deviceHash);
+      if(q.text_count >= FREE_TEXT_LIMIT){
+        return res.status(402).json({status:"limit", message:"You've reached your free daily text limit.", upgradeLink:"/index.html#pricing"});
+      }
+    }
+
+    const { message, conversationId } = req.body || {};
+    if(!message || typeof message!=="string") return res.status(400).json({error:"message required"});
+
+    let convId = conversationId;
+    if(!convId){
+      const r = await pool.query(
+        `insert into conversations(user_email, user_id, title)
+         select $1, u.id, $2 from users u where u.email=$1 returning id`,
+        [s.email, "New chat"]
+      );
+      convId = r.rows[0].id;
+    }else{
+      await pool.query(`update conversations set updated_at=now() where id=$1 and user_email=$2`,[convId,s.email]);
+    }
+
+    await pool.query(`insert into messages(conversation_id, role, content) values($1,'user',$2)`,[convId, message]);
+
+    const system = "You are Math GPT. Solve step-by-step clearly.";
+    const answer = await openaiChat([
+      { role:"system", content: system },
+      { role:"user", content: message }
+    ]);
+
+    await pool.query(`insert into messages(conversation_id, role, content) values($1,'assistant',$2)`,[convId, answer]);
+
+    if((u.plan||"FREE").toUpperCase()==="FREE") await bumpQuota(deviceHash,"text");
+
+    res.json({ response: answer, conversationId: convId });
+  }catch(e){
+    console.error("chat error",e);
+    res.status(500).json({error:"Chat failed"});
+  }
+});
+
+app.post("/api/photo-solve", upload.single("image"), async (req,res)=>{
+  try{
+    const s = readSession(req);
+    if(!s?.email) return res.status(401).json({error:"unauthenticated"});
+    const u = await getUserByEmail(s.email);
+    if(!u?.verified) return res.status(403).json({status:"verify_required"});
+
+    const deviceHash = ensureDevice(req,res);
+    if((u.plan||"FREE").toUpperCase()==="FREE"){
+      const q = await getQuota(deviceHash);
+      if(q.photo_count >= FREE_PHOTO_LIMIT){
+        return res.status(402).json({status:"limit", message:"You've reached your free photo limit.", upgradeLink:"/index.html#pricing"});
+      }
+    }
+
+    const file = req.file;
+    if(!file) return res.status(400).json({error:"image required"});
+    const mimeOk = ["image/png","image/jpeg","image/jpg","image/webp"].includes(file.mimetype);
+    if(!mimeOk) return res.status(400).json({error:"unsupported image type"});
+    const b64 = file.buffer.toString("base64");
+    const dataUrl = `data:${file.mimetype};base64,${b64}`;
+
+    const { attempt="", conversationId } = req.body || {};
+
+    let convId = conversationId;
+    if(!convId){
+      const r = await pool.query(
+        `insert into conversations(user_email, user_id, title)
+         select $1, u.id, $2 from users u where u.email=$1 returning id`,
+        [s.email, "New chat"]
+      );
+      convId = r.rows[0].id;
+    }else{
+      await pool.query(`update conversations set updated_at=now() where id=$1 and user_email=$2`,[convId,s.email]);
+    }
+
+    const userPrompt = attempt
+      ? `Solve this math problem step-by-step. Note: ${attempt}`
+      : `Solve this math problem step-by-step.`;
+
+    await pool.query(`insert into messages(conversation_id, role, content) values($1,'user',$2)`,
+      [convId, `${userPrompt}\n\n[Photo attached]`]);
+
+    const system = "You are Math GPT. Be precise and show steps. If the image is unclear, state assumptions.";
+    const r = await fetch("https://api.openai.com/v1/chat/completions",{
+      method:"POST",
+      headers:{ Authorization:`Bearer ${OPENAI_API_KEY}`, "Content-Type":"application/json" },
+      body:JSON.stringify({
+        model: OPENAI_DEFAULT_MODEL,
+        temperature: 0.2,
+        messages: [
+          { role:"system", content: system },
+          { role:"user", content: [
+              { type:"text", text: userPrompt },
+              { type:"image_url", image_url: { url: dataUrl } }
+            ] }
+        ]
+      })
+    });
+
+    if(!r.ok){
+      const t = await r.text().catch(()=> "");
+      throw new Error(`OpenAI error: ${r.status} ${t}`);
+    }
+    const data = await r.json();
+    const out = data?.choices?.[0]?.message?.content || "No response text returned.";
+
+    await pool.query(`insert into messages(conversation_id, role, content) values($1,'assistant',$2)`,[convId,out]);
+
+    if((u.plan||"FREE").toUpperCase()==="FREE") await bumpQuota(deviceHash,"photo");
+
+    res.json({ response: out, conversationId: convId });
+  }catch(e){
+    console.error("photo-solve error",e);
+    res.status(500).json({error:"Photo solve failed"});
+  }
+});
+
+/* ===================== Paystack — ONE-TIME (GHS) with card + mobile money ===================== */
+
+// Success landing: verify then send to chat
+function getSuccessCallbackUrl(){ return "https://gptshelp.online/payment-success"; }
+
+function majorToMinorGhs(majorStr){
+  const n = Number(majorStr);
   if (!isFinite(n) || n <= 0) return null;
-  // Paystack wants "amount" in the smallest unit. For USD that's cents.
+  // Paystack requires integers in minor units (pesewas)
   return Math.round(n * 100);
 }
 
-function getSuccessCallbackUrl() {
-  // After Paystack authorization, user returns here; we verify then redirect to chat
-  return "https://gptshelp.online/payment-success";
-}
+// Log env snapshot at boot
+(() => {
+  console.log("[PAYSTACK] startup", JSON.stringify({
+    has_public_key: !!PAYSTACK_PUBLIC_KEY,
+    has_secret_key: !!PAYSTACK_SECRET_KEY,
+    price_plus_ghs: PRICE_PLUS_GHS || "unset",
+    price_pro_ghs: PRICE_PRO_GHS || "unset",
+    currency: CURRENCY,
+  }));
+})();
 
-console.log("[PAYSTACK] startup", JSON.stringify({
-  has_public_key: !!PAYSTACK_PUBLIC_KEY,
-  has_secret_key: !!PAYSTACK_SECRET_KEY,
-  currency: CHARGE_CURRENCY,
-  price_plus_usd: PRICE_PLUS_USD,
-  price_pro_usd: PRICE_PRO_USD
-}));
-
-// Public config (already above) exposes USD prices & currency for UI
-
-// Initialize a hosted checkout (one-time charge)
+/**
+ * Initialize a ONE-TIME transaction in GHS.
+ * Body: { plan: "PLUS" | "PRO" }
+ */
 app.post("/api/paystack/init", async (req, res) => {
   try {
     const s = readSession(req);
     if (!s?.email) return res.status(401).json({ status: "error", message: "Not signed in" });
 
-    const { plan } = req.body || {};
-    const label = String(plan || "").toUpperCase();
-    let priceUsd = null;
+    const label = String(req.body?.plan || "").toUpperCase();
+    if (label !== "PLUS" && label !== "PRO") {
+      return res.status(400).json({ status: "error", message: "Invalid plan" });
+    }
 
-    if (label === "PLUS") priceUsd = Number(PRICE_PLUS_USD || 0);
-    if (label === "PRO")  priceUsd = Number(PRICE_PRO_USD || 0);
-
-    const amountMinor = usdToMinor(priceUsd);
+    const amountMinor = majorToMinorGhs(label === "PLUS" ? PRICE_PLUS_GHS : PRICE_PRO_GHS);
     if (!amountMinor) {
-      return res.status(400).json({ status: "error", message: "Price not configured" });
+      return res.status(500).json({ status: "error", message: "Price not configured in Railway (GHS)" });
     }
 
     const payload = {
       email: s.email,
-      amount: amountMinor,                // in cents when currency is USD
-      currency: CHARGE_CURRENCY,          // "USD"
+      amount: amountMinor,         // integer, in pesewas
+      currency: CURRENCY,          // "GHS"
       callback_url: getSuccessCallbackUrl(),
-      // Let Paystack pick channels based on currency/region
-      metadata: {
-        plan_label: label,
-        site: "gptshelp.online"
-      }
+      channels: ["card", "mobile_money"], // enable MoMo + Card
+      metadata: { plan_label: label, site: "gptshelp.online" },
     };
 
     console.log("[PAYSTACK][INIT] request ->", JSON.stringify({
-      amount: amountMinor, currency: payload.currency, callback_url: payload.callback_url, metadata: payload.metadata
+      email: s.email,
+      amount_minor: amountMinor,
+      currency: CURRENCY,
+      channels: payload.channels,
+      callback_url: payload.callback_url,
+      metadata: payload.metadata,
     }));
 
     const initRes = await fetch("https://api.paystack.co/transaction/initialize", {
@@ -474,14 +617,13 @@ app.post("/api/paystack/init", async (req, res) => {
     const text = await initRes.text();
     let j = {};
     try { j = JSON.parse(text); } catch {}
-
     console.log("[PAYSTACK][INIT] response -> status=%s ok=%s", initRes.status, initRes.ok);
     if (!initRes.ok || j.status !== true) {
       console.log("[PAYSTACK][INIT] body:", text);
       return res.status(400).json({ status: "error", message: j?.message || "Init failed" });
     }
 
-    res.json({
+    return res.json({
       status: "ok",
       authorization_url: j.data.authorization_url,
       reference: j.data.reference,
@@ -516,7 +658,7 @@ app.get("/payment-success", async (req, res) => {
   }
 });
 
-// Verify & upgrade plan based on metadata.plan_label
+// Verify one-time payment and upgrade plan using metadata.plan_label
 app.post("/api/paystack/verify", async (req,res)=>{
   try{
     const { reference } = req.body || {};
@@ -539,16 +681,20 @@ app.post("/api/paystack/verify", async (req,res)=>{
       return res.status(400).json({status:"error", message:"Payment not successful"});
     }
 
+    // Pull what we need
     const paidEmail = data?.customer?.email || null;
-    const planLabel = (data?.metadata?.plan_label || "").toUpperCase();
+    const label = (data?.metadata?.plan_label || "").toUpperCase();
+
+    if (!paidEmail) {
+      return res.status(400).json({ status:"error", message:"Missing customer email in verification response" });
+    }
 
     let newPlan = null;
-    if (paidEmail && (planLabel === "PLUS" || planLabel === "PRO")) {
-      newPlan = planLabel;
-    }
+    if (label === "PLUS" || label === "PRO") newPlan = label;
 
     if(newPlan){
       await pool.query(`update users set plan=$2, updated_at=now() where email=$1`,[paidEmail,newPlan]);
+
       // Refresh session if it's the same user currently signed in
       const s = readSession(req);
       if (s?.email && s.email === paidEmail) {
