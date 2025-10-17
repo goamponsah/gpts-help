@@ -28,13 +28,17 @@ const {
   RESEND_API_KEY,
   RESEND_FROM,
 
-  // Paystack (SUBSCRIPTIONS with PLAN CODES – price in dashboard)
+  // Paystack (ONE-TIME CHARGES in USD; show local estimate on UI)
   PAYSTACK_PUBLIC_KEY,
   PAYSTACK_SECRET_KEY,
-  PAYSTACK_CURRENCY,                 // optional, e.g. "GHS" or "NGN"
-  PLAN_CODE_PLUS_MONTHLY,            // e.g. PLN_xxxxx (from Paystack Dashboard)
-  PLAN_CODE_PRO_ANNUAL,              // e.g. PLN_yyyyy (from Paystack Dashboard)
 
+  // (Optional) If you want to force a particular Paystack currency at charge time
+  // We'll use "USD" for one-time charges so that your amounts (Railway) are in USD.
+  FORCE_PAYSTACK_CURRENCY, // e.g. "USD" (default to USD below)
+
+  // USD prices you set in Railway (integers or decimals). e.g. 3.99, 7, 49
+  PRICE_PLUS_USD,   // required (e.g. 49)
+  PRICE_PRO_USD,    // required (e.g. 388)
 } = process.env;
 
 if (!DATABASE_URL) console.error("[ERROR] DATABASE_URL not set");
@@ -42,8 +46,10 @@ if (!JWT_SECRET) console.warn("[WARN] JWT_SECRET not set");
 if (!OPENAI_API_KEY) console.warn("[WARN] OPENAI_API_KEY missing");
 if (!PAYSTACK_PUBLIC_KEY) console.warn("[WARN] PAYSTACK_PUBLIC_KEY missing");
 if (!PAYSTACK_SECRET_KEY) console.warn("[WARN] PAYSTACK_SECRET_KEY missing");
+if (!PRICE_PLUS_USD || !PRICE_PRO_USD) console.warn("[WARN] USD prices not set (PRICE_PLUS_USD / PRICE_PRO_USD)");
 
 const OPENAI_DEFAULT_MODEL = OPENAI_MODEL || "gpt-4o-mini";
+const CHARGE_CURRENCY = (FORCE_PAYSTACK_CURRENCY || "USD").toUpperCase();
 
 if (FRONTEND_ORIGIN) {
   app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
@@ -68,8 +74,10 @@ app.use(
     setHeaders: (res, filePath) => {
       const p = filePath.toLowerCase();
       const noCache =
-        p.endsWith(".html") || p.endsWith("service-worker.js") ||
-        p.endsWith("/service-worker.js") || p.endsWith("\\service-worker.js");
+        p.endsWith(".html") ||
+        p.endsWith("service-worker.js") ||
+        p.endsWith("/service-worker.js") ||
+        p.endsWith("\\service-worker.js");
       res.setHeader(
         "Cache-Control",
         noCache ? "no-store, no-cache, must-revalidate" : "public, max-age=31536000, immutable"
@@ -265,15 +273,15 @@ async function bumpQuota(deviceHash,kind){
 app.get("/api/public-config", (req,res)=>{
   res.json({
     paystackPublicKey: PAYSTACK_PUBLIC_KEY || null,
-    currency: (PAYSTACK_CURRENCY || "GHS").toUpperCase(),
-    plans: {
-      hasPlus: !!PLAN_CODE_PLUS_MONTHLY,
-      hasPro:  !!PLAN_CODE_PRO_ANNUAL
+    chargeCurrency: CHARGE_CURRENCY, // "USD"
+    prices: {
+      plusUsd: Number(PRICE_PLUS_USD || 0),
+      proUsd:  Number(PRICE_PRO_USD || 0),
     }
   });
 });
 
-/* ===================== Auth APIs ===================== */
+/* ===================== Auth APIs (same as before) ===================== */
 app.get("/api/me", async (req,res)=>{
   const s = readSession(req);
   if(!s?.email) return res.json({ status:"anon" });
@@ -396,29 +404,31 @@ app.post("/api/reset/confirm", async (req,res)=>{
   }catch(e){ console.error("reset/confirm error",e); res.status(500).json({status:"error", message:"Reset failed"}); }
 });
 
-/* ===================== Conversations, Shares, Chat (unchanged) ===================== */
-// ... (kept same as your current build for brevity; no changes needed to these sections)
+/* ===================== Paystack (ONE-TIME in USD; price from Railway) ===================== */
 
-/* ===================== Paystack (Plans — price controlled in Dashboard) ===================== */
+function usdToMinor(usd) {
+  const n = Number(usd);
+  if (!isFinite(n) || n <= 0) return null;
+  // Paystack wants "amount" in the smallest unit. For USD that's cents.
+  return Math.round(n * 100);
+}
 
-// Simple logger so you can confirm env on boot
-(function logPaystackStartup(){
-  const info = {
-    has_public_key: !!PAYSTACK_PUBLIC_KEY,
-    has_secret_key: !!PAYSTACK_SECRET_KEY,
-    has_plus_plan: !!PLAN_CODE_PLUS_MONTHLY,
-    has_pro_plan:  !!PLAN_CODE_PRO_ANNUAL,
-    currency: PAYSTACK_CURRENCY || "default"
-  };
-  console.log("[PAYSTACK] startup", JSON.stringify(info));
-})();
-
-// Force success landing here; server will then redirect to /chat.html
-function getSuccessCallbackUrl(){
+function getSuccessCallbackUrl() {
+  // After Paystack authorization, user returns here; we verify then redirect to chat
   return "https://gptshelp.online/payment-success";
 }
 
-// Initialize Paystack with PLAN CODE (no amount passed)
+console.log("[PAYSTACK] startup", JSON.stringify({
+  has_public_key: !!PAYSTACK_PUBLIC_KEY,
+  has_secret_key: !!PAYSTACK_SECRET_KEY,
+  currency: CHARGE_CURRENCY,
+  price_plus_usd: PRICE_PLUS_USD,
+  price_pro_usd: PRICE_PRO_USD
+}));
+
+// Public config (already above) exposes USD prices & currency for UI
+
+// Initialize a hosted checkout (one-time charge)
 app.post("/api/paystack/init", async (req, res) => {
   try {
     const s = readSession(req);
@@ -426,25 +436,30 @@ app.post("/api/paystack/init", async (req, res) => {
 
     const { plan } = req.body || {};
     const label = String(plan || "").toUpperCase();
-    let planCode = null;
-    if (label === "PLUS") planCode = PLAN_CODE_PLUS_MONTHLY;
-    if (label === "PRO")  planCode = PLAN_CODE_PRO_ANNUAL;
+    let priceUsd = null;
 
-    if (!planCode) {
-      return res.status(400).json({ status: "error", message: "Missing plan configuration" });
+    if (label === "PLUS") priceUsd = Number(PRICE_PLUS_USD || 0);
+    if (label === "PRO")  priceUsd = Number(PRICE_PRO_USD || 0);
+
+    const amountMinor = usdToMinor(priceUsd);
+    if (!amountMinor) {
+      return res.status(400).json({ status: "error", message: "Price not configured" });
     }
 
     const payload = {
       email: s.email,
-      plan: planCode,                                        // <-- Paystack decides price from dashboard
+      amount: amountMinor,                // in cents when currency is USD
+      currency: CHARGE_CURRENCY,          // "USD"
       callback_url: getSuccessCallbackUrl(),
-      currency: PAYSTACK_CURRENCY || undefined,              // optional
-      metadata: { plan_label: label, site: "gptshelp.online" }
-      // NOTE: Paystack will decide what channels are available for subscription plans.
+      // Let Paystack pick channels based on currency/region
+      metadata: {
+        plan_label: label,
+        site: "gptshelp.online"
+      }
     };
 
     console.log("[PAYSTACK][INIT] request ->", JSON.stringify({
-      plan: planCode, callback_url: payload.callback_url, metadata: payload.metadata
+      amount: amountMinor, currency: payload.currency, callback_url: payload.callback_url, metadata: payload.metadata
     }));
 
     const initRes = await fetch("https://api.paystack.co/transaction/initialize", {
@@ -478,7 +493,7 @@ app.post("/api/paystack/init", async (req, res) => {
   }
 });
 
-// Paystack success landing -> verify -> redirect to chat
+// Success landing -> verify -> redirect to chat
 app.get("/payment-success", async (req, res) => {
   try {
     const reference = (req.query.reference || req.query.trxref || "").toString();
@@ -501,7 +516,7 @@ app.get("/payment-success", async (req, res) => {
   }
 });
 
-// Verify & upgrade plan
+// Verify & upgrade plan based on metadata.plan_label
 app.post("/api/paystack/verify", async (req,res)=>{
   try{
     const { reference } = req.body || {};
@@ -525,13 +540,11 @@ app.post("/api/paystack/verify", async (req,res)=>{
     }
 
     const paidEmail = data?.customer?.email || null;
-    // Identify which plan by the plan code returned
-    const planCode = data.plan || data?.subscription?.plan || data?.authorization?.plan || null;
+    const planLabel = (data?.metadata?.plan_label || "").toUpperCase();
 
     let newPlan = null;
-    if (paidEmail && planCode) {
-      if (PLAN_CODE_PLUS_MONTHLY && planCode === PLAN_CODE_PLUS_MONTHLY) newPlan = "PLUS";
-      if (PLAN_CODE_PRO_ANNUAL  && planCode === PLAN_CODE_PRO_ANNUAL ) newPlan = "PRO";
+    if (paidEmail && (planLabel === "PLUS" || planLabel === "PRO")) {
+      newPlan = planLabel;
     }
 
     if(newPlan){
