@@ -37,6 +37,10 @@ const {
   PAYSTACK_CURRENCY,
   PLAN_CODE_PLUS_MONTHLY,
   PLAN_CODE_PRO_ANNUAL,
+
+  // Optional explicit amounts in MINOR units (e.g., 4900 for ₵49.00)
+  PAYSTACK_AMOUNT_PLUS,
+  PAYSTACK_AMOUNT_PRO,
 } = process.env;
 
 if (!DATABASE_URL) console.error("[ERROR] DATABASE_URL not set");
@@ -409,6 +413,43 @@ async function bumpQuota(deviceHash,kind){
   }
 }
 
+/* ---------- Paystack debug helpers (safe logging) ---------- */
+function shortHash(s) {
+  try { return crypto.createHash("sha256").update(String(s)).digest("hex").slice(0, 10); }
+  catch { return "na"; }
+}
+async function readBodySafe(res) {
+  try {
+    const text = await res.text();
+    try { return { text, json: JSON.parse(text) }; } catch { return { text, json: null }; }
+  } catch {
+    return { text: "", json: null };
+  }
+}
+function logPaystackRequest(op, payload) {
+  const clone = { ...payload };
+  if (clone.email) clone.email_hash = shortHash(clone.email), delete clone.email;
+  console.error(`[PAYSTACK][${op}] request ->`, JSON.stringify(clone));
+}
+function logPaystackResponse(op, r, body) {
+  const headers = {};
+  try { for (const [k,v] of r.headers) headers[k] = v; } catch {}
+  console.error(
+    `[PAYSTACK][${op}] response -> status=${r.status} ok=${r.ok}\nheaders=${JSON.stringify(headers)}\ntext=${body.text}\njson=${JSON.stringify(body.json)}`
+  );
+}
+
+// One-time startup snapshot (no secrets)
+console.error("[PAYSTACK] startup", JSON.stringify({
+  has_public_key: !!PAYSTACK_PUBLIC_KEY,
+  has_secret_key: !!PAYSTACK_SECRET_KEY,
+  has_plus_plan: !!PLAN_CODE_PLUS_MONTHLY,
+  has_pro_plan: !!PLAN_CODE_PRO_ANNUAL,
+  currency: PAYSTACK_CURRENCY || "default",
+  amount_plus: PAYSTACK_AMOUNT_PLUS || "unset",
+  amount_pro: PAYSTACK_AMOUNT_PRO || "unset",
+}));
+
 /* ===================== Auth APIs ===================== */
 
 // public-config (for Paystack public key)
@@ -547,7 +588,9 @@ app.post("/api/reset/confirm", async (req,res)=>{
     const u = await getUserByEmail(email);
     setSessionCookie(res, { email, plan: u?.plan || "FREE" });
     res.json({ status:"ok" });
-  }catch(e){ console.error("reset/confirm error",e); res.status(500).json({status:"error", message:"Reset failed"}); }
+  }catch(e){
+    console.error("reset/confirm error",e);
+    res.status(500).json({status:"error", message:"Reset failed"}); }
 });
 
 /* ===================== Conversations & Messages ===================== */
@@ -874,24 +917,52 @@ app.post("/api/feedback", async (req,res)=>{
 
 /* ===================== Paystack ===================== */
 
-// 1) Initialize a hosted checkout for a plan
+// 1) Initialize a hosted checkout for a plan (with deep logging)
 app.post("/api/paystack/init", async (req, res) => {
   try {
     const s = readSession(req);
-    if (!s?.email) return res.status(401).json({ status: "error", message: "Not signed in" });
+    if (!s?.email) {
+      return res.status(401).json({ status: "error", message: "Not signed in" });
+    }
 
     const { plan, planCode } = req.body || {};
     let code = planCode || null;
+
     if (!code && plan) {
       const p = String(plan).toUpperCase();
       if (p === "PLUS") code = PLAN_CODE_PLUS_MONTHLY;
       if (p === "PRO")  code = PLAN_CODE_PRO_ANNUAL;
     }
-    if (!code) return res.status(400).json({ status: "error", message: "Missing plan" });
+
+    if (!code) {
+      return res.status(400).json({ status: "error", message: "Missing plan" });
+    }
 
     const callbackUrl =
       PAYSTACK_CALLBACK_URL ||
       `${req.protocol}://${req.get("host")}/paystack/callback`;
+
+    // Optional explicit amounts (in minor units) – only sent if env is set
+    const amountPlus = Number(PAYSTACK_AMOUNT_PLUS || 0); // e.g., 4900 for ₵49.00
+    const amountPro  = Number(PAYSTACK_AMOUNT_PRO  || 0); // e.g., 38800 for ₵388.00
+    let amount = undefined;
+
+    if (String(plan || "").toUpperCase() === "PLUS" && amountPlus > 0) amount = amountPlus;
+    if (String(plan || "").toUpperCase() === "PRO"  && amountPro  > 0) amount = amountPro;
+
+    const payload = {
+      email: s.email,
+      plan: code,
+      callback_url: callbackUrl,
+      currency: PAYSTACK_CURRENCY || undefined,
+      ...(amount ? { amount } : {}),
+      metadata: {
+        plan_label: plan || "unknown",
+        site: "gptshelp.online",
+      },
+    };
+
+    logPaystackRequest("INIT", payload);
 
     const initRes = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
@@ -899,17 +970,21 @@ app.post("/api/paystack/init", async (req, res) => {
         Authorization: `Bearer ${PAYSTACK_SECRET_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({
-        email: s.email,
-        plan: code,
-        callback_url: callbackUrl,
-        currency: PAYSTACK_CURRENCY || undefined,
-      }),
+      body: JSON.stringify(payload),
     });
-    const j = await initRes.json();
-    if (!initRes.ok || j.status !== true) {
-      return res.status(400).json({ status: "error", message: j?.message || "Init failed" });
+
+    const body = await readBodySafe(initRes);
+    logPaystackResponse("INIT", initRes, body);
+
+    const j = body.json;
+    if (!initRes.ok || !j || j.status !== true) {
+      return res.status(400).json({
+        status: "error",
+        message: (j && j.message) || body.text || "Init failed",
+        raw: j || null,
+      });
     }
+
     res.json({
       status: "ok",
       authorization_url: j.data.authorization_url,
@@ -917,7 +992,7 @@ app.post("/api/paystack/init", async (req, res) => {
       access_code: j.data.access_code,
     });
   } catch (e) {
-    console.error("paystack init error", e);
+    console.error("[PAYSTACK][INIT] exception", e);
     res.status(500).json({ status: "error", message: "Initialization error" });
   }
 });
@@ -948,7 +1023,7 @@ app.get("/paystack/callback", async (req, res) => {
   }
 });
 
-// 3) Verify endpoint
+// 3) Verify endpoint (with deep logging)
 app.post("/api/paystack/verify", async (req,res)=>{
   try{
     const s = readSession(req);
@@ -956,34 +1031,51 @@ app.post("/api/paystack/verify", async (req,res)=>{
     const { reference } = req.body || {};
     if(!reference) return res.status(400).json({status:"error", message:"Missing reference"});
 
+    console.error(`[PAYSTACK][VERIFY] request -> ref=${reference}, email_hash=${shortHash(s.email)}`);
+
     const r = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,{
       headers:{ Authorization:`Bearer ${PAYSTACK_SECRET_KEY}` }
     });
-    const j = await r.json();
+
+    const body = await readBodySafe(r);
+    logPaystackResponse("VERIFY", r, body);
+
+    const j = body.json;
     if(!r.ok || !j || j.status !== true){
-      return res.status(400).json({status:"error", message:"Verification failed"});
+      return res.status(400).json({
+        status:"error",
+        message:(j && j.message) || body.text || "Verification failed",
+        raw: j || null,
+      });
     }
 
     const data = j.data || {};
     if(data.status !== "success"){
-      return res.status(400).json({status:"error", message:"Payment not successful"});
+      return res.status(400).json({status:"error", message:"Payment not successful", raw:data});
     }
 
-    const planCode = data.plan || data?.subscription?.plan || data?.authorization?.plan || null;
+    const planCode =
+      data.plan ||
+      (data.subscription && data.subscription.plan) ||
+      (data.authorization && data.authorization.plan) ||
+      null;
+
     let newPlan = null;
     if(planCode){
       if(PLAN_CODE_PLUS_MONTHLY && planCode === PLAN_CODE_PLUS_MONTHLY) newPlan = "PLUS";
       if(PLAN_CODE_PRO_ANNUAL  && planCode === PLAN_CODE_PRO_ANNUAL ) newPlan = "PRO";
     }
 
+    console.error(`[PAYSTACK][VERIFY] resolved plan -> code=${planCode || "na"}, newPlan=${newPlan || "unchanged"}`);
+
     if(newPlan){
       await pool.query(`update users set plan=$2, updated_at=now() where email=$1`,[s.email,newPlan]);
       setSessionCookie(res, { email:s.email, plan:newPlan });
     }
 
-    res.json({ status:"success", plan:newPlan || undefined });
+    res.json({ status:"success", plan:newPlan || undefined, raw:data });
   }catch(e){
-    console.error("paystack verify error",e);
+    console.error("[PAYSTACK][VERIFY] exception",e);
     res.status(500).json({status:"error", message:"Verification error"});
   }
 });
