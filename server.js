@@ -1112,4 +1112,3 @@ const PORT = process.env.PORT || 3000;
 app.use((req, res) => res.status(404).send("Not Found"));
 
 app.listen(PORT, ()=> console.log(`GPTs Help server running on :${PORT}`));
-```0
