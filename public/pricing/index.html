@@ -34,68 +34,31 @@
     }
     *{box-sizing:border-box}
     body{
-      margin:0;
-      font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-      background:var(--bg);
-      color:var(--text);
+      margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+      background:var(--bg);color:var(--text);
     }
     a{color:var(--brand);text-decoration:none}
     header{background:#fff;border-bottom:1px solid #eee}
-    .nav{
-      max-width:1200px;
-      margin:0 auto;
-      padding:1rem 2rem;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-    }
+    .nav{max-width:1200px;margin:0 auto;padding:1rem 2rem;display:flex;align-items:center;justify-content:space-between}
     .brand{font-weight:800}
     .nav-right{display:flex;gap:.5rem}
     .btn{
-      border:1px solid var(--border);
-      background:#fff;
-      color:var(--brand);
-      padding:.55rem .9rem;
-      border-radius:10px;
-      cursor:pointer;
-      font-weight:600;
+      border:1px solid var(--border);background:#fff;color:var(--brand);
+      padding:.55rem .9rem;border-radius:10px;cursor:pointer;font-weight:600
     }
-    .btn.primary{
-      background:var(--brand);
-      color:#fff;
-      border-color:transparent;
-    }
+    .btn.primary{background:var(--brand);color:#fff;border-color:transparent}
     main{max-width:1200px;margin:0 auto;padding:2rem}
     h1{margin-top:.2rem}
-    .plans{
-      display:grid;
-      grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
-      gap:1.5rem;
-      margin-top:1.25rem;
-    }
-    .plan{
-      background:#fff;
-      border:1px solid #eee;
-      border-radius:14px;
-      padding:2rem;
-      text-align:center;
-      box-shadow:var(--shadow);
-      position:relative;
-    }
+    .plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.5rem;margin-top:1.25rem}
+    .plan{background:#fff;border:1px solid #eee;border-radius:14px;padding:2rem;text-align:center;box-shadow:var(--shadow);position:relative}
     .price{font-size:2rem;color:var(--brand);margin:.5rem 0 1rem}
     .plan ul{list-style:none;padding:0;color:var(--muted);text-align:left;margin:1rem 0}
     .plan li{margin:.35rem 0}
-    .badge{
-      position:absolute;top:12px;right:12px;background:var(--brand);color:#fff;
-      font-size:.75rem;padding:.25rem .5rem;border-radius:999px
-    }
-    .stack{display:grid;gap:.5rem;margin-top:.75rem}
-    .notice{
-      display:none;margin:1rem 0 0;padding:.9rem 1rem;border-radius:10px;
-      background:#fff3cd;color:#664d03;border:1px solid #ffecb5;
-    }
-    footer{ text-align:center;padding:2rem;color:var(--muted);margin-top:2rem;border-top:1px solid #eee }
+    .badge{position:absolute;top:12px;right:12px;background:var(--brand);color:#fff;font-size:.75rem;padding:.25rem .5rem;border-radius:999px}
+    .notice{display:none;margin:1rem 0 0;padding:.9rem 1rem;border-radius:10px;background:#fff3cd;color:#664d03;border:1px solid #ffecb5}
+    footer{text-align:center;padding:2rem;color:var(--muted);margin-top:2rem;border-top:1px solid #eee}
     .btn[disabled]{opacity:.7;cursor:progress}
+    .hint{color:#6c757d;font-size:.9rem;margin-top:.5rem}
   </style>
 
   <!-- Breadcrumb Schema -->
@@ -156,7 +119,7 @@
 
   <main>
     <h1>Pricing</h1>
-    <p>Start free and upgrade anytime to unlock unlimited photo solves.</p>
+    <p>Start free and upgrade anytime. <strong>Payments are one-time</strong> (no auto-renew). Renew manually whenever you like.</p>
 
     <div id="notice" class="notice" role="status" aria-live="polite"></div>
 
@@ -175,30 +138,26 @@
       <div class="plan">
         <div class="badge">Popular</div>
         <h3>Plus Monthly</h3>
-        <div class="price">₵49 / mo</div>
+        <div class="price">₵49</div>
         <ul>
           <li><strong>Unlimited Photo Solves</strong></li>
           <li>Advanced explanations & proofs</li>
           <li>Priority processing</li>
         </ul>
-        <div class="stack">
-          <button id="btnPlusSub" class="btn primary" type="button">Subscribe (Auto-renew — Card)</button>
-          <button id="btnPlusOT" class="btn" type="button">Pay with MoMo or Card (One-time)</button>
-        </div>
+        <button id="btnPlus" class="btn primary" type="button">Subscribe</button>
+        <div class="hint">Pay with Mobile Money or Card • One-time</div>
       </div>
 
       <div class="plan">
         <h3>Pro Annual</h3>
-        <div class="price">₵388 / yr</div>
+        <div class="price">₵388</div>
         <ul>
           <li><strong>Unlimited Photo Solves</strong></li>
           <li>Save 34% yearly</li>
           <li>Team sharing & exports</li>
         </ul>
-        <div class="stack">
-          <button id="btnProSub" class="btn primary" type="button">Subscribe (Auto-renew — Card)</button>
-          <button id="btnProOT" class="btn" type="button">Pay with MoMo or Card (One-time)</button>
-        </div>
+        <button id="btnPro" class="btn primary" type="button">Subscribe</button>
+        <div class="hint">Pay with Mobile Money or Card • One-time</div>
       </div>
     </div>
   </main>
@@ -218,22 +177,18 @@
       notice.textContent = '';
     }
 
-    async function startCheckout(plan, mode) {
+    async function startCheckout(plan) {
       clearNotice();
-      const btnId =
-        plan === 'PLUS'
-          ? (mode === 'one_time' ? 'btnPlusOT' : 'btnPlusSub')
-          : (mode === 'one_time' ? 'btnProOT'  : 'btnProSub');
-
-      const btn = document.getElementById(btnId);
+      const btn = plan === 'PLUS' ? document.getElementById('btnPlus') : document.getElementById('btnPro');
       btn.disabled = true;
 
       try {
+        // Force one-time flow (MoMo + Card)
         const res = await fetch('/api/paystack/init', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ plan, mode }) // mode: "subscription" | "one_time"
+          body: JSON.stringify({ plan, mode: 'one_time' })
         });
 
         const data = await res.json().catch(() => ({}));
@@ -256,11 +211,8 @@
       }
     }
 
-    // Wire buttons
-    document.getElementById('btnPlusSub').addEventListener('click', () => startCheckout('PLUS', 'subscription'));
-    document.getElementById('btnPlusOT').addEventListener('click',  () => startCheckout('PLUS', 'one_time'));
-    document.getElementById('btnProSub').addEventListener('click',  () => startCheckout('PRO',  'subscription'));
-    document.getElementById('btnProOT').addEventListener('click',   () => startCheckout('PRO',  'one_time'));
+    document.getElementById('btnPlus').addEventListener('click', () => startCheckout('PLUS'));
+    document.getElementById('btnPro').addEventListener('click',  () => startCheckout('PRO'));
   </script>
 </body>
 </html>
