@@ -4,105 +4,37 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <title>MathGPT Pricing — Free, Plus, and Pro Plans</title>
-  <meta name="description" content="Choose your MathGPT plan: Free for basic step-by-step math solutions, Plus for unlimited photo solves, or Pro for team sharing and exports.">
+  <title>MathGPT Pricing — Plans</title>
+  <meta name="description" content="Choose a plan and subscribe. Price is managed in Paystack dashboard. After payment, you’ll be redirected to Chat.">
 
   <link rel="canonical" href="https://gptshelp.online/pricing/" />
-
-  <!-- Open Graph -->
-  <meta property="og:type" content="website" />
-  <meta property="og:title" content="MathGPT Pricing — Unlock Unlimited Photo Solves" />
-  <meta property="og:description" content="Explore Free, Plus, and Pro plans. Upgrade to unlock unlimited AI math explanations and exports." />
-  <meta property="og:url" content="https://gptshelp.online/pricing/" />
-  <meta property="og:image" content="https://gptshelp.online/static/brand/shortcut-pricing.png" />
-
-  <!-- Twitter -->
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="MathGPT Pricing — Free, Plus, and Pro" />
-  <meta name="twitter:description" content="Get advanced AI math solutions with Plus or Pro plans. Start free today." />
-  <meta name="twitter:image" content="https://gptshelp.online/static/brand/shortcut-pricing.png" />
-
   <meta name="theme-color" content="#6f42c1" />
   <link rel="icon" href="/static/brand/favicon.ico" />
   <link rel="apple-touch-icon" href="/static/brand/logo-192.png" />
   <link rel="manifest" href="/manifest.webmanifest" />
 
   <style>
-    :root {
-      --brand:#6f42c1;--accent:#ffc107;--bg:#f8f9fa;--text:#212529;--muted:#6c757d;
-      --panel:#fff;--border:#eee;--shadow:0 16px 36px rgba(0,0,0,.08)
-    }
+    :root{--brand:#6f42c1;--bg:#f8f9fa;--text:#212529;--muted:#6c757d;--border:#eee;--shadow:0 16px 36px rgba(0,0,0,.08)}
     *{box-sizing:border-box}
-    body{
-      margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
-      background:var(--bg);color:var(--text);
-    }
+    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
     a{color:var(--brand);text-decoration:none}
     header{background:#fff;border-bottom:1px solid #eee}
     .nav{max-width:1200px;margin:0 auto;padding:1rem 2rem;display:flex;align-items:center;justify-content:space-between}
     .brand{font-weight:800}
     .nav-right{display:flex;gap:.5rem}
-    .btn{
-      border:1px solid var(--border);background:#fff;color:var(--brand);
-      padding:.55rem .9rem;border-radius:10px;cursor:pointer;font-weight:600
-    }
+    .btn{border:1px solid var(--border);background:#fff;color:var(--brand);padding:.55rem .9rem;border-radius:10px;cursor:pointer;font-weight:600}
     .btn.primary{background:var(--brand);color:#fff;border-color:transparent}
+    .btn[disabled]{opacity:.7;cursor:progress}
     main{max-width:1200px;margin:0 auto;padding:2rem}
     h1{margin-top:.2rem}
     .plans{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1.5rem;margin-top:1.25rem}
     .plan{background:#fff;border:1px solid #eee;border-radius:14px;padding:2rem;text-align:center;box-shadow:var(--shadow);position:relative}
-    .price{font-size:2rem;color:var(--brand);margin:.5rem 0 1rem}
     .plan ul{list-style:none;padding:0;color:var(--muted);text-align:left;margin:1rem 0}
     .plan li{margin:.35rem 0}
     .badge{position:absolute;top:12px;right:12px;background:var(--brand);color:#fff;font-size:.75rem;padding:.25rem .5rem;border-radius:999px}
-    .notice{display:none;margin:1rem 0 0;padding:.9rem 1rem;border-radius:10px;background:#fff3cd;color:#664d03;border:1px solid #ffecb5}
+    .notice{margin:1rem 0 0;padding:.9rem 1rem;border-radius:10px;background:#fff3cd;color:#664d03;border:1px solid #ffecb5;display:none}
     footer{text-align:center;padding:2rem;color:var(--muted);margin-top:2rem;border-top:1px solid #eee}
-    .btn[disabled]{opacity:.7;cursor:progress}
-    .hint{color:#6c757d;font-size:.9rem;margin-top:.5rem}
   </style>
-
-  <!-- Breadcrumb Schema -->
-  <script type="application/ld+json">
-  {
-    "@context":"https://schema.org",
-    "@type":"BreadcrumbList",
-    "itemListElement":[
-      {"@type":"ListItem","position":1,"name":"Home","item":"https://gptshelp.online/"},
-      {"@type":"ListItem","position":2,"name":"Pricing","item":"https://gptshelp.online/pricing/"}
-    ]
-  }
-  </script>
-
-  <!-- Product Offer Schema -->
-  <script type="application/ld+json">
-  {
-    "@context":"https://schema.org",
-    "@type":"Product",
-    "name":"MathGPT Subscription Plans",
-    "description":"Subscription plans for MathGPT, including Free, Plus Monthly, and Pro Annual tiers.",
-    "brand":{"@type":"Brand","name":"GPTs Help"},
-    "offers":[
-      {"@type":"Offer","name":"Free Plan","price":"0","priceCurrency":"GHS","availability":"https://schema.org/InStock"},
-      {"@type":"Offer","name":"Plus Monthly","price":"49","priceCurrency":"GHS","availability":"https://schema.org/InStock"},
-      {"@type":"Offer","name":"Pro Annual","price":"388","priceCurrency":"GHS","availability":"https://schema.org/InStock"}
-    ]
-  }
-  </script>
-
-  <!-- Site Search Schema -->
-  <script type="application/ld+json">
-  {
-    "@context":"https://schema.org",
-    "@type":"WebSite",
-    "name":"GPTs Help",
-    "url":"https://gptshelp.online/",
-    "potentialAction":{
-      "@type":"SearchAction",
-      "target":"https://gptshelp.online/search/?q={search_term_string}",
-      "query-input":"required name=search_term_string"
-    }
-  }
-  </script>
 </head>
 <body>
   <header>
@@ -119,14 +51,13 @@
 
   <main>
     <h1>Pricing</h1>
-    <p>Start free and upgrade anytime.</p>
+    <p style="color:#6c757d;margin:.25rem 0 1rem">Final prices are managed in the Paystack dashboard. You’ll confirm on Paystack and return to Chat.</p>
 
     <div id="notice" class="notice" role="status" aria-live="polite"></div>
 
     <div class="plans">
       <div class="plan">
         <h3>Free</h3>
-        <div class="price">₵0 / mo</div>
         <ul>
           <li><strong>2 Photo Solves</strong></li>
           <li>Basic step-by-step answers</li>
@@ -137,25 +68,23 @@
 
       <div class="plan">
         <div class="badge">Popular</div>
-        <h3>Plus Monthly</h3>
-        <div class="price">₵49</div>
+        <h3>Plus (subscription)</h3>
         <ul>
           <li><strong>Unlimited Photo Solves</strong></li>
-          <li>Advanced explanations & proofs</li>
+          <li>Advanced explanations &amp; proofs</li>
           <li>Priority processing</li>
         </ul>
-        <button id="btnPlus" class="btn primary" type="button">Subscribe</button>
+        <button id="btnPlus" class="btn primary" type="button">Subscribe to Plus</button>
       </div>
 
       <div class="plan">
-        <h3>Pro Annual</h3>
-        <div class="price">₵388</div>
+        <h3>Pro (subscription)</h3>
         <ul>
           <li><strong>Unlimited Photo Solves</strong></li>
-          <li>Save 34% yearly</li>
-          <li>Team sharing & exports</li>
+          <li>Team features &amp; exports</li>
+          <li>Best value annually</li>
         </ul>
-        <button id="btnPro" class="btn primary" type="button">Subscribe</button>
+        <button id="btnPro" class="btn primary" type="button">Subscribe to Pro</button>
       </div>
     </div>
   </main>
@@ -166,14 +95,8 @@
     document.getElementById('y').textContent = new Date().getFullYear();
 
     const notice = document.getElementById('notice');
-    function show(msg) {
-      notice.textContent = msg;
-      notice.style.display = 'block';
-    }
-    function clearNotice() {
-      notice.style.display = 'none';
-      notice.textContent = '';
-    }
+    function show(msg){ notice.textContent = msg; notice.style.display = 'block'; }
+    function clearNotice(){ notice.textContent = ''; notice.style.display = 'none'; }
 
     async function startCheckout(plan) {
       clearNotice();
@@ -181,27 +104,22 @@
       btn.disabled = true;
 
       try {
-        // Force one-time flow (MoMo + Card)
         const res = await fetch('/api/paystack/init', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           credentials: 'include',
-          body: JSON.stringify({ plan, mode: 'one_time' })
+          body: JSON.stringify({ plan })
         });
-
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
-          if (res.status === 401) {
-            throw new Error('Please sign in first. Open Chat to create an account, verify your email, then return here.');
-          }
+          if (res.status === 401) throw new Error('Please sign in first. Open Chat to create an account, verify your email, then return here.');
           throw new Error(data?.message || 'Could not start checkout.');
         }
-
-        if (data && data.authorization_url) {
-          window.location.href = data.authorization_url; // Paystack Hosted Page
+        if (data?.authorization_url) {
+          window.location.href = data.authorization_url; // Paystack will handle payment & return
           return;
         }
-        throw new Error('Missing authorization URL from server.');
+        throw new Error('Missing authorization URL.');
       } catch (e) {
         show(e.message || 'Something went wrong.');
       } finally {
@@ -210,7 +128,7 @@
     }
 
     document.getElementById('btnPlus').addEventListener('click', () => startCheckout('PLUS'));
-    document.getElementById('btnPro').addEventListener('click',  () => startCheckout('PRO'));
+    document.getElementById('btnPro').addEventListener('click', () => startCheckout('PRO'));
   </script>
 </body>
 </html>
