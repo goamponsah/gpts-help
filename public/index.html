@@ -422,7 +422,6 @@
       mnavOverlay.setAttribute("aria-hidden","false");
       mnavPanel.setAttribute("aria-hidden","false");
       mnavBtn.setAttribute("aria-expanded","true");
-      // prevent background scroll
       document.body.style.overflow="hidden";
     }
     function mnavHide(){
@@ -611,21 +610,36 @@
 
       setBtnLoading(signupSubmit,true,"Create account");
       try{
-        await apiSignupFree(email, p1);
-        try{ localStorage.setItem("userEmail", email); }catch{}
-        verifyInfo.style.display="block";
-        signupErr.style.color="var(--ok)";
-        signupErr.textContent="Almost done — check your inbox and verify your email to continue.";
+        const r = await apiSignupFree(email, p1);
+        // success path
+        if (r && (r.status === "ok" || r.status === "success")) {
+          try{ localStorage.setItem("userEmail", email); }catch{}
+          verifyInfo.style.display="block";
+          signupErr.style.color="var(--ok)";
+          signupErr.textContent="Almost done — check your inbox and verify your email to continue.";
+        }
+        // email already exists (common codes/messages)
+        else if (r && (r.code === "EMAIL_EXISTS" || r.code === "EMAIL_IN_USE" ||
+                       /exist|in use|already/i.test(r.message||""))) {
+          signupErr.style.color = "";
+          signupErr.textContent = "This email is already registered. Please log in.";
+          // show quick action to log in
+          document.getElementById("signupGoLogin").focus();
+        }
+        // generic failure
+        else {
+          signupErr.style.color = "";
+          signupErr.textContent = r?.message || "Could not create account. Please try again.";
+        }
       }catch{
-        verifyInfo.style.display="block";
-        signupErr.style.color="var(--ok)";
-        signupErr.textContent="Almost done — check your inbox and verify your email to continue.";
+        signupErr.style.color = "";
+        signupErr.textContent = "Could not create account. Please try again.";
       }finally{
         setBtnLoading(signupSubmit,false,"Create account");
       }
     }
 
-    signupBtn.addEventListener('click', openSignup);
+    document.getElementById("signupBtn").addEventListener('click', openSignup);
     signupClose.addEventListener('click', closeSignup);
     signupOverlay.addEventListener('click',(e)=>{ if(e.target===signupOverlay) closeSignup(); });
     document.addEventListener('keydown',(e)=>{ if(e.key==="Escape" && signupOverlay.classList.contains("open")) closeSignup(); });
