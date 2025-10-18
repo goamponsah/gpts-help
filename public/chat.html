@@ -4,6 +4,7 @@
   <meta charset="utf-8" />
   <title>MathGPT Chat — Solve Any Math Problem Step-by-Step</title>
   <meta name="description" content="Use MathGPT Chat to upload a photo or type a problem. Get instant, accurate, step-by-step solutions with explanations.">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <meta property="og:type" content="website">
   <meta property="og:title" content="MathGPT Chat — Step-by-Step Math Solver">
@@ -16,15 +17,13 @@
   <meta name="twitter:description" content="Upload a photo or type a question. MathGPT explains every step.">
   <meta name="twitter:image" content="https://gptshelp.online/static/brand/shortcut-chat.png">
 
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root{
       --sidebar-w:280px;
       --bg:#0e0f13; --panel:#13141a; --muted:#9aa3b2; --text:#e7eaf1;
       --brand:#5865f2; --user:#1c2333; --assistant:#13141a; --border:#232634;
       --vh:100vh; --composer-h:88px; --menu-bg:#0f1117;
-      --pill:#0f1117; --pill-border:#202433;
-      --cta:#22c55e;
+      --pill:#0f1117; --pill-border:#202433; --cta:#22c55e;
     }
     *{box-sizing:border-box}
     html,body{height:100%;margin:0}
@@ -32,24 +31,30 @@
     a{color:#9aa3b2}
 
     .app{height:calc(var(--vh));display:grid;grid-template-columns:var(--sidebar-w) 1fr;}
-    @media (max-width:900px){ .app{ grid-template-columns:1fr } .sidebar{ display:none } }
+    /* --- MOBILE / TABLET LAYOUT --- */
+    @media (max-width:1100px){
+      .app{ grid-template-columns:1fr }
+    }
 
-    /* ===== Mobile top bar (ChatGPT-like) ===== */
+    /* ===== Mobile top bar ===== */
     .mbar{display:none;position:sticky;top:0;z-index:40;background:#0f1117;border-bottom:1px solid var(--border);height:52px;align-items:center;gap:10px;padding:0 10px}
     .mbtn{width:36px;height:36px;border-radius:9999px;border:1px solid var(--border);background:#141722;color:#dfe3ec;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px}
     .mtitle{flex:1;text-align:center;font-weight:700;letter-spacing:.2px;color:#e7eaf1}
-    @media (max-width:900px){ .mbar{display:flex} }
+    @media (max-width:1100px){ .mbar{display:flex} }
 
-    /* Sidebar + overlay for mobile drawer */
+    /* ===== Sidebar + off-canvas drawer ===== */
     .sidebar{position:relative;display:grid;grid-template-rows:auto 1fr auto;border-right:1px solid var(--border);background:#0f1117;min-height:0}
-    .side-dim{display:none}
-    @media (max-width:900px){
+    /* Hide sidebar on mobile unless .drawer */
+    @media (max-width:1100px){
+      .sidebar:not(.drawer){ display:none !important; }
       .sidebar.drawer{
-        display:block;position:fixed;inset:0 auto 0 0;width:min(86vw,320px);z-index:1000;
-        box-shadow:0 24px 60px rgba(0,0,0,.6);border-right:1px solid var(--border)
+        display:block !important; position:fixed; inset:0 auto 0 0; width:min(86vw,320px); z-index:1000;
+        box-shadow:0 24px 60px rgba(0,0,0,.6); border-right:1px solid var(--border)
       }
-      .side-dim.open{display:block;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:900}
     }
+    /* Backdrop */
+    .side-dim{display:none}
+    .side-dim.open{display:block;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:900}
 
     .side-top{padding:12px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;justify-content:space-between}
     .logo{font-weight:700;letter-spacing:.2px; color:#e7eaf1; text-decoration:none}
@@ -102,7 +107,7 @@
     .bubble code{background:#0b0d12;padding:2px 6px;border-radius:6px;border:1px solid var(--border)}
     .bubble pre{background:#0b0d12;padding:10px;border-radius:10px;border:1px solid var(--border);overflow:auto}
 
-    /* ===== Message action bar (below assistant replies) ===== */
+    /* ===== Action bar below assistant replies ===== */
     .msg-actions{
       margin-top:8px;
       display:flex;
@@ -111,28 +116,18 @@
       flex-wrap:wrap;
     }
     .msg-actions .act{
-      background:transparent;
-      color:inherit;
+      background:transparent; color:inherit;
       border:1px solid var(--border);
-      border-radius:8px;
-      padding:6px 8px;
-      font-size:12px;
-      cursor:pointer;
+      border-radius:8px; padding:6px 8px; font-size:12px; cursor:pointer;
     }
-    .msg-actions .sep{
-      width:1px;height:18px;background:rgba(255,255,255,.12);
-    }
+    .msg-actions .sep{ width:1px;height:18px;background:rgba(255,255,255,.12); }
 
-    /* === Stack action bar under assistant replies === */
-    .msg.assistant{
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 6px;
-    }
-    .msg.assistant .msg-actions{ align-self: stretch; }
+    /* Stack bubble + actions vertically for assistant */
+    .msg.assistant{ flex-direction:column; align-items:flex-start; gap:6px; }
+    .msg.assistant .msg-actions{ align-self:stretch; }
 
     .composer{position:fixed;left:var(--sidebar-w);right:0;bottom:0;z-index:30;border-top:1px solid var(--border);background:linear-gradient(#0e0f13,#0f1117);padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px))}
-    @media (max-width:900px){ .composer{ left:0 } }
+    @media (max-width:1100px){ .composer{ left:0 } }
     .row{max-width:900px;margin:0 auto;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
     .input{display:flex;align-items:flex-end;gap:8px;background:#0f1117;border:1px solid var(--border);border-radius:9999px;padding:6px 10px;min-height:42px}
     .ta-wrap{flex:1;display:flex;flex-direction:column}
@@ -147,8 +142,7 @@
 
     .welcome{display:none;place-items:center;text-align:center;padding:40px 16px 120px}
     .welcome h1{font-size:32px;margin:12px 0 18px}
-    /* Removed quick pills per request */
-    @media (max-width:900px){ .welcome{display:grid} }
+    @media (max-width:1100px){ .welcome{display:grid} }
 
     .overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000}
     .overlay.open{display:flex}
@@ -175,11 +169,11 @@
     <div style="width:36px;height:36px"></div>
   </div>
 
-  <!-- Backdrop for mobile drawer -->
+  <!-- Drawer backdrop -->
   <div class="side-dim" id="sideDim" aria-hidden="true"></div>
 
   <div class="app">
-    <!-- Sidebar -->
+    <!-- Sidebar (drawer on mobile) -->
     <aside class="sidebar" id="sidebar">
       <div class="side-top">
         <a class="logo" href="/" aria-label="Home">GPTs Help</a>
@@ -220,14 +214,13 @@
 
       <section class="welcome" id="welcome">
         <h1>What can I help with?</h1>
-        <!-- quick pills removed -->
       </section>
 
       <div class="messages" id="messages"></div>
     </main>
   </div>
 
-  <!-- Fixed Composer -->
+  <!-- Composer -->
   <form class="composer" id="composer">
     <div class="row">
       <div class="input">
@@ -264,11 +257,14 @@
   </div>
 
   <div class="toast" id="toast">Link copied to clipboard</div>
+
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
   <script>
     function setVh(){ const vh = window.innerHeight * 0.01; document.documentElement.style.setProperty('--vh', `${vh*100}px`); }
     setVh(); window.addEventListener('resize', setVh);
 
-    /* ===== Mobile drawer toggling ===== */
+    /* === Drawer toggling === */
     const sidebar = document.getElementById('sidebar');
     const sideDim = document.getElementById('sideDim');
     const mMenuBtn = document.getElementById('mMenuBtn');
@@ -278,6 +274,7 @@
     sideDim.addEventListener('click', closeDrawer);
     document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeDrawer(); });
 
+    /* ======== API helpers (unchanged) ======== */
     const api = {
       listConvs: ()=>fetch('/api/conversations',{credentials:'include'}).then(r=>r.json()),
       createConv:(title)=>fetch('/api/conversations',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({title})}).then(r=>r.json()),
@@ -321,7 +318,6 @@
     const shareOverlay = document.getElementById('shareOverlay');
     const shareLinkInput = document.getElementById('shareLinkInput');
     const createShareBtn = document.getElementById('createShareBtn');
-    const shareCloseBtn = document.getElementById('shareCloseBtn');
     const toastEl = document.getElementById('toast');
 
     let currentConvId = null;
@@ -447,62 +443,36 @@
 
     function hideWelcome(){ welcome.style.display='none'; }
     function maybeShowWelcome(){
-      if (window.innerWidth < 900 && messagesEl.children.length === 0) {
+      if (window.innerWidth <= 1100 && messagesEl.children.length === 0) {
         welcome.style.display='grid';
       } else {
         welcome.style.display='none';
       }
     }
 
-    function openShareModal(convId){ pendingShareConvId=convId; shareOverlay.classList.add('open'); shareOverlay.setAttribute('aria-hidden','false'); shareLinkInput.value=''; shareLinkInput.placeholder='Generating…'; setTimeout(()=>createShareBtn.focus(),10); }
+    function openShareModal(convId){ pendingShareConvId=convId; shareOverlay.classList.add('open'); shareOverlay.setAttribute('aria-hidden','false'); shareLinkInput.value=''; shareLinkInput.placeholder='Generating…'; }
     function closeShareModal(){ shareOverlay.classList.remove('open'); shareOverlay.setAttribute('aria-hidden','true'); pendingShareConvId=null; }
-    document.getElementById('shareCloseBtn').addEventListener('click', closeShareModal);
-    shareOverlay.addEventListener('click', (e)=>{ if(e.target===shareOverlay) closeShareModal(); });
-    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape' && shareOverlay.classList.contains('open')) closeShareModal(); });
-    createShareBtn.addEventListener('click', async ()=>{
-      const id = pendingShareConvId ?? currentConvId; if(!id) return;
-      try{
-        const r = await api.shareCreate(id);
-        if(!r?.token){ showToast('Could not create link'); return; }
-        const url = `${location.origin}/chat.html?share=${encodeURIComponent(r.token)}`;
-        shareLinkInput.value = url; shareLinkInput.select();
-        await navigator.clipboard.writeText(url);
-        createShareBtn.textContent='Copied!'; showToast('Link copied to clipboard');
-        setTimeout(()=>createShareBtn.textContent='Create link',1200);
-      }catch{ showToast('Copy failed. Select and copy manually.'); }
-    });
+    document.getElementById('shareOverlay').addEventListener('click',(e)=>{ if(e.target.id==='shareOverlay') closeShareModal(); });
 
     /* ---- LOCAL TITLE UPDATE HELPERS ---- */
     function setConvTitleLocal(id, title){
       convTitleCache[id] = title;
       const node = convListEl.querySelector(`.conv[data-id="${id}"] .conv-title`);
       if (node) node.textContent = title;
-      if (currentConvId === id) {
-        document.title = `${title} — GPTs Help`;
-      }
+      if (currentConvId === id) document.title = `${title} — GPTs Help`;
     }
-
     function shouldAutoTitleFor(convId){
       if (!convId) return true;
       if (pendingAutoTitle.has(convId)) return true;
       const t = (convTitleCache[convId]||'').trim().toLowerCase();
       return t === 'new chat' || t === 'untitled' || t === '';
     }
-
     async function maybeAutoTitle(convId, sourceText, prefix = ""){
       if (!convId) return;
       if (!shouldAutoTitleFor(convId)) return;
       const autoTitle = makeTitleFrom(sourceText, prefix);
-      if (!autoTitle || autoTitle.toLowerCase() === (convTitleCache[convId]||'').trim().toLowerCase()) {
-        return;
-      }
-      try{
-        await api.renameConv(convId, autoTitle);
-        setConvTitleLocal(convId, autoTitle);
-        pendingAutoTitle.delete(convId);
-      }catch(e){
-        console.warn('Auto-title rename failed', e);
-      }
+      if (!autoTitle || autoTitle.toLowerCase() === (convTitleCache[convId]||'').trim().toLowerCase()) return;
+      try{ await api.renameConv(convId, autoTitle); setConvTitleLocal(convId, autoTitle); pendingAutoTitle.delete(convId); }catch{}
     }
 
     async function loadConversations(selectId=null){
@@ -544,7 +514,7 @@
           document.querySelectorAll('.conv').forEach(n=>n.classList.remove('active'));
           row.classList.add('active');
           await showConversation(c.id);
-          closeDrawer(); // close drawer after choosing a chat on mobile
+          closeDrawer(); // close drawer after choose
         });
 
         row.appendChild(title); row.appendChild(menuBtn); row.appendChild(menu);
@@ -625,7 +595,7 @@
     });
 
     /* Photo Solve */
-    photoBtn.addEventListener('click',()=> !readOnly && photoFile.click());
+    document.getElementById('photoBtn').addEventListener('click',()=> !readOnly && photoFile.click());
     photoFile.addEventListener('change', async ()=>{
       if(readOnly) return;
       const file = photoFile.files && photoFile.files[0]; if(!file) return;
@@ -691,7 +661,7 @@
       await loadConversations(currentConvId);
       clearMessages();
       promptEl.focus();
-      closeDrawer();
+      closeDrawer(); // close drawer after action
     });
 
     /* User menu */
@@ -737,8 +707,7 @@
       const parts = pick.split(' ').filter(Boolean);
       const a = (parts[0]||'U')[0] || 'U';
       const b = (parts[1]||'')[0] || '';
-      const val = (a + b).toUpperCase();
-      return val || 'U';
+      return (a + b).toUpperCase() || 'U';
     }
     function planLabelize(plan){
       const p=(plan||'FREE').toString().toUpperCase();
@@ -801,7 +770,7 @@
       if(fromUrl){ currentConvId=Number(fromUrl); await showConversation(currentConvId); }
 
       (function autoresizeInit(){ const e = document.getElementById('prompt'); e.style.height='auto'; e.style.height=Math.min(120,e.scrollHeight)+'px'; })();
-      updateComposerPad();
+      document.documentElement.style.setProperty('--composer-h', (document.getElementById('composer').offsetHeight||0)+'px');
       maybeShowWelcome();
       document.getElementById('prompt').focus();
     })();
