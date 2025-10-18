@@ -287,21 +287,70 @@ app.get("/api/me", async (req,res)=>{
   res.json({ status:"ok", user:{ email:u.email, plan:u.plan, verified:u.verified }});
 });
 
+/* ---- NEW: check if an email already exists ---- */
+app.post("/api/check-email", async (req, res) => {
+  try {
+    const { email } = req.body || {};
+    if (!email || typeof email !== "string") {
+      return res.json({ exists: false });
+    }
+    const u = await getUserByEmail(email);
+    res.json({ exists: !!u });
+  } catch (e) {
+    console.error("check-email error", e);
+    res.json({ exists: false });
+  }
+});
+
+/* ---- UPDATED: signup blocks duplicates and does not send verify again ---- */
 app.post("/api/signup-free", async (req,res)=>{
   try{
     const {email,password} = req.body || {};
     if(!email) return res.status(400).json({error:"Email required"});
-    const u = await upsertUser(email,"FREE");
+
+    // If email already registered, do not create or send verification
+    const existing = await getUserByEmail(email);
+    if (existing) {
+      return res
+        .status(409)
+        .json({
+          status: "error",
+          code: "EMAIL_EXISTS",
+          message: "This email is already registered. Please log in."
+        });
+    }
+
+    // Create brand-new user
+    const { rows } = await pool.query(
+      `insert into users(email, plan) values($1,$2) returning *`,
+      [email, "FREE"]
+    );
+    const u = rows[0];
+
+    // Optional password
     if(password && password.length>=8) await setUserPassword(email,password);
+
+    // Send verification email
     const token = crypto.randomBytes(24).toString("hex");
     const until = new Date(Date.now() + 24*3600e3);
     await pool.query(`update users set verify_token=$2, verify_expires=$3, verified=false where email=$1`,[email,token,until]);
     const origin = req.headers.origin || FRONTEND_ORIGIN || `${req.protocol}://${req.get("host")}`;
     const link = `${origin}/api/verify-email?token=${token}`;
     await resendSend({to:email,subject:"Verify your GPTs Help email",html:verificationEmailHtml(link)});
+
     setSessionCookie(res,{email,plan:u.plan});
     res.json({ ok:true });
-  }catch(e){ console.error(e); res.status(500).json({error:"Signup failed"}); }
+  }catch(e){
+    if (e && e.code === "23505") {
+      return res.status(409).json({
+        status: "error",
+        code: "EMAIL_EXISTS",
+        message: "This email is already registered. Please log in."
+      });
+    }
+    console.error(e);
+    res.status(500).json({error:"Signup failed"});
+  }
 });
 
 app.get("/api/verify-email", async (req,res)=>{
