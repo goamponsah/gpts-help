@@ -45,11 +45,33 @@
     a{color:var(--brand);text-decoration:none}
 
     header{background:#fff;border-bottom:1px solid #eee}
-    .nav{max-width:1200px;margin:0 auto;padding:1rem 2rem;display:flex;align-items:center;justify-content:space-between}
+    .nav{max-width:1200px;margin:0 auto;padding:1rem 2rem;display:flex;align-items:center;justify-content:space-between;gap:.75rem}
     .brand{font-weight:800;letter-spacing:.2px;color:var(--brand);font-size:1.2rem}
     .nav-right{display:flex;gap:.5rem;align-items:center}
     .btn-nav{border:1px solid var(--border);background:#fff;color:var(--brand);padding:.55rem .9rem;border-radius:10px;cursor:pointer;font-weight:600}
     .btn-nav.primary{background:var(--brand);color:#fff;border-color:transparent}
+
+    /* Hamburger (top-right) — hidden on desktop */
+    .hamburger{display:none;align-items:center;justify-content:center;width:40px;height:40px;border:1px solid var(--border);border-radius:12px;background:#fff;color:#5b3aa8;cursor:pointer}
+    .hamburger:focus{outline:2px solid #cbb6ff;outline-offset:2px}
+
+    /* Mobile menu (slide-in from right) */
+    .mnav-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);backdrop-filter:saturate(140%) blur(2px);display:none;z-index:1200}
+    .mnav-overlay.open{display:block}
+    .mnav-panel{position:fixed;top:0;right:0;height:100%;width:min(88vw,360px);background:#fff;border-left:1px solid #eee;box-shadow:var(--shadow);transform:translateX(100%);transition:transform .25s ease;z-index:1201;display:flex;flex-direction:column}
+    .mnav-panel.open{transform:translateX(0)}
+    .mnav-head{display:flex;align-items:center;justify-content:space-between;padding:14px;border-bottom:1px solid #eee}
+    .mnav-title{font-weight:800;color:#5b3aa8}
+    .mnav-close{border:1px solid var(--border);background:#fff;border-radius:10px;padding:.4rem .6rem;cursor:pointer}
+    .mnav-items{padding:10px}
+    .mnav-item{display:block;width:100%;text-align:left;background:#fff;border:1px solid #eee;border-radius:12px;padding:.9rem 1rem;font-weight:600;color:#5b3aa8;margin-bottom:10px;cursor:pointer}
+    .mnav-item.primary{background:var(--brand);color:#fff;border-color:transparent}
+
+    /* Hide desktop buttons on small screens, show hamburger */
+    @media (max-width:900px){
+      .nav-right{display:none}
+      .hamburger{display:inline-flex}
+    }
 
     .hero{background:linear-gradient(135deg,var(--brand),#9c6fff);color:#fff;text-align:center;padding:5rem 2rem}
     .hero h1{font-size:clamp(2rem,4vw,3rem);margin-bottom:1rem}
@@ -91,6 +113,7 @@
     .testimonial{background:#fff;border:1px solid #eee;border-radius:12px;padding:1.5rem;font-style:italic}
 
     footer{text-align:center;padding:2rem;color:var(--muted);margin-top:3rem;border-top:1px solid #eee}
+
     .overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);z-index:1000}
     .overlay.open{display:flex}
     .modal{width:min(520px,92vw);background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;box-shadow:var(--shadow)}
@@ -111,42 +134,13 @@
 
   <!-- ===== JSON-LD Schema ===== -->
   <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "Organization",
-    "name": "GPTs Help",
-    "url": "https://gptshelp.online/",
-    "logo": "https://gptshelp.online/static/brand/logo-192.png",
-    "sameAs": []
-  }
+  {"@context":"https://schema.org","@type":"Organization","name":"GPTs Help","url":"https://gptshelp.online/","logo":"https://gptshelp.online/static/brand/logo-192.png","sameAs":[]}
   </script>
   <script type="application/ld+json">
-  {
-    "@context":"https://schema.org",
-    "@type":"WebSite",
-    "name":"GPTs Help",
-    "url":"https://gptshelp.online/",
-    "potentialAction":{
-      "@type":"SearchAction",
-      "target":"https://gptshelp.online/search/?q={query}",
-      "query-input":"required name=query"
-    }
-  }
+  {"@context":"https://schema.org","@type":"WebSite","name":"GPTs Help","url":"https://gptshelp.online/","potentialAction":{"@type":"SearchAction","target":"https://gptshelp.online/search/?q={query}","query-input":"required name=query"}}
   </script>
   <script type="application/ld+json">
-  {
-    "@context":"https://schema.org",
-    "@type":"SoftwareApplication",
-    "name":"GPTs Help",
-    "applicationCategory":"EducationalApplication",
-    "operatingSystem":"Web",
-    "offers":[
-      {"@type":"Offer","price":"0","priceCurrency":"GHS","name":"Free"},
-      {"@type":"Offer","price":"49","priceCurrency":"GHS","name":"Plus Monthly"},
-      {"@type":"Offer","price":"388","priceCurrency":"GHS","name":"Pro Annual"}
-    ],
-    "aggregateRating":{"@type":"AggregateRating","ratingValue":"4.9","ratingCount":"27"}
-  }
+  {"@context":"https://schema.org","@type":"SoftwareApplication","name":"GPTs Help","applicationCategory":"EducationalApplication","operatingSystem":"Web","offers":[{"@type":"Offer","price":"0","priceCurrency":"GHS","name":"Free"},{"@type":"Offer","price":"49","priceCurrency":"GHS","name":"Plus Monthly"},{"@type":"Offer","price":"388","priceCurrency":"GHS","name":"Pro Annual"}],"aggregateRating":{"@type":"AggregateRating","ratingValue":"4.9","ratingCount":"27"}}
   </script>
 </head>
 <body>
@@ -154,6 +148,8 @@
   <header>
     <div class="nav" role="navigation" aria-label="Primary">
       <a class="brand" href="/" aria-label="Home">GPTs Help</a>
+
+      <!-- Desktop buttons -->
       <div class="nav-right">
         <a class="btn-nav" href="/overview/" aria-label="Overview">Overview</a>
         <a class="btn-nav" href="/pricing/" aria-label="Pricing">Pricing</a>
@@ -162,8 +158,28 @@
         <button id="loginBtn" class="btn-nav">Log in</button>
         <button id="signupBtn" class="btn-nav primary">Sign up for free</button>
       </div>
+
+      <!-- Mobile hamburger (top-right) -->
+      <button id="mnavBtn" class="hamburger" aria-label="Menu" aria-controls="mnavOverlay" aria-expanded="false">☰</button>
     </div>
   </header>
+
+  <!-- Mobile menu overlay & panel -->
+  <div id="mnavOverlay" class="mnav-overlay" aria-hidden="true"></div>
+  <aside id="mnavPanel" class="mnav-panel" aria-hidden="true" role="dialog" aria-label="Mobile Menu">
+    <div class="mnav-head">
+      <div class="mnav-title">GPTs Help</div>
+      <button id="mnavClose" class="mnav-close" aria-label="Close">✕</button>
+    </div>
+    <div class="mnav-items">
+      <a href="/overview/" class="mnav-item">Overview</a>
+      <a href="/pricing/" class="mnav-item">Pricing</a>
+      <a href="/download/" class="mnav-item">Download</a>
+      <button id="mnavOpenChat" class="mnav-item" style="display:none">Open Chat</button>
+      <button id="mnavLogin" class="mnav-item">Log in</button>
+      <button id="mnavSignup" class="mnav-item primary">Sign up for free</button>
+    </div>
+  </aside>
 
   <!-- Hero Section -->
   <section class="hero">
@@ -345,14 +361,14 @@
     const NEXT_URL = "/chat.html";
 
     // ---------- Config load & prices from Railway ----------
-    let PAYSTACK_PUBLIC_KEY = null; // (not strictly needed for server-init, but we keep it)
+    let PAYSTACK_PUBLIC_KEY = null; // optional on client now
     let PRICE_PLUS = null; // GHS
     let PRICE_PRO  = null; // GHS
     async function loadConfig(){
       try{
         const r = await fetch("/api/public-config");
         const cfg = await r.json();
-        PAYSTACK_PUBLIC_KEY = cfg.paystackPublicKey || null; // optional
+        PAYSTACK_PUBLIC_KEY = cfg.paystackPublicKey || null;
         if (typeof cfg.pricePlusGhs !== "undefined"){
           PRICE_PLUS = cfg.pricePlusGhs;
           const el = document.getElementById("pricePlus");
@@ -395,26 +411,67 @@
       else{ btn.disabled=false; btn.textContent = label || btn.dataset.prev || btn.textContent; }
     }
 
-    // ---------- Header auth state ----------
+    // ---------- Mobile menu controls ----------
+    const mnavBtn   = document.getElementById("mnavBtn");
+    const mnavOverlay = document.getElementById("mnavOverlay");
+    const mnavPanel = document.getElementById("mnavPanel");
+    const mnavClose = document.getElementById("mnavClose");
+    function mnavOpen(){
+      mnavOverlay.classList.add("open");
+      mnavPanel.classList.add("open");
+      mnavOverlay.setAttribute("aria-hidden","false");
+      mnavPanel.setAttribute("aria-hidden","false");
+      mnavBtn.setAttribute("aria-expanded","true");
+      // prevent background scroll
+      document.body.style.overflow="hidden";
+    }
+    function mnavHide(){
+      mnavOverlay.classList.remove("open");
+      mnavPanel.classList.remove("open");
+      mnavOverlay.setAttribute("aria-hidden","true");
+      mnavPanel.setAttribute("aria-hidden","true");
+      mnavBtn.setAttribute("aria-expanded","false");
+      document.body.style.overflow="";
+    }
+    mnavBtn.addEventListener("click", mnavOpen);
+    mnavClose.addEventListener("click", mnavHide);
+    mnavOverlay.addEventListener("click", mnavHide);
+    document.addEventListener("keydown", (e)=>{ if(e.key==="Escape") mnavHide(); });
+
+    // ---------- Header auth state (desktop + mobile) ----------
     async function reflectAuth(){
       const me = await apiMe();
       const openChatBtn = document.getElementById("openChatBtn");
       const loginBtn = document.getElementById("loginBtn");
       const signupBtn = document.getElementById("signupBtn");
+
+      const mnavOpenChat = document.getElementById("mnavOpenChat");
+      const mnavLogin = document.getElementById("mnavLogin");
+      const mnavSignup = document.getElementById("mnavSignup");
+
       if(me?.status==="ok" && me.user?.email){
         if(me.user.verified){
           openChatBtn.style.display="inline-block";
           openChatBtn.onclick = goToChat;
+          mnavOpenChat.style.display="block";
+          mnavOpenChat.onclick = ()=>{ mnavHide(); goToChat(); };
         }else{
           openChatBtn.style.display="inline-block";
           openChatBtn.onclick = () => { alert("Please verify your email first. We’ve sent you a link."); apiResendVerify().catch(()=>{}); };
+          mnavOpenChat.style.display="block";
+          mnavOpenChat.onclick = () => { mnavHide(); alert("Please verify your email first. We’ve sent you a link."); apiResendVerify().catch(()=>{}); };
         }
         loginBtn.textContent="Switch account";
         signupBtn.textContent="New account";
+        mnavLogin.textContent="Switch account";
+        mnavSignup.textContent="New account";
       }else{
         openChatBtn.style.display="none";
+        mnavOpenChat.style.display="none";
         loginBtn.textContent="Log in";
         signupBtn.textContent="Sign up for free";
+        mnavLogin.textContent="Log in";
+        mnavSignup.textContent="Sign up for free";
       }
     }
 
@@ -436,6 +493,7 @@
     const forgotLink = document.getElementById("forgotLink");
 
     function openLogin(){
+      mnavHide();
       loginEmailErr.textContent=''; loginErr.textContent='';
       loginOverlay.classList.add("open"); loginOverlay.setAttribute("aria-hidden","false");
       loginStepEmail.classList.add("active"); loginStepPassword.classList.remove("active");
@@ -500,7 +558,7 @@
       }
     });
 
-    // ---------- Signup modal (verify gate) ----------
+    // ---------- Signup modal ----------
     const signupOverlay = document.getElementById("signupOverlay");
     const signupBtn = document.getElementById("signupBtn");
     const signupClose = document.getElementById("signupClose");
@@ -520,6 +578,7 @@
     const resendVerifyBtn = document.getElementById("resendVerifyBtn");
 
     function openSignup(){
+      mnavHide();
       signupEmailErr.textContent=''; signupErr.textContent=''; verifyInfo.style.display="none";
       signupOverlay.classList.add("open"); signupOverlay.setAttribute("aria-hidden","false");
       signupStepEmail.classList.add("active"); signupStepPassword.classList.remove("active");
@@ -699,14 +758,14 @@
         setBtnLoading(solveBtn,false,'Solve Now');
       }
     }
-    solveBtn.addEventListener('click', solveNow);
-    clearBtn.addEventListener('click', ()=>{ selectedFile=null; preview.innerHTML=''; demoActions.style.display='none'; resultEl.textContent='Upload a math question to see the step-by-step solution here.'; fileInput.value=''; });
+    document.getElementById("solveBtn").addEventListener('click', solveNow);
+    document.getElementById("clearBtn").addEventListener('click', ()=>{ selectedFile=null; preview.innerHTML=''; demoActions.style.display='none'; resultEl.textContent='Upload a math question to see the step-by-step solution here.'; fileInput.value=''; });
 
     // ---------- Plan buttons (single binding only) ----------
     document.getElementById("plusMonthlyBtn").addEventListener('click', ()=> startSubscription("PLUS"));
     document.getElementById("proAnnualBtn").addEventListener('click', ()=> startSubscription("PRO"));
-    paywallMonthly.addEventListener('click', ()=> startSubscription("PLUS"));
-    paywallAnnual.addEventListener('click', ()=> startSubscription("PRO"));
+    document.getElementById("paywallMonthly").addEventListener('click', ()=> startSubscription("PLUS"));
+    document.getElementById("paywallAnnual").addEventListener('click', ()=> startSubscription("PRO"));
 
     // ---------- Start Free ----------
     document.getElementById("startFreeBtn").addEventListener('click', ()=>{
@@ -717,6 +776,10 @@
         } else openSignup();
       });
     });
+
+    // ---------- Mobile menu actions (hook to existing modals) ----------
+    document.getElementById("mnavLogin").addEventListener('click', openLogin);
+    document.getElementById("mnavSignup").addEventListener('click', openSignup);
 
     // ---------- Init ----------
     document.getElementById("year").textContent = new Date().getFullYear();
