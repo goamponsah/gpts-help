@@ -37,10 +37,36 @@
 
     /* Layout */
     .app{height:calc(var(--vh));width:100vw;display:grid;grid-template-columns:var(--sidebar-w) 1fr;min-height:0}
-    @media (max-width:900px){ .app{ grid-template-columns:1fr } .sidebar{ display:none } }
+    @media (max-width:900px){
+      .app{ grid-template-columns:1fr }
+    }
 
-    /* Sidebar (desktop only) */
-    .sidebar{position:relative;display:grid;grid-template-rows:auto 1fr auto;border-right:1px solid var(--border);background:#0f1117;min-height:0}
+    /* ===== Mobile top bar with menu button ===== */
+    .mobile-topbar{
+      display:none;
+      position:sticky; top:0; z-index:20;
+      padding:10px; background:linear-gradient(180deg, rgba(0,0,0,.65), rgba(0,0,0,0));
+    }
+    .hamburger{
+      width:36px;height:36px;border-radius:9999px;border:1px solid var(--border);
+      background:#141822;color:#e6e9f5;display:inline-grid;place-items:center;cursor:pointer;
+      box-shadow:0 2px 8px rgba(0,0,0,.25);
+    }
+    .hamburger:active{transform:scale(.98)}
+    .hamburger span{
+      display:block;width:16px;height:2px;background:#e6e9f5;border-radius:2px;position:relative;
+    }
+    .hamburger span::before,.hamburger span::after{
+      content:"";position:absolute;left:0;width:16px;height:2px;background:#e6e9f5;border-radius:2px;
+    }
+    .hamburger span::before{top:-5px}
+    .hamburger span::after{top:5px}
+    @media (max-width:900px){ .mobile-topbar{display:block} }
+
+    /* Sidebar (desktop) */
+    .sidebar{
+      position:relative;display:grid;grid-template-rows:auto 1fr auto;border-right:1px solid var(--border);background:#0f1117;min-height:0
+    }
     .side-top{padding:12px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;justify-content:space-between}
     .logo{font-weight:700;letter-spacing:.2px; color:#e7eaf1; text-decoration:none}
     .new-chat{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px 10px;cursor:pointer;font-size:13px}
@@ -73,6 +99,21 @@
     .um-text{font-size:14px}
     .um-right{margin-left:auto;color:#8b93ad;font-size:12px}
 
+    /* ===== Sidebar as drawer on mobile ===== */
+    @media (max-width:900px){
+      .sidebar{ display:none } /* default hidden */
+      body.drawer-open .sidebar{
+        display:grid;
+        position:fixed; inset:0 auto 0 0; width:min(86vw,320px); z-index:1001;
+        box-shadow:12px 0 40px rgba(0,0,0,.55);
+      }
+      #drawerBackdrop{
+        display:none;
+        position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1000;
+      }
+      body.drawer-open #drawerBackdrop{ display:block }
+    }
+
     /* Main */
     .main{display:grid;grid-template-rows:auto 1fr;min-height:0;height:100%}
     .readOnlyBanner{display:none;padding:10px 14px;border-bottom:1px solid var(--border);background:#10121a;color:#cbd2e1;font-size:14px}
@@ -101,34 +142,14 @@
     .bubble code{background:#0b0d12;padding:2px 6px;border-radius:6px;border:1px solid var(--border)}
     .bubble pre{background:#0b0d12;padding:10px;border-radius:10px;border:1px solid var(--border);overflow:auto}
 
-    /* Action bar below assistant replies */
-    .msg-actions{
-      margin-top:8px;
-      display:flex;
-      gap:8px;
-      align-items:center;
-      flex-wrap:wrap;
-    }
-    .msg-actions .act{
-      background:transparent;
-      color:inherit;
-      border:1px solid var(--border);
-      border-radius:8px;
-      padding:6px 8px;
-      font-size:12px;
-      cursor:pointer;
-    }
-    .msg-actions .sep{
-      width:1px;height:18px;background:rgba(255,255,255,.12);
-    }
+    /* Action bar below assistant replies (kept) */
+    .msg-actions{ margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    .msg-actions .act{ background:transparent; color:inherit; border:1px solid var(--border); border-radius:8px; padding:6px 8px; font-size:12px; cursor:pointer; }
+    .msg-actions .sep{ width:1px;height:18px;background:rgba(255,255,255,.12); }
 
     /* Composer */
     .composer{
-      position:fixed;
-      left:var(--sidebar-w);
-      right:0;
-      bottom:0;
-      z-index:30;
+      position:fixed; left:var(--sidebar-w); right:0; bottom:0; z-index:30;
       border-top:1px solid var(--border);
       background:linear-gradient(#0e0f13,#0f1117);
       padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));
@@ -146,25 +167,18 @@
     .send-mobile{background:var(--cta);color:#04110a;border-color:transparent}
     .icon-btn:disabled{opacity:.6;cursor:not-allowed}
 
-    /* Mobile welcome hero */
+    /* Mobile welcome hero (no chips) */
     .welcome{
-      display:none;
-      place-items:center;
-      text-align:center;
-      padding:40px 16px 120px;
+      display:none; place-items:center; text-align:center; padding:40px 16px 120px;
       min-height:calc(100dvh - var(--composer-h));
     }
     @media (max-width:900px){ .welcome{display:grid} }
     .welcome h1{
       font-size:clamp(24px,6vw,32px);
-      margin:12px 0 18px;
-      letter-spacing:.2px;
+      margin:12px 0 18px; letter-spacing:.2px;
       animation:breathing 4s ease-in-out infinite;
     }
-    @keyframes breathing{
-      0%,100%{opacity:.9; transform:translateY(0)}
-      50%{opacity:1; transform:translateY(-1px)}
-    }
+    @keyframes breathing{ 0%,100%{opacity:.9; transform:translateY(0)} 50%{opacity:1; transform:translateY(-1px)} }
 
     /* Overlay modal (share) & toast */
     .overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000}
@@ -186,8 +200,11 @@
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 </head>
 <body>
+  <!-- Backdrop for the mobile drawer -->
+  <div id="drawerBackdrop" aria-hidden="true"></div>
+
   <div class="app">
-    <!-- Sidebar (desktop) -->
+    <!-- Sidebar -->
     <aside class="sidebar">
       <div class="side-top">
         <a class="logo" href="/" aria-label="Home">GPTs Help</a>
@@ -209,7 +226,7 @@
         <div class="um-item" id="umLogout"><span class="um-icon">↩️</span><span class="um-text">Log out</span></div>
       </div>
 
-      <!-- Bottom user card -->
+      <!-- Bottom: user card -->
       <div class="side-bottom">
         <div class="usercard" id="userCard" title="Account (click for menu)" tabindex="0" aria-haspopup="menu" aria-expanded="false" aria-controls="userMenu">
           <div class="avatar" id="userAvatar">U</div>
@@ -224,9 +241,14 @@
 
     <!-- Main -->
     <main class="main">
+      <!-- Mobile top bar -->
+      <div class="mobile-topbar">
+        <button class="hamburger" id="hamburger" aria-label="Open menu"><span></span></button>
+      </div>
+
       <div class="readOnlyBanner" id="roBanner">🔒 Read-only shared view. <a href="/index.html" style="color:#9aa3b2">Sign up</a> to chat.</div>
 
-      <!-- Clean mobile welcome (no quick buttons) -->
+      <!-- Clean mobile welcome (no quick chips) -->
       <section class="welcome" id="welcome">
         <h1>What can I help with?</h1>
       </section>
@@ -328,6 +350,9 @@
     const createShareBtn = document.getElementById('createShareBtn');
     const shareCloseBtn = document.getElementById('shareCloseBtn');
     const toastEl = document.getElementById('toast');
+
+    const drawerBackdrop = document.getElementById('drawerBackdrop');
+    const hamburger = document.getElementById('hamburger');
 
     /* ---------- state ---------- */
     let currentConvId = null;
@@ -473,14 +498,12 @@
       }catch{ showToast('Copy failed. Select and copy manually.'); }
     });
 
-    /* Title helpers */
+    /* Title helpers (auto-title from user prompt) */
     function setConvTitleLocal(id, title){
       convTitleCache[id] = title;
       const node = convListEl.querySelector(`.conv[data-id="${id}"] .conv-title`);
       if (node) node.textContent = title;
-      if (currentConvId === id) {
-        document.title = `${title} — GPTs Help`;
-      }
+      if (currentConvId === id) document.title = `${title} — GPTs Help`;
     }
     function shouldAutoTitleFor(convId){
       if (!convId) return true;
@@ -597,7 +620,7 @@
           await loadConversations(currentConvId);
         }
 
-        // ✅ auto-title from the USER PROMPT (your request)
+        // Auto-title from the USER PROMPT
         await maybeAutoTitleFromUser(currentConvId, text);
 
         if(res.__status === 403 && (res.status==='verify_required' || res.message?.toLowerCase().includes('verify'))){
@@ -699,10 +722,24 @@
     umUpgrade.addEventListener('click', ()=>{ location.href='/index.html#pricing'; });
     umLogout.addEventListener('click', async ()=>{ try{ await api.logout(); }catch{} location.replace('/index.html'); });
 
+    /* Drawer behavior (mobile menu) */
+    function openDrawer(){ document.body.classList.add('drawer-open'); }
+    function closeDrawer(){ document.body.classList.remove('drawer-open'); }
+    hamburger.addEventListener('click', openDrawer);
+    drawerBackdrop.addEventListener('click', closeDrawer);
+    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeDrawer(); });
+    // Close drawer when a conversation is chosen
+    document.addEventListener('click', (e)=>{
+      if(window.innerWidth >= 900) return;
+      if(e.target.closest('.conv')) closeDrawer();
+    });
+
     /* Shared link (read-only) */
     async function enterReadOnlyView(token){
       readOnly = true;
       document.querySelector('.sidebar').style.display='none';
+      closeDrawer();
+      document.querySelector('.mobile-topbar').style.display='none';
       composerEl.style.display='none';
       roBanner.classList.add('show');
       updateComposerPad();
