@@ -277,7 +277,7 @@
     <a href="/support/">Support</a> &middot; <a href="/pricing/">Pricing</a>
   </footer>
 
-  <!-- ===== Auth + Paywall Modals (unchanged UI) ===== -->
+  <!-- ===== Auth + Paywall Modals ===== -->
   <!-- Login -->
   <div id="loginOverlay" class="overlay" aria-hidden="true">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
@@ -360,8 +360,8 @@
     const genRef = () => "gptshelp_" + Date.now() + "_" + Math.random().toString(36).slice(2,8);
     const NEXT_URL = "/chat.html";
 
-    // ---------- Config load & prices from Railway ----------
-    let PAYSTACK_PUBLIC_KEY = null; // optional on client now
+    // ---------- Config load & prices ----------
+    let PAYSTACK_PUBLIC_KEY = null;
     let PRICE_PLUS = null; // GHS
     let PRICE_PRO  = null; // GHS
     async function loadConfig(){
@@ -389,14 +389,29 @@
       const r = await fetch("/api/login",{method:"POST",headers:{ "Content-Type":"application/json" },credentials:"include",body:JSON.stringify({email,password})});
       return r.json();
     }
+    // We keep this returning the whole Response so callers can check status & body.
     async function apiSignupFree(email, password){
-      // We'll read both the response body and status in the caller.
       return fetch("/api/signup-free",{
         method:"POST",
         headers:{ "Content-Type":"application/json" },
         credentials:"include",
         body:JSON.stringify({email,password})
       });
+    }
+    // NEW: email existence check used on the first step
+    async function apiCheckEmail(email){
+      try{
+        const r = await fetch("/api/check-email",{
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          credentials:"include",
+          body: JSON.stringify({ email })
+        });
+        if(!r.ok) return { exists: false };
+        return await r.json();
+      }catch{
+        return { exists: false };
+      }
     }
     async function apiForgot(email){
       const r = await fetch("/api/forgot-password",{method:"POST",headers:{ "Content-Type":"application/json" },credentials:"include",body:JSON.stringify({email})});
@@ -416,7 +431,7 @@
       else{ btn.disabled=false; btn.textContent = label || btn.dataset.prev || btn.textContent; }
     }
 
-    // ---------- Mobile menu controls ----------
+    // ---------- Mobile menu ----------
     const mnavBtn   = document.getElementById("mnavBtn");
     const mnavOverlay = document.getElementById("mnavOverlay");
     const mnavPanel = document.getElementById("mnavPanel");
@@ -589,10 +604,35 @@
       setTimeout(()=>signupEmail.focus(),20);
     }
     function closeSignup(){ signupOverlay.classList.remove("open"); signupOverlay.setAttribute("aria-hidden","true"); }
-    function handleSignupEmailContinue(){
+    async function handleSignupEmailContinue(){
       const e = signupEmail.value.trim(); signupEmailErr.textContent='';
       if(!isValidEmail(e)){ signupEmailErr.textContent="Enter a valid email."; return; }
-      signupEmailEcho.textContent = e; signupStepEmail.classList.remove("active"); signupStepPassword.classList.add("active"); setTimeout(()=>signupPassword.focus(),20);
+
+      // NEW: check if email already exists before proceeding
+      signupEmailContinue.disabled = true;
+      signupEmailContinue.innerHTML = '<span class="spinner dark"></span> Continue';
+      try{
+        const check = await apiCheckEmail(e);
+        if (check && check.exists){
+          signupEmailErr.textContent = "This email is already registered. Please log in.";
+          signupEmail.focus();
+          return; // do NOT proceed to password page
+        }
+        // proceed to password step
+        signupEmailEcho.textContent = e;
+        signupStepEmail.classList.remove("active");
+        signupStepPassword.classList.add("active");
+        setTimeout(()=>signupPassword.focus(),20);
+      }catch{
+        // if the check fails, keep current behavior (optional)
+        signupEmailEcho.textContent = e;
+        signupStepEmail.classList.remove("active");
+        signupStepPassword.classList.add("active");
+        setTimeout(()=>signupPassword.focus(),20);
+      }finally{
+        signupEmailContinue.disabled = false;
+        signupEmailContinue.textContent = 'Continue';
+      }
     }
     function passwordOk(p){ return typeof p === 'string' && p.length >= 8; }
 
@@ -615,31 +655,22 @@
 
       setBtnLoading(signupSubmit,true,"Create account");
       try{
-        // read both status and body
         const resp = await apiSignupFree(email, p1);
         const data = await resp.json().catch(()=> ({}));
 
-        // success
         if (resp.ok && (data.status === "ok" || data.status === "success")) {
           try{ localStorage.setItem("userEmail", email); }catch{}
           verifyInfo.style.display="block";
           signupErr.style.color="var(--ok)";
           signupErr.textContent="Almost done — check your inbox and verify your email to continue.";
-        }
-        // duplicate email (common status codes or messages)
-        else if (
+        } else if (
           resp.status === 409 || resp.status === 422 || resp.status === 400 ||
-          (data && (
-            data.code === "EMAIL_EXISTS" || data.code === "EMAIL_IN_USE" ||
-            /exist|already|in use|duplicate/i.test(String(data.message||""))
-          ))
+          (data && (data.code === "EMAIL_EXISTS" || data.code === "EMAIL_IN_USE" || /exist|already|in use|duplicate/i.test(String(data.message||""))))
         ) {
+          // should be rare now since we pre-check, but keep it just in case
           signupErr.style.color = "";
           signupErr.textContent = "This email is already registered. Please log in.";
-          document.getElementById("signupGoLogin").focus();
-        }
-        // generic failure
-        else {
+        } else {
           signupErr.style.color = "";
           signupErr.textContent = data?.message || "Could not create account. Please try again.";
         }
@@ -652,16 +683,17 @@
     }
 
     document.getElementById("signupBtn").addEventListener('click', openSignup);
-    signupClose.addEventListener('click', closeSignup);
-    signupOverlay.addEventListener('click',(e)=>{ if(e.target===signupOverlay) closeSignup(); });
-    document.addEventListener('keydown',(e)=>{ if(e.key==="Escape" && signupOverlay.classList.contains("open")) closeSignup(); });
-    signupEmailContinue.addEventListener('click', handleSignupEmailContinue);
-    signupEmail.addEventListener('keydown',(e)=>{ if(e.key==='Enter') handleSignupEmailContinue(); });
-    signupChangeEmail.addEventListener('click', ()=>{ signupStepPassword.classList.remove("active"); signupStepEmail.classList.add("active"); setTimeout(()=>signupEmail.focus(),20); });
-    signupSubmit.addEventListener('click', handleSignupSubmit);
-    signupPassword2.addEventListener('keydown',(e)=>{ if(e.key==='Enter') handleSignupSubmit(); });
-    signupGoLogin.addEventListener('click',(e)=>{ e.preventDefault(); closeSignup(); openLogin(); });
-    resendVerifyBtn.addEventListener('click', async ()=>{
+    document.getElementById("signupClose").addEventListener('click', closeSignup);
+    document.getElementById("signupOverlay").addEventListener('click',(e)=>{ if(e.target===document.getElementById("signupOverlay")) closeSignup(); });
+    document.addEventListener('keydown',(e)=>{ if(e.key==="Escape" && document.getElementById("signupOverlay").classList.contains("open")) closeSignup(); });
+    document.getElementById("signupEmailContinue").addEventListener('click', handleSignupEmailContinue);
+    document.getElementById("signupEmail").addEventListener('keydown',(e)=>{ if(e.key==='Enter') handleSignupEmailContinue(); });
+    document.getElementById("signupChangeEmail").addEventListener('click', ()=>{ signupStepPassword.classList.remove("active"); signupStepEmail.classList.add("active"); setTimeout(()=>signupEmail.focus(),20); });
+    document.getElementById("signupSubmit").addEventListener('click', handleSignupSubmit);
+    document.getElementById("signupPassword2").addEventListener('keydown',(e)=>{ if(e.key==='Enter') handleSignupSubmit(); });
+    document.getElementById("signupGoLogin").addEventListener('click',(e)=>{ e.preventDefault(); closeSignup(); openLogin(); });
+    document.getElementById("resendVerifyBtn").addEventListener('click', async ()=>{
+      const resendVerifyBtn = document.getElementById("resendVerifyBtn");
       resendVerifyBtn.disabled = true;
       try{ await apiResendVerify(); resendVerifyBtn.textContent = "Sent!"; setTimeout(()=>resendVerifyBtn.textContent="Resend email",1500); }
       catch{ resendVerifyBtn.textContent = "Failed"; setTimeout(()=>resendVerifyBtn.textContent="Resend email",1500); }
@@ -787,7 +819,7 @@
     document.getElementById("solveBtn").addEventListener('click', solveNow);
     document.getElementById("clearBtn").addEventListener('click', ()=>{ selectedFile=null; preview.innerHTML=''; demoActions.style.display='none'; resultEl.textContent='Upload a math question to see the step-by-step solution here.'; fileInput.value=''; });
 
-    // ---------- Plan buttons (single binding only) ----------
+    // ---------- Plan buttons ----------
     document.getElementById("plusMonthlyBtn").addEventListener('click', ()=> startSubscription("PLUS"));
     document.getElementById("proAnnualBtn").addEventListener('click', ()=> startSubscription("PRO"));
     document.getElementById("paywallMonthly").addEventListener('click', ()=> startSubscription("PLUS"));
@@ -803,7 +835,7 @@
       });
     });
 
-    // ---------- Mobile menu actions (hook to existing modals) ----------
+    // ---------- Mobile menu actions ----------
     document.getElementById("mnavLogin").addEventListener('click', openLogin);
     document.getElementById("mnavSignup").addEventListener('click', openSignup);
 
