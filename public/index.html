@@ -245,6 +245,7 @@
         <ul>
           <li><strong>Unlimited Photo Solves</strong></li>
           <li>Advanced explanations &amp; proofs</li>
+          <li>Priority processing</li>
         </ul>
         <button class="btn btn-primary" id="plusMonthlyBtn">Subscribe Monthly</button>
       </div>
@@ -255,6 +256,7 @@
         <ul>
           <li><strong>Unlimited Photo Solves</strong></li>
           <li>Annual discount (save 34%)</li>
+          <li>Team sharing &amp; exports</li>
         </ul>
         <button class="btn btn-primary" id="proAnnualBtn">Subscribe Annually</button>
       </div>
@@ -388,8 +390,13 @@
       return r.json();
     }
     async function apiSignupFree(email, password){
-      const r = await fetch("/api/signup-free",{method:"POST",headers:{ "Content-Type":"application/json" },credentials:"include",body:JSON.stringify({email,password})});
-      return r.json();
+      // We'll read both the response body and status in the caller.
+      return fetch("/api/signup-free",{
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        credentials:"include",
+        body:JSON.stringify({email,password})
+      });
     }
     async function apiForgot(email){
       const r = await fetch("/api/forgot-password",{method:"POST",headers:{ "Content-Type":"application/json" },credentials:"include",body:JSON.stringify({email})});
@@ -608,26 +615,33 @@
 
       setBtnLoading(signupSubmit,true,"Create account");
       try{
-        const r = await apiSignupFree(email, p1);
-        // success path
-        if (r && (r.status === "ok" || r.status === "success")) {
+        // read both status and body
+        const resp = await apiSignupFree(email, p1);
+        const data = await resp.json().catch(()=> ({}));
+
+        // success
+        if (resp.ok && (data.status === "ok" || data.status === "success")) {
           try{ localStorage.setItem("userEmail", email); }catch{}
           verifyInfo.style.display="block";
           signupErr.style.color="var(--ok)";
           signupErr.textContent="Almost done — check your inbox and verify your email to continue.";
         }
-        // email already exists (common codes/messages)
-        else if (r && (r.code === "EMAIL_EXISTS" || r.code === "EMAIL_IN_USE" ||
-                       /exist|in use|already/i.test(r.message||""))) {
+        // duplicate email (common status codes or messages)
+        else if (
+          resp.status === 409 || resp.status === 422 || resp.status === 400 ||
+          (data && (
+            data.code === "EMAIL_EXISTS" || data.code === "EMAIL_IN_USE" ||
+            /exist|already|in use|duplicate/i.test(String(data.message||""))
+          ))
+        ) {
           signupErr.style.color = "";
           signupErr.textContent = "This email is already registered. Please log in.";
-          // show quick action to log in
           document.getElementById("signupGoLogin").focus();
         }
         // generic failure
         else {
           signupErr.style.color = "";
-          signupErr.textContent = r?.message || "Could not create account. Please try again.";
+          signupErr.textContent = data?.message || "Could not create account. Please try again.";
         }
       }catch{
         signupErr.style.color = "";
