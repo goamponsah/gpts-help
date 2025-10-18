@@ -71,6 +71,7 @@
     .demo-actions{display:flex;gap:.6rem;justify-content:center;margin-top:.75rem}
     .btn{padding:.85rem 1.2rem;font-weight:700;border:none;border-radius:10px;cursor:pointer}
     .btn-primary{background:var(--accent);color:#000}
+    .btn-secondary{background:#fff;color:#va(--brand);border:1px solid var(--border)}
     .btn-secondary{background:#fff;color:var(--brand);border:1px solid var(--border)}
     .preview{margin-top:1rem;display:flex;gap:1rem;flex-wrap:wrap;justify-content:center}
     .preview img{max-width:220px;border-radius:10px;border:1px solid #eee}
@@ -91,6 +92,8 @@
     .testimonial{background:#fff;border:1px solid #eee;border-radius:12px;padding:1.5rem;font-style:italic}
 
     footer{text-align:center;padding:2rem;color:var(--muted);margin-top:3rem;border-top:1px solid #eee}
+
+    /* Overlays */
     .overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);z-index:1000}
     .overlay.open{display:flex}
     .modal{width:min(520px,92vw);background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px;box-shadow:var(--shadow)}
@@ -159,8 +162,8 @@
         <a class="btn-nav" href="/pricing/" aria-label="Pricing">Pricing</a>
         <a class="btn-nav" href="/download/" aria-label="Download">Download</a>
         <button id="openChatBtn" class="btn-nav" style="display:none" onclick="goToChat()">Open Chat</button>
-        <button id="loginBtn" class="btn-nav">Log in</button>
-        <button id="signupBtn" class="btn-nav primary">Sign up for free</button>
+        <button id="loginBtn" class="btn-nav" type="button">Log in</button>
+        <button id="signupBtn" class="btn-nav primary" type="button">Sign up for free</button>
       </div>
     </div>
   </header>
@@ -219,7 +222,7 @@
           <li>Basic step-by-step answers</li>
           <li>Try before you buy</li>
         </ul>
-        <button class="btn btn-secondary" id="startFreeBtn">Start free</button>
+        <button class="btn btn-secondary" id="startFreeBtn" type="button">Start free</button>
       </div>
 
       <div class="plan">
@@ -231,7 +234,7 @@
           <li>Advanced explanations &amp; proofs</li>
           <li>Priority processing</li>
         </ul>
-        <button class="btn btn-primary" id="plusMonthlyBtn">Subscribe Monthly</button>
+        <button class="btn btn-primary" id="plusMonthlyBtn" type="button">Subscribe Monthly</button>
       </div>
 
       <div class="plan">
@@ -242,7 +245,7 @@
           <li>Annual discount (save 34%)</li>
           <li>Team sharing &amp; exports</li>
         </ul>
-        <button class="btn btn-primary" id="proAnnualBtn">Subscribe Annually</button>
+        <button class="btn btn-primary" id="proAnnualBtn" type="button">Subscribe Annually</button>
       </div>
     </div>
   </section>
@@ -260,6 +263,95 @@
   <footer>&copy; <span id="year"></span> GPTs Help. All rights reserved. &middot;
     <a href="/support/">Support</a> &middot; <a href="/pricing/">Pricing</a>
   </footer>
+
+  <!-- ========== LOGIN MODAL ========== -->
+  <div class="overlay" id="loginOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+      <button id="loginClose" class="close-x" aria-label="Close">×</button>
+      <h3 id="loginTitle">Log in</h3>
+      <p class="sub">Welcome back. Enter your email to continue.</p>
+
+      <!-- Step 1: email -->
+      <div class="step" id="loginStepEmail">
+        <label for="loginEmail">Email</label>
+        <input type="email" id="loginEmail" placeholder="you@example.com" autocomplete="email" />
+        <div id="loginEmailErr" class="err"></div>
+        <div class="row" style="margin-top:8px;">
+          <button id="loginEmailContinue" class="btn btn-primary" type="button">Continue</button>
+          <button id="loginGoSignup" class="btn" type="button">Create account</button>
+        </div>
+      </div>
+
+      <!-- Step 2: password -->
+      <div class="step" id="loginStepPassword">
+        <div class="inline" style="margin:.25rem 0 .25rem">
+          <strong id="loginEmailEcho">you@example.com</strong>
+          <button id="loginChangeEmail" class="link" type="button" aria-label="Change email">Change</button>
+        </div>
+        <label for="loginPassword">Password</label>
+        <input type="password" id="loginPassword" placeholder="••••••••" autocomplete="current-password" />
+        <div id="loginErr" class="err"></div>
+        <div class="row" style="margin-top:8px;">
+          <button id="loginSubmit" class="btn btn-primary" type="button">Log in</button>
+          <button id="forgotLink" class="btn" type="button">Forgot password?</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== SIGNUP MODAL ========== -->
+  <div class="overlay" id="signupOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="signupTitle">
+      <button id="signupClose" class="close-x" aria-label="Close">×</button>
+      <h3 id="signupTitle">Create your account</h3>
+      <p class="sub">Start free. Verify your email to unlock features.</p>
+
+      <!-- Step 1: email -->
+      <div class="step" id="signupStepEmail">
+        <label for="signupEmail">Email</label>
+        <input type="email" id="signupEmail" placeholder="you@example.com" autocomplete="email" />
+        <div id="signupEmailErr" class="err"></div>
+        <div class="row" style="margin-top:8px;">
+          <button id="signupEmailContinue" class="btn btn-primary" type="button">Continue</button>
+          <button id="signupGoLogin" class="btn" type="button">Have an account?</button>
+        </div>
+      </div>
+
+      <!-- Step 2: password -->
+      <div class="step" id="signupStepPassword">
+        <div class="inline" style="margin:.25rem 0 .25rem">
+          <strong id="signupEmailEcho">you@example.com</strong>
+          <button id="signupChangeEmail" class="link" type="button" aria-label="Change email">Change</button>
+        </div>
+        <label for="signupPassword">Password</label>
+        <input type="password" id="signupPassword" placeholder="At least 8 characters" autocomplete="new-password" />
+        <label for="signupPassword2">Confirm password</label>
+        <input type="password" id="signupPassword2" placeholder="Re-enter your password" autocomplete="new-password" />
+        <div class="verify-note" id="verifyInfo" style="display:none">
+          We’ve sent a verification link to your email. Click it to continue.
+        </div>
+        <div id="signupErr" class="err"></div>
+        <div class="row" style="margin-top:8px;">
+          <button id="signupSubmit" class="btn btn-primary" type="button">Create account</button>
+          <button id="resendVerifyBtn" class="btn" type="button">Resend email</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== PAYWALL MODAL ========== -->
+  <div class="overlay" id="paywallOverlay" aria-hidden="true">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="paywallTitle">
+      <button id="paywallClose" class="close-x" aria-label="Close">×</button>
+      <h3 id="paywallTitle">Upgrade for unlimited Photo Solves</h3>
+      <p class="sub">Choose a plan to continue.</p>
+      <div class="row" style="margin-top:8px;">
+        <button id="paywallMonthly" class="btn btn-primary" type="button">Subscribe Monthly</button>
+        <button id="paywallAnnual" class="btn" type="button">Subscribe Annually</button>
+      </div>
+      <p class="muted" style="margin-top:10px">Payments are handled securely by Paystack.</p>
+    </div>
+  </div>
 
   <!-- ===== Scripts (same as before) ===== -->
   <script src="https://js.paystack.co/v2/inline.js"></script>
@@ -527,8 +619,7 @@
         popup.newTransaction({
           key: PAYSTACK_PUBLIC_KEY,
           email,
-          // IMPORTANT: when using a Paystack PLAN, do not send 'amount' or force 'currency':
-          // The plan defines amount & currency on Paystack dashboard.
+          // Using a Plan: do NOT pass amount/currency; plan controls price
           plan: planCode,
           reference: genRef(),
           callback: (response) => {
