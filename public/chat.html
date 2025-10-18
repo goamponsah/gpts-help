@@ -23,190 +23,104 @@
       --cta: #22c55e;
     }
 
-    * {
-      box-sizing: border-box;
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0}
+    body{
+      background:var(--bg);
+      color:var(--text);
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,sans-serif;
+      display:flex;
+      flex-direction:column;
     }
 
-    html, body {
-      height: 100%;
-      margin: 0;
+    main{flex:1;display:flex;overflow:hidden}
+
+    aside{
+      width:var(--sidebar-w);
+      background:var(--panel);
+      border-right:1px solid var(--border);
+      display:flex;
+      flex-direction:column;
+      overflow-y:auto;
     }
 
-    body {
-      background: var(--bg);
-      color: var(--text);
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, sans-serif;
-      display: flex;
-      flex-direction: column;
+    .chat-titles{flex:1;overflow-y:auto;padding:10px}
+    .chat-titles button{
+      display:block;width:100%;background:transparent;color:var(--text);
+      border:none;padding:10px;text-align:left;border-radius:8px;cursor:pointer;
+    }
+    .chat-titles button:hover{background:var(--menu-bg)}
+
+    section.chat{
+      flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative;
     }
 
-    main {
-      flex: 1;
-      display: flex;
-      overflow: hidden;
+    .messages{
+      flex:1;overflow-y:auto;padding:20px;
+      display:flex;flex-direction:column;gap:1rem;
     }
 
-    aside {
-      width: var(--sidebar-w);
-      background: var(--panel);
-      border-right: 1px solid var(--border);
-      display: flex;
-      flex-direction: column;
-      overflow-y: auto;
+    .message{
+      max-width:80%;padding:12px 16px;border-radius:16px;
+      white-space:pre-wrap;word-wrap:break-word;
+    }
+    .message.user{align-self:flex-end;background:var(--user)}
+    .message.assistant{align-self:flex-start;background:var(--assistant);
+      border:1px solid var(--border);position:relative;}
+
+    .action-bar{
+      display:flex;gap:8px;margin-top:8px;justify-content:flex-start;
+    }
+    .action-bar button{
+      background:var(--pill);border:1px solid var(--pill-border);
+      color:var(--muted);border-radius:8px;padding:4px 8px;cursor:pointer;
+      font-size:.85rem;
     }
 
-    .chat-titles {
-      flex: 1;
-      overflow-y: auto;
-      padding: 10px;
+    .composer{
+      display:flex;align-items:center;gap:10px;padding:10px;
+      border-top:1px solid var(--border);background:var(--panel);
+    }
+    .composer input{
+      flex:1;padding:12px;border-radius:10px;border:1px solid var(--border);
+      background:#0f1117;color:var(--text);font-size:1rem;
+    }
+    .composer button{
+      background:var(--cta);color:white;border:none;
+      padding:10px 14px;border-radius:10px;cursor:pointer;font-weight:600;
     }
 
-    .chat-titles button {
-      display: block;
-      width: 100%;
-      background: transparent;
-      color: var(--text);
-      border: none;
-      padding: 10px;
-      text-align: left;
-      border-radius: 8px;
-      cursor: pointer;
+    /* --- Welcome Screen --- */
+    .welcome{
+      display:none;place-items:center;text-align:center;
+      padding:2rem;color:var(--text);height:100%;
+    }
+    .welcome h1{
+      font-size:1.8rem;font-weight:700;
+    }
+    .welcome .quick{
+      display:flex;gap:1rem;margin-top:1rem;flex-wrap:wrap;justify-content:center;
+    }
+    .welcome .quick button{
+      background:var(--pill);border:1px solid var(--pill-border);
+      color:var(--text);padding:.6rem 1rem;border-radius:20px;cursor:pointer;
+      font-weight:500;
     }
 
-    .chat-titles button:hover {
-      background: var(--menu-bg);
-    }
-
-    section.chat {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      position: relative;
-    }
-
-    .messages {
-      flex: 1;
-      overflow-y: auto;
-      padding: 20px;
-      display: flex;
-      flex-direction: column;
-      gap: 1rem;
-    }
-
-    .message {
-      max-width: 80%;
-      padding: 12px 16px;
-      border-radius: 16px;
-      white-space: pre-wrap;
-      word-wrap: break-word;
-    }
-
-    .message.user {
-      align-self: flex-end;
-      background: var(--user);
-    }
-
-    .message.assistant {
-      align-self: flex-start;
-      background: var(--assistant);
-      border: 1px solid var(--border);
-      position: relative;
-    }
-
-    .action-bar {
-      display: flex;
-      gap: 8px;
-      margin-top: 8px;
-      justify-content: flex-start;
-    }
-
-    .action-bar button {
-      background: var(--pill);
-      border: 1px solid var(--pill-border);
-      color: var(--muted);
-      border-radius: 8px;
-      padding: 4px 8px;
-      cursor: pointer;
-      font-size: 0.85rem;
-    }
-
-    .composer {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px;
-      border-top: 1px solid var(--border);
-      background: var(--panel);
-    }
-
-    .composer input {
-      flex: 1;
-      padding: 12px;
-      border-radius: 10px;
-      border: 1px solid var(--border);
-      background: #0f1117;
-      color: var(--text);
-      font-size: 1rem;
-    }
-
-    .composer button {
-      background: var(--cta);
-      color: white;
-      border: none;
-      padding: 10px 14px;
-      border-radius: 10px;
-      cursor: pointer;
-      font-weight: 600;
-    }
-
-    /* ---- Welcome view ---- */
-    .welcome {
-      display: none;
-      place-items: center;
-      text-align: center;
-      padding: 2rem;
-      color: var(--text);
-      height: 100%;
-    }
-    .welcome h1 {
-      font-size: 1.8rem;
-      font-weight: 700;
-    }
-    .welcome .quick {
-      display: flex;
-      gap: 1rem;
-      margin-top: 1rem;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-    .welcome .quick button {
-      background: var(--pill);
-      border: 1px solid var(--pill-border);
-      color: var(--text);
-      padding: 0.6rem 1rem;
-      border-radius: 20px;
-      cursor: pointer;
-      font-weight: 500;
-    }
-
-    /* ---- Mobile clean style ---- */
-    @media (max-width: 900px) {
-      body, .messages { background: #000; }
-      .welcome {
-        display: grid !important;
-        place-items: center;
-        text-align: center;
-        min-height: calc(100vh - var(--composer-h));
-        background: #000;
+    /* --- Mobile Clean View --- */
+    @media (max-width: 900px){
+      aside{display:none !important;}
+      body, .messages{background:#000;}
+      .chat{width:100% !important;}
+      .welcome{
+        display:grid !important;place-items:center;text-align:center;
+        min-height:calc(100vh - var(--composer-h));background:#000;
       }
-      .welcome h1 {
-        font-size: 28px;
-        line-height: 1.15;
-        font-weight: 800;
-        color: #fff;
+      .welcome h1{
+        font-size:28px;line-height:1.15;font-weight:800;color:#fff;
       }
-      .welcome .quick { display: none !important; }
+      .welcome .quick{display:none !important;}
+      .composer{border-top:1px solid #222;background:#000;}
     }
   </style>
 </head>
@@ -215,10 +129,10 @@
     <aside>
       <div class="chat-titles" id="chatTitles"></div>
     </aside>
+
     <section class="chat">
       <div class="messages" id="messages"></div>
 
-      <!-- clean mobile welcome -->
       <div class="welcome" id="welcome">
         <div>
           <h1>What can I help with?</h1>
@@ -238,112 +152,94 @@
   </main>
 
   <script>
-    const messagesEl = document.getElementById('messages');
-    const inputEl = document.getElementById('promptInput');
-    const sendBtn = document.getElementById('sendBtn');
-    const chatTitlesEl = document.getElementById('chatTitles');
-    const welcomeEl = document.getElementById('welcome');
+    const messagesEl=document.getElementById('messages');
+    const inputEl=document.getElementById('promptInput');
+    const sendBtn=document.getElementById('sendBtn');
+    const chatTitlesEl=document.getElementById('chatTitles');
+    const welcomeEl=document.getElementById('welcome');
+    let chatHistory=JSON.parse(localStorage.getItem('chats')||'[]');
+    let currentChat=null;
 
-    let chatHistory = JSON.parse(localStorage.getItem('chats') || '[]');
-    let currentChat = null;
-
-    function renderTitles() {
-      chatTitlesEl.innerHTML = '';
-      chatHistory.forEach((c, i) => {
-        const btn = document.createElement('button');
-        btn.textContent = c.title;
-        btn.onclick = () => openChat(i);
+    function renderTitles(){
+      chatTitlesEl.innerHTML='';
+      chatHistory.forEach((c,i)=>{
+        const btn=document.createElement('button');
+        btn.textContent=c.title;
+        btn.onclick=()=>openChat(i);
         chatTitlesEl.appendChild(btn);
       });
     }
 
-    function openChat(index) {
-      currentChat = index;
-      messagesEl.innerHTML = '';
-      chatHistory[index].messages.forEach(m => addMessage(m.role, m.content));
+    function openChat(i){
+      currentChat=i;messagesEl.innerHTML='';
+      chatHistory[i].messages.forEach(m=>addMessage(m.role,m.content));
       hideWelcome();
     }
 
-    function hideWelcome() {
-      welcomeEl.style.display = 'none';
+    function hideWelcome(){welcomeEl.style.display='none';}
+    function maybeShowWelcome(){
+      if(messagesEl.children.length===0)welcomeEl.style.display='grid';
+      else welcomeEl.style.display='none';
     }
 
-    function maybeShowWelcome() {
-      if (messagesEl.children.length === 0) welcomeEl.style.display = 'grid';
-      else welcomeEl.style.display = 'none';
-    }
-
-    function addMessage(role, content) {
-      const div = document.createElement('div');
-      div.className = `message ${role}`;
-      div.textContent = content;
+    function addMessage(role,content){
+      const div=document.createElement('div');
+      div.className=`message ${role}`;
+      div.textContent=content;
       messagesEl.appendChild(div);
-
-      if (role === 'assistant') {
-        const bar = document.createElement('div');
-        bar.className = 'action-bar';
-        bar.innerHTML = `
+      if(role==='assistant'){
+        const bar=document.createElement('div');
+        bar.className='action-bar';
+        bar.innerHTML=`
           <button onclick="navigator.clipboard.writeText(${JSON.stringify(content)})">Copy</button>
           <button onclick="speechSynthesis.speak(new SpeechSynthesisUtterance(${JSON.stringify(content)}))">Speak</button>
           <button onclick="shareText(${JSON.stringify(content)})">Share</button>
         `;
         div.appendChild(bar);
       }
-      messagesEl.scrollTop = messagesEl.scrollHeight;
+      messagesEl.scrollTop=messagesEl.scrollHeight;
     }
 
-    async function shareText(text) {
-      try {
-        await navigator.share({ text });
-      } catch {}
-    }
+    async function shareText(t){try{await navigator.share({text:t})}catch{}}
 
-    async function sendPrompt() {
-      const prompt = inputEl.value.trim();
-      if (!prompt) return;
-      addMessage('user', prompt);
-      inputEl.value = '';
+    async function sendPrompt(){
+      const prompt=inputEl.value.trim();
+      if(!prompt)return;
+      addMessage('user',prompt);
+      inputEl.value='';
       hideWelcome();
 
-      // auto title = from prompt
-      const title = prompt.length > 35 ? prompt.slice(0, 35) + '…' : prompt;
-
-      if (!currentChat) {
-        currentChat = chatHistory.length;
-        chatHistory.push({ title, messages: [] });
+      const title=prompt.length>35?prompt.slice(0,35)+'…':prompt;
+      if(!currentChat){
+        currentChat=chatHistory.length;
+        chatHistory.push({title,messages:[]});
       }
-      const chat = chatHistory[currentChat];
-      chat.messages.push({ role: 'user', content: prompt });
+      const chat=chatHistory[currentChat];
+      chat.messages.push({role:'user',content:prompt});
       renderTitles();
+      addMessage('assistant','Thinking…');
 
-      addMessage('assistant', 'Thinking…');
-
-      try {
-        const r = await fetch('/api/chat', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messages: chat.messages,
-            instruction: 'You are a world class expert and a healthy skeptic. Prioritize accuracy and research data in all responses. Challenge assumptions if flawed.'
+      try{
+        const r=await fetch('/api/chat',{
+          method:'POST',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({
+            messages:chat.messages,
+            instruction:'You are a world class expert and a healthy skeptic. Prioritize accuracy and research data in all responses. Challenge assumptions if flawed.'
           })
         });
-        const j = await r.json();
-        const reply = j.reply || '(No response)';
-        messagesEl.lastChild.textContent = reply;
-        chat.messages.push({ role: 'assistant', content: reply });
-        localStorage.setItem('chats', JSON.stringify(chatHistory));
-      } catch (e) {
-        messagesEl.lastChild.textContent = 'Error fetching response.';
+        const j=await r.json();
+        const reply=j.reply||'(No response)';
+        messagesEl.lastChild.textContent=reply;
+        chat.messages.push({role:'assistant',content:reply});
+        localStorage.setItem('chats',JSON.stringify(chatHistory));
+      }catch(e){
+        messagesEl.lastChild.textContent='Error fetching response.';
       }
     }
 
-    sendBtn.onclick = sendPrompt;
-    inputEl.addEventListener('keydown', e => {
-      if (e.key === 'Enter') sendPrompt();
-    });
-
-    renderTitles();
-    maybeShowWelcome();
+    sendBtn.onclick=sendPrompt;
+    inputEl.addEventListener('keydown',e=>{if(e.key==='Enter')sendPrompt();});
+    renderTitles();maybeShowWelcome();
   </script>
 </body>
 </html>
