@@ -28,16 +28,18 @@ const {
   RESEND_API_KEY,
   RESEND_FROM,
 
-  // Paystack (SUBSCRIPTIONS with PLAN CODES – price controlled in dashboard)
+  // Paystack (Subscriptions via PLAN codes; price is controlled in Dashboard)
   PAYSTACK_PUBLIC_KEY,
   PAYSTACK_SECRET_KEY,
-  PAYSTACK_CURRENCY,                 // keep GHS for your merchant
-  PLAN_CODE_PLUS_MONTHLY,            // e.g. PLN_xxxxx
-  PLAN_CODE_PRO_ANNUAL,              // e.g. PLN_yyyyy
+  PLAN_CODE_PLUS_MONTHLY,   // e.g. PLN_xxxxx
+  PLAN_CODE_PRO_ANNUAL,     // e.g. PLN_yyyyy
 
-  // Customizable system prompts (optional)
-  SYSTEM_PROMPT_TEXT,
-  SYSTEM_PROMPT_PHOTO,
+  // Currency: force GHS (per your requirement)
+  PAYSTACK_CURRENCY,
+
+  // Railway UI price tags (for Pricing page display only)
+  PRICE_PLUS_GHS,
+  PRICE_PRO_GHS
 } = process.env;
 
 if (!DATABASE_URL) console.error("[ERROR] DATABASE_URL not set");
@@ -48,6 +50,7 @@ if (!PAYSTACK_SECRET_KEY) console.warn("[WARN] PAYSTACK_SECRET_KEY missing");
 
 const OPENAI_DEFAULT_MODEL = OPENAI_MODEL || "gpt-4o-mini";
 
+// CORS
 if (FRONTEND_ORIGIN) {
   app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
 } else {
@@ -58,7 +61,7 @@ app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 const upload = multer({ storage: multer.memoryStorage() });
 
-/* ---------- Static files (SEO/PWA friendly) ---------- */
+/* ---------- Static files ---------- */
 const PUB = path.join(__dirname, "public");
 app.get("/robots.txt", (req, res) => res.sendFile(path.join(PUB, "robots.txt")));
 app.get("/sitemap.xml", (req, res) => res.sendFile(path.join(PUB, "sitemap.xml")));
@@ -232,64 +235,6 @@ async function setUserPassword(email,pw){
   await pool.query(`update users set pass_salt=$2, pass_hash=$3, updated_at=now() where email=$1`,[email,salt,hash]);
 }
 
-/* ---------- System prompts (configurable) ---------- */
-function systemPromptText() {
-  return (
-    SYSTEM_PROMPT_TEXT ||
-    [
-      "You are Math GPT.",
-      "You are a world-class expert and a healthy skeptic.",
-      "Prioritize accuracy and research data in all responses.",
-      "Challenge the user's assumptions if they are flawed.",
-      "Solve step-by-step clearly.",
-    ].join(" ")
-  );
-}
-function systemPromptPhoto() {
-  return (
-    SYSTEM_PROMPT_PHOTO ||
-    [
-      "You are Math GPT.",
-      "You are a world-class expert and a healthy skeptic.",
-      "Prioritize accuracy and research data in all responses.",
-      "Challenge the user's assumptions if they are flawed.",
-      "Be precise and show steps.",
-      "If the image is unclear, state assumptions.",
-    ].join(" ")
-  );
-}
-
-/* ---------- OpenAI helpers ---------- */
-async function openaiChat(messages){
-  const r = await fetch("https://api.openai.com/v1/chat/completions",{
-    method:"POST",
-    headers:{
-      Authorization:`Bearer ${OPENAI_API_KEY}`,
-      "Content-Type":"application/json"
-    },
-    body:JSON.stringify({
-      model: OPENAI_DEFAULT_MODEL,
-      messages,
-      temperature: 0.2
-    })
-  });
-  if(!r.ok){
-    const t = await r.text().catch(()=> "");
-    throw new Error(`OpenAI error: ${r.status} ${t}`);
-  }
-  const data = await r.json();
-  return data?.choices?.[0]?.message?.content || "";
-}
-
-async function autoTitleFromText(userText, assistantText) {
-  // Keep it short, clear; no emojis; 4–7 words
-  const ti = await openaiChat([
-    { role: "system", content: "You name chats. Return ONLY a concise, human-readable title (4-7 words), no punctuation at end, no emojis." },
-    { role: "user", content: `Create a short title for this math help conversation.\n\nUser asked:\n${userText}\n\nAssistant answered:\n${assistantText}` }
-  ]);
-  return (ti || "New chat").trim().replace(/\p{Emoji_Presentation}|\p{Extended_Pictographic}/gu,'').slice(0, 80);
-}
-
 /* ----- Resend mail ----- */
 async function resendSend({to,subject,html,text}){
   if(!RESEND_API_KEY || !RESEND_FROM){ console.warn("[RESEND] Missing"); return; }
@@ -324,11 +269,15 @@ async function bumpQuota(deviceHash,kind){
   }
 }
 
-/* ===================== Public Config (for UI hints) ===================== */
+/* ===================== Public Config (for Pricing UI) ===================== */
 app.get("/api/public-config", (req,res)=>{
   res.json({
     paystackPublicKey: PAYSTACK_PUBLIC_KEY || null,
-    currency: (PAYSTACK_CURRENCY || "GHS").toUpperCase(),
+    currency: "GHS",
+    pricing: {
+      plus: Number(PRICE_PLUS_GHS || 0),
+      pro:  Number(PRICE_PRO_GHS  || 0)
+    },
     plans: {
       hasPlus: !!PLAN_CODE_PLUS_MONTHLY,
       hasPro:  !!PLAN_CODE_PRO_ANNUAL
@@ -459,15 +408,12 @@ app.post("/api/reset/confirm", async (req,res)=>{
   }catch(e){ console.error("reset/confirm error",e); res.status(500).json({status:"error", message:"Reset failed"}); }
 });
 
-/* ===================== Conversations & Messages ===================== */
-
-// helper to get user id fast
+/* ===================== Conversations & Shares ===================== */
 async function getUserIdByEmail(email){
   const r = await pool.query(`select id from users where email=$1`,[email]);
   return r.rows?.[0]?.id || null;
 }
 
-// List conversations
 app.get("/api/conversations", async (req,res)=>{
   try{
     const s = readSession(req);
@@ -483,7 +429,6 @@ app.get("/api/conversations", async (req,res)=>{
   }catch(e){ console.error(e); res.status(500).json({error:"failed"}); }
 });
 
-// Create conversation
 app.post("/api/conversations", async (req,res)=>{
   try{
     const s = readSession(req);
@@ -501,7 +446,6 @@ app.post("/api/conversations", async (req,res)=>{
   }catch(e){ console.error(e); res.status(500).json({error:"failed"}); }
 });
 
-// Update conversation (rename / archive)
 app.patch("/api/conversations/:id", async (req,res)=>{
   try{
     const s = readSession(req);
@@ -526,7 +470,6 @@ app.patch("/api/conversations/:id", async (req,res)=>{
   }catch(e){ console.error(e); res.status(500).json({error:"failed"}); }
 });
 
-// Delete conversation
 app.delete("/api/conversations/:id", async (req,res)=>{
   try{
     const s = readSession(req);
@@ -537,7 +480,6 @@ app.delete("/api/conversations/:id", async (req,res)=>{
   }catch(e){ console.error(e); res.status(500).json({error:"failed"}); }
 });
 
-// Get conversation messages
 app.get("/api/conversations/:id", async (req,res)=>{
   try{
     const s = readSession(req);
@@ -556,53 +498,34 @@ app.get("/api/conversations/:id", async (req,res)=>{
   }catch(e){ console.error(e); res.status(500).json({error:"failed"}); }
 });
 
-/* ===================== Shareable Links ===================== */
+/* ===================== Chat & Photo Solve (context aware) ===================== */
+const SYSTEM_MATH =
+  "You are Math GPT — a world-class expert and a healthy skeptic. " +
+  "Prioritize accuracy and reference/derive results carefully. " +
+  "Challenge assumptions if they look flawed. Always show clear, step-by-step reasoning.";
 
-// Create a share token
-app.post("/api/conversations/:id/share", async (req,res)=>{
-  try{
-    const s = readSession(req);
-    if(!s?.email) return res.status(401).json({error:"unauthenticated"});
-    const id = Number(req.params.id);
-    const own = await pool.query(`select 1 from conversations where id=$1 and user_email=$2`,[id,s.email]);
-    if(!own.rowCount) return res.status(404).json({error:"not found"});
+async function openaiChat(messages){
+  const r = await fetch("https://api.openai.com/v1/chat/completions",{
+    method:"POST",
+    headers:{
+      Authorization:`Bearer ${OPENAI_API_KEY}`,
+      "Content-Type":"application/json"
+    },
+    body:JSON.stringify({
+      model: OPENAI_DEFAULT_MODEL,
+      messages,
+      temperature: 0.2
+    })
+  });
+  if(!r.ok){
+    const t = await r.text().catch(()=> "");
+    throw new Error(`OpenAI error: ${r.status} ${t}`);
+  }
+  const data = await r.json();
+  return data?.choices?.[0]?.message?.content || "";
+}
 
-    // reuse existing if any
-    let tokenRow = await pool.query(`select token from conversation_shares where conversation_id=$1`,[id]);
-    if(!tokenRow.rowCount){
-      const token = crypto.randomBytes(16).toString("hex");
-      tokenRow = await pool.query(
-        `insert into conversation_shares(conversation_id, token) values($1,$2) returning token`,
-        [id, token]
-      );
-    }
-    res.json({ token: tokenRow.rows[0].token });
-  }catch(e){ console.error(e); res.status(500).json({error:"failed"}); }
-});
-
-// Read shared conversation (public)
-app.get("/api/share/:token", async (req,res)=>{
-  try{
-    const { token } = req.params;
-    const { rows } = await pool.query(`
-      select c.title, c.id
-        from conversation_shares s
-        join conversations c on c.id=s.conversation_id
-       where s.token=$1
-    `,[token]);
-    if(!rows.length) return res.status(404).json({error:"not found"});
-    const { id, title } = rows[0];
-    const msgs = await pool.query(
-      `select role, content, created_at from messages where conversation_id=$1 order by id asc`,
-      [id]
-    );
-    res.json({ title, messages: msgs.rows });
-  }catch(e){ console.error(e); res.status(500).json({error:"failed"}); }
-});
-
-/* ===================== Chat & Photo Solve (with expert/accuracy prompt + autotitle) ===================== */
-
-// Chat (text)
+// Chat with conversation memory
 app.post("/api/chat", async (req,res)=>{
   try{
     const s = readSession(req);
@@ -637,31 +560,24 @@ app.post("/api/chat", async (req,res)=>{
       await pool.query(`update conversations set updated_at=now() where id=$1 and user_email=$2`,[convId,s.email]);
     }
 
+    // load last 20 messages for context
+    const hist = await pool.query(
+      `select role, content from messages
+        where conversation_id=$1
+        order by id asc`,
+      [convId]
+    );
+    const prior = hist.rows.slice(-20).map(m=>({ role:m.role, content:m.content }));
+
+    const messages = [{ role:"system", content: SYSTEM_MATH }, ...prior, { role:"user", content: message }];
+
     // store user message
     await pool.query(`insert into messages(conversation_id, role, content) values($1,'user',$2)`,[convId, message]);
 
-    const system = systemPromptText();
-    const answer = await openaiChat([
-      { role:"system", content: system },
-      { role:"user", content: message }
-    ]);
+    const answer = await openaiChat(messages);
 
     // store assistant message
     await pool.query(`insert into messages(conversation_id, role, content) values($1,'assistant',$2)`,[convId, answer]);
-
-    // Autotitle if still default
-    const titleRow = await pool.query(`select title from conversations where id=$1`, [convId]);
-    const currentTitle = titleRow.rows?.[0]?.title || "New chat";
-    if (!currentTitle || currentTitle.toLowerCase() === "new chat") {
-      try {
-        const newTitle = await autoTitleFromText(message, answer);
-        if (newTitle && newTitle.length > 0) {
-          await pool.query(`update conversations set title=$2, updated_at=now() where id=$1`, [convId, newTitle]);
-        }
-      } catch (e) {
-        console.warn("[autotitle][text] failed:", e?.message || e);
-      }
-    }
 
     if((u.plan||"FREE").toUpperCase()==="FREE") await bumpQuota(deviceHash,"text");
 
@@ -672,7 +588,7 @@ app.post("/api/chat", async (req,res)=>{
   }
 });
 
-// Photo solve (image -> reasoning)
+// Photo solve (keeps context)
 app.post("/api/photo-solve", upload.single("image"), async (req,res)=>{
   try{
     const s = readSession(req);
@@ -713,6 +629,15 @@ app.post("/api/photo-solve", upload.single("image"), async (req,res)=>{
       await pool.query(`update conversations set updated_at=now() where id=$1 and user_email=$2`,[convId,s.email]);
     }
 
+    // context
+    const hist = await pool.query(
+      `select role, content from messages
+        where conversation_id=$1
+        order by id asc`,
+      [convId]
+    );
+    const prior = hist.rows.slice(-20).map(m=>({ role:m.role, content:m.content }));
+
     const userPrompt = attempt
       ? `Solve this math problem step-by-step. Note: ${attempt}`
       : `Solve this math problem step-by-step.`;
@@ -720,7 +645,6 @@ app.post("/api/photo-solve", upload.single("image"), async (req,res)=>{
     await pool.query(`insert into messages(conversation_id, role, content) values($1,'user',$2)`,
       [convId, `${userPrompt}\n\n[Photo attached]`]);
 
-    const system = systemPromptPhoto();
     const r = await fetch("https://api.openai.com/v1/chat/completions",{
       method:"POST",
       headers:{ Authorization:`Bearer ${OPENAI_API_KEY}`, "Content-Type":"application/json" },
@@ -728,7 +652,8 @@ app.post("/api/photo-solve", upload.single("image"), async (req,res)=>{
         model: OPENAI_DEFAULT_MODEL,
         temperature: 0.2,
         messages: [
-          { role:"system", content: system },
+          { role:"system", content: SYSTEM_MATH },
+          ...prior,
           {
             role:"user",
             content: [
@@ -749,20 +674,6 @@ app.post("/api/photo-solve", upload.single("image"), async (req,res)=>{
 
     await pool.query(`insert into messages(conversation_id, role, content) values($1,'assistant',$2)`,[convId,out]);
 
-    // Autotitle if default
-    const titleRow = await pool.query(`select title from conversations where id=$1`, [convId]);
-    const currentTitle = titleRow.rows?.[0]?.title || "New chat";
-    if (!currentTitle || currentTitle.toLowerCase() === "new chat") {
-      try {
-        const newTitle = await autoTitleFromText(userPrompt, out);
-        if (newTitle && newTitle.length > 0) {
-          await pool.query(`update conversations set title=$2, updated_at=now() where id=$1`, [convId, newTitle]);
-        }
-      } catch (e) {
-        console.warn("[autotitle][photo] failed:", e?.message || e);
-      }
-    }
-
     if((u.plan||"FREE").toUpperCase()==="FREE") await bumpQuota(deviceHash,"photo");
 
     res.json({ response: out, conversationId: convId });
@@ -772,7 +683,46 @@ app.post("/api/photo-solve", upload.single("image"), async (req,res)=>{
   }
 });
 
-/* ===================== Feedback (like/dislike) ===================== */
+/* ===================== Shares & Feedback ===================== */
+app.post("/api/conversations/:id/share", async (req,res)=>{
+  try{
+    const s = readSession(req);
+    if(!s?.email) return res.status(401).json({error:"unauthenticated"});
+    const id = Number(req.params.id);
+    const own = await pool.query(`select 1 from conversations where id=$1 and user_email=$2`,[id,s.email]);
+    if(!own.rowCount) return res.status(404).json({error:"not found"});
+
+    let tokenRow = await pool.query(`select token from conversation_shares where conversation_id=$1`,[id]);
+    if(!tokenRow.rowCount){
+      const token = crypto.randomBytes(16).toString("hex");
+      tokenRow = await pool.query(
+        `insert into conversation_shares(conversation_id, token) values($1,$2) returning token`,
+        [id, token]
+      );
+    }
+    res.json({ token: tokenRow.rows[0].token });
+  }catch(e){ console.error(e); res.status(500).json({error:"failed"}); }
+});
+
+app.get("/api/share/:token", async (req,res)=>{
+  try{
+    const { token } = req.params;
+    const { rows } = await pool.query(`
+      select c.title, c.id
+        from conversation_shares s
+        join conversations c on c.id=s.conversation_id
+       where s.token=$1
+    `,[token]);
+    if(!rows.length) return res.status(404).json({error:"not found"});
+    const { id, title } = rows[0];
+    const msgs = await pool.query(
+      `select role, content, created_at from messages where conversation_id=$1 order by id asc`,
+      [id]
+    );
+    res.json({ title, messages: msgs.rows });
+  }catch(e){ console.error(e); res.status(500).json({error:"failed"}); }
+});
+
 app.post("/api/feedback", async (req,res)=>{
   try{
     const s = readSession(req);
@@ -787,24 +737,25 @@ app.post("/api/feedback", async (req,res)=>{
   }catch(e){ console.error("feedback error",e); res.status(500).json({error:'feedback failed'}); }
 });
 
-/* ===================== Paystack (plan-code; price lives in dashboard) ===================== */
+/* ===================== Paystack (Plans via plan codes) ===================== */
 (function logPaystackStartup(){
   const info = {
     has_public_key: !!PAYSTACK_PUBLIC_KEY,
     has_secret_key: !!PAYSTACK_SECRET_KEY,
     has_plus_plan: !!PLAN_CODE_PLUS_MONTHLY,
     has_pro_plan:  !!PLAN_CODE_PRO_ANNUAL,
-    currency: PAYSTACK_CURRENCY || "GHS"
+    currency: (PAYSTACK_CURRENCY || "GHS"),
+    price_plus_ghs: PRICE_PLUS_GHS || "unset",
+    price_pro_ghs:  PRICE_PRO_GHS  || "unset"
   };
   console.log("[PAYSTACK] startup", JSON.stringify(info));
 })();
 
 function getSuccessCallbackUrl(){
-  // Single success landing; we verify then redirect to chat
   return "https://gptshelp.online/payment-success";
 }
 
-// Initialize Paystack with PLAN CODE (subscription price set in dashboard)
+// Initialize Paystack checkout (subscription/auth for plan code)
 app.post("/api/paystack/init", async (req, res) => {
   try {
     const s = readSession(req);
@@ -822,9 +773,9 @@ app.post("/api/paystack/init", async (req, res) => {
 
     const payload = {
       email: s.email,
-      plan: planCode,                           // Plan controls the amount; do not send amount here
+      plan: planCode,                         // price comes from Paystack Dashboard
       callback_url: getSuccessCallbackUrl(),
-      currency: PAYSTACK_CURRENCY || "GHS",
+      currency: "GHS",                        // force GHS
       metadata: { plan_label: label, site: "gptshelp.online" }
     };
 
@@ -863,7 +814,7 @@ app.post("/api/paystack/init", async (req, res) => {
   }
 });
 
-// Paystack success landing -> verify -> redirect to chat
+// Success landing -> verify -> redirect to chat
 app.get("/payment-success", async (req, res) => {
   try {
     const reference = (req.query.reference || req.query.trxref || "").toString();
