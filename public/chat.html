@@ -2,71 +2,39 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>GPTs Help — Chat</title>
-  <meta name="description" content="Chat with MathGPT. Type or upload a math problem and get a clear, step-by-step solution." />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>MathGPT Chat — Solve Any Math Problem Step-by-Step</title>
+  <meta name="description" content="Use MathGPT Chat to upload a photo or type a problem. Get instant, accurate, step-by-step solutions with explanations.">
 
-  <!-- Social -->
   <meta property="og:type" content="website">
-  <meta property="og:title" content="GPTs Help — Chat">
-  <meta property="og:description" content="Type or snap a math problem and get a full solution with steps.">
+  <meta property="og:title" content="MathGPT Chat — Step-by-Step Math Solver">
+  <meta property="og:description" content="Snap or type your math problem and get a full solution instantly. Powered by GPT-5 AI.">
   <meta property="og:url" content="https://gptshelp.online/chat.html">
   <meta property="og:image" content="https://gptshelp.online/static/brand/shortcut-chat.png">
 
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="GPTs Help — Chat">
-  <meta name="twitter:description" content="Your math copilot. Clear steps, fast.">
+  <meta name="twitter:title" content="MathGPT Chat — Solve Math with AI">
+  <meta name="twitter:description" content="Upload a photo or type a question. MathGPT explains every step.">
   <meta name="twitter:image" content="https://gptshelp.online/static/brand/shortcut-chat.png">
 
-  <link rel="icon" href="/static/brand/favicon.ico">
-  <link rel="apple-touch-icon" href="/static/brand/logo-192.png">
-  <meta name="theme-color" content="#0e0f13">
-
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     :root{
       --sidebar-w:280px;
-      --bg:#000; --panel:#111317; --muted:#a7afbf; --text:#f1f4fb;
-      --brand:#5865f2; --user:#162032; --assistant:#101219; --border:#232634;
+      --bg:#0e0f13; --panel:#13141a; --muted:#9aa3b2; --text:#e7eaf1;
+      --brand:#5865f2; --user:#1c2333; --assistant:#13141a; --border:#232634;
       --vh:100vh; --composer-h:88px; --menu-bg:#0f1117;
       --pill:#0f1117; --pill-border:#202433;
       --cta:#22c55e;
     }
     *{box-sizing:border-box}
-    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
-    a{color:#b6c1ff}
+    html,body{height:100%;margin:0}
+    body{background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,sans-serif}
+    a{color:#9aa3b2}
 
-    /* Layout */
-    .app{height:calc(var(--vh));width:100vw;display:grid;grid-template-columns:var(--sidebar-w) 1fr;min-height:0}
-    @media (max-width:900px){
-      .app{ grid-template-columns:1fr }
-    }
+    .app{height:calc(var(--vh));display:grid;grid-template-columns:var(--sidebar-w) 1fr;}
+    @media (max-width:900px){ .app{ grid-template-columns:1fr } .sidebar{ display:none } }
 
-    /* ===== Mobile top bar with menu button ===== */
-    .mobile-topbar{
-      display:none;
-      position:sticky; top:0; z-index:20;
-      padding:10px; background:linear-gradient(180deg, rgba(0,0,0,.65), rgba(0,0,0,0));
-    }
-    .hamburger{
-      width:36px;height:36px;border-radius:9999px;border:1px solid var(--border);
-      background:#141822;color:#e6e9f5;display:inline-grid;place-items:center;cursor:pointer;
-      box-shadow:0 2px 8px rgba(0,0,0,.25);
-    }
-    .hamburger:active{transform:scale(.98)}
-    .hamburger span{
-      display:block;width:16px;height:2px;background:#e6e9f5;border-radius:2px;position:relative;
-    }
-    .hamburger span::before,.hamburger span::after{
-      content:"";position:absolute;left:0;width:16px;height:2px;background:#e6e9f5;border-radius:2px;
-    }
-    .hamburger span::before{top:-5px}
-    .hamburger span::after{top:5px}
-    @media (max-width:900px){ .mobile-topbar{display:block} }
-
-    /* Sidebar (desktop) */
-    .sidebar{
-      position:relative;display:grid;grid-template-rows:auto 1fr auto;border-right:1px solid var(--border);background:#0f1117;min-height:0
-    }
+    .sidebar{position:relative;display:grid;grid-template-rows:auto 1fr auto;border-right:1px solid var(--border);background:#0f1117;min-height:0}
     .side-top{padding:12px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;justify-content:space-between}
     .logo{font-weight:700;letter-spacing:.2px; color:#e7eaf1; text-decoration:none}
     .new-chat{background:var(--panel);color:var(--text);border:1px solid var(--border);border-radius:10px;padding:8px 10px;cursor:pointer;font-size:13px}
@@ -88,6 +56,7 @@
     .u-name{display:block;font-size:14px;font-weight:600;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
     .u-plan{display:block;margin-top:2px;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:170px}
     .carat{color:#aab1c7}
+
     .user-menu{position:absolute;left:10px;bottom:64px;width:calc(var(--sidebar-w) - 20px);background:var(--menu-bg);border:1px solid var(--border);border-radius:16px;box-shadow:0 18px 40px rgba(0,0,0,.45);display:none;z-index:50;overflow:hidden}
     .user-menu.open{display:block}
     .um-head{padding:10px 12px;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:center}
@@ -99,36 +68,11 @@
     .um-text{font-size:14px}
     .um-right{margin-left:auto;color:#8b93ad;font-size:12px}
 
-    /* ===== Sidebar as drawer on mobile ===== */
-    @media (max-width:900px){
-      .sidebar{ display:none } /* default hidden */
-      body.drawer-open .sidebar{
-        display:grid;
-        position:fixed; inset:0 auto 0 0; width:min(86vw,320px); z-index:1001;
-        box-shadow:12px 0 40px rgba(0,0,0,.55);
-      }
-      #drawerBackdrop{
-        display:none;
-        position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1000;
-      }
-      body.drawer-open #drawerBackdrop{ display:block }
-    }
-
-    /* Main */
     .main{display:grid;grid-template-rows:auto 1fr;min-height:0;height:100%}
     .readOnlyBanner{display:none;padding:10px 14px;border-bottom:1px solid var(--border);background:#10121a;color:#cbd2e1;font-size:14px}
     .readOnlyBanner.show{display:block}
-
-    /* Messages area */
-    .messages{
-      overflow-y:auto;
-      padding:20px 14px calc(20px + var(--composer-h));
-      min-height:0;
-      scroll-behavior:smooth;
-      background: radial-gradient(1200px 400px at 50% -200px, rgba(88,101,242,.06), transparent 60%);
-    }
-    .msg{max-width:900px;margin:0 auto 12px auto;display:flex;animation:fadein .18s ease-out}
-    @keyframes fadein{from{opacity:.5;transform:translateY(4px)}to{opacity:1;transform:none}}
+    .messages{overflow-y:auto;padding:20px 18px calc(20px + var(--composer-h));min-height:0;scroll-behavior:smooth;background:radial-gradient(1200px 400px at 50% -200px, rgba(88,101,242,.08), transparent 60%)}
+    .msg{max-width:900px;margin:0 auto 12px auto;display:flex}
     .bubble{max-width:68ch;padding:12px 14px;border:1px solid var(--border);border-radius:12px;line-height:1.55;font-size:15px;background:var(--assistant)}
     .meta{display:block;color:var(--muted);margin-bottom:6px;font-size:12px}
     .msg.assistant{justify-content:flex-start}
@@ -142,18 +86,38 @@
     .bubble code{background:#0b0d12;padding:2px 6px;border-radius:6px;border:1px solid var(--border)}
     .bubble pre{background:#0b0d12;padding:10px;border-radius:10px;border:1px solid var(--border);overflow:auto}
 
-    /* Action bar below assistant replies (kept) */
-    .msg-actions{ margin-top:8px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-    .msg-actions .act{ background:transparent; color:inherit; border:1px solid var(--border); border-radius:8px; padding:6px 8px; font-size:12px; cursor:pointer; }
-    .msg-actions .sep{ width:1px;height:18px;background:rgba(255,255,255,.12); }
-
-    /* Composer */
-    .composer{
-      position:fixed; left:var(--sidebar-w); right:0; bottom:0; z-index:30;
-      border-top:1px solid var(--border);
-      background:linear-gradient(#0e0f13,#0f1117);
-      padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px));
+    /* ===== Message action bar (below assistant replies) ===== */
+    .msg-actions{
+      margin-top:8px;
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
     }
+    .msg-actions .act{
+      background:transparent;
+      color:inherit;
+      border:1px solid var(--border);
+      border-radius:8px;
+      padding:6px 8px;
+      font-size:12px;
+      cursor:pointer;
+    }
+    .msg-actions .sep{
+      width:1px;height:18px;background:rgba(255,255,255,.12);
+    }
+
+    /* === NEW: STACK ACTION BAR UNDER ASSISTANT REPLIES === */
+    .msg.assistant{
+      flex-direction: column;     /* bubble first, then actions underneath */
+      align-items: flex-start;
+      gap: 6px;                   /* slight space between bubble and actions */
+    }
+    .msg.assistant .msg-actions{
+      align-self: stretch;        /* let bar sit neatly below the bubble width */
+    }
+
+    .composer{position:fixed;left:var(--sidebar-w);right:0;bottom:0;z-index:30;border-top:1px solid var(--border);background:linear-gradient(#0e0f13,#0f1117);padding:10px 12px calc(10px + env(safe-area-inset-bottom,0px))}
     @media (max-width:900px){ .composer{ left:0 } }
     .row{max-width:900px;margin:0 auto;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center}
     .input{display:flex;align-items:flex-end;gap:8px;background:#0f1117;border:1px solid var(--border);border-radius:9999px;padding:6px 10px;min-height:42px}
@@ -167,20 +131,14 @@
     .send-mobile{background:var(--cta);color:#04110a;border-color:transparent}
     .icon-btn:disabled{opacity:.6;cursor:not-allowed}
 
-    /* Mobile welcome hero (no chips) */
-    .welcome{
-      display:none; place-items:center; text-align:center; padding:40px 16px 120px;
-      min-height:calc(100dvh - var(--composer-h));
-    }
+    .welcome{display:none;place-items:center;text-align:center;padding:40px 16px 120px}
+    .welcome h1{font-size:32px;margin:12px 0 18px}
+    .quick{display:grid;gap:12px;grid-template-columns:1fr 1fr;max-width:560px;margin:0 auto}
+    .pill{display:flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--pill-border);background:var(--pill);color:#cbd2e1;border-radius:18px;height:54px;font-weight:600;cursor:pointer}
+    .pill:active{transform:scale(.98)}
+    .mic{font-size:18px}
     @media (max-width:900px){ .welcome{display:grid} }
-    .welcome h1{
-      font-size:clamp(24px,6vw,32px);
-      margin:12px 0 18px; letter-spacing:.2px;
-      animation:breathing 4s ease-in-out infinite;
-    }
-    @keyframes breathing{ 0%,100%{opacity:.9; transform:translateY(0)} 50%{opacity:1; transform:translateY(-1px)} }
 
-    /* Overlay modal (share) & toast */
     .overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1000}
     .overlay.open{display:flex}
     .modal{width:min(560px,92vw);background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:18px;box-shadow:0 18px 40px rgba(0,0,0,.45)}
@@ -195,18 +153,15 @@
     .toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);padding:10px 14px;font-size:13px;background:#141722;color:#e7eaf1;border:1px solid var(--border);border-radius:9999px;display:none;z-index:1100}
     .toast.show{display:block}
   </style>
-
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
 </head>
 <body>
-  <!-- Backdrop for the mobile drawer -->
-  <div id="drawerBackdrop" aria-hidden="true"></div>
-
   <div class="app">
     <!-- Sidebar -->
     <aside class="sidebar">
       <div class="side-top">
+        <!-- Home link for one-click navigation -->
         <a class="logo" href="/" aria-label="Home">GPTs Help</a>
         <button class="new-chat" id="newChatBtn">+ New Chat</button>
       </div>
@@ -241,23 +196,23 @@
 
     <!-- Main -->
     <main class="main">
-      <!-- Mobile top bar -->
-      <div class="mobile-topbar">
-        <button class="hamburger" id="hamburger" aria-label="Open menu"><span></span></button>
-      </div>
-
       <div class="readOnlyBanner" id="roBanner">🔒 Read-only shared view. <a href="/index.html" style="color:#9aa3b2">Sign up</a> to chat.</div>
 
-      <!-- Clean mobile welcome (no quick chips) -->
       <section class="welcome" id="welcome">
         <h1>What can I help with?</h1>
+        <div class="quick">
+          <button class="pill" data-prompt="Create an image of a right triangle with labels.">🖼️ Create image</button>
+          <button class="pill" data-prompt="Write a JavaScript function that factors a quadratic ax^2+bx+c.">[>-] Code</button>
+          <button class="pill" data-prompt="Help me write a study plan for calculus.">✍️ Help me write</button>
+          <button class="pill" data-prompt="Explain limits in simple steps with examples.">✨ More</button>
+        </div>
       </section>
 
       <div class="messages" id="messages"></div>
     </main>
   </div>
 
-  <!-- Composer -->
+  <!-- Fixed Composer -->
   <form class="composer" id="composer">
     <div class="row">
       <div class="input">
@@ -267,7 +222,7 @@
             <select id="gptType"><option value="math">Math GPT</option></select>
             <span id="status" style="margin-left:auto;"></span>
           </div>
-          <textarea id="prompt" placeholder="Message Math GPT…" autocomplete="off" inputmode="latin" enterkeyhint="send"></textarea>
+          <textarea id="prompt" placeholder="Message Math GPT…" autocomplete="off"></textarea>
         </div>
       </div>
       <div class="controls">
@@ -294,16 +249,10 @@
   </div>
 
   <div class="toast" id="toast">Link copied to clipboard</div>
-
   <script>
-    /* ---------- viewport unit fix for mobile keyboards ---------- */
-    function setVh(){
-      const vh = window.innerHeight * 0.01;
-      document.documentElement.style.setProperty('--vh', `${vh*100}px`);
-    }
+    function setVh(){ const vh = window.innerHeight * 0.01; document.documentElement.style.setProperty('--vh', `${vh*100}px`); }
     setVh(); window.addEventListener('resize', setVh);
 
-    /* ---------- API ---------- */
     const api = {
       listConvs: ()=>fetch('/api/conversations',{credentials:'include'}).then(r=>r.json()),
       createConv:(title)=>fetch('/api/conversations',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',body:JSON.stringify({title})}).then(r=>r.json()),
@@ -319,7 +268,6 @@
       logout:()=>fetch('/api/logout',{method:'POST',credentials:'include'})
     };
 
-    /* ---------- DOM refs ---------- */
     const messagesEl = document.getElementById('messages');
     const convListEl = document.getElementById('convList');
     const promptEl = document.getElementById('prompt');
@@ -351,18 +299,13 @@
     const shareCloseBtn = document.getElementById('shareCloseBtn');
     const toastEl = document.getElementById('toast');
 
-    const drawerBackdrop = document.getElementById('drawerBackdrop');
-    const hamburger = document.getElementById('hamburger');
-
-    /* ---------- state ---------- */
     let currentConvId = null;
     let pendingShareConvId = null;
     let readOnly = false;
 
     const convTitleCache = {};
-    const pendingAutoTitle = new Set();
+    const pendingAutoTitle = new Set(); // only title once per new conversation
 
-    /* ---------- helpers ---------- */
     function updatePlaceholder(){
       promptEl.placeholder = `Message Math GPT…`;
       promptEl.setAttribute('aria-label', `Message Math GPT`);
@@ -399,19 +342,26 @@
       return prefix?`${prefix} ${t}`:t;
     }
 
-    /* TTS */
+    // ====== TTS controller (Speak/Pause/Resume per reply; single active) ======
     const tts = { utter:null, bubble:null, btn:null };
     function ttsReset(){ if(tts.btn) tts.btn.innerHTML='🔊 Speak'; tts.utter=null; tts.bubble=null; tts.btn=null; }
     function toggleSpeakFor(bubble, btn){
       const text = bubble?.innerText || bubble?.textContent || '';
       if(!text) return;
+
       if(tts.utter && tts.bubble === bubble){
-        if(speechSynthesis.paused){ speechSynthesis.resume(); btn.innerHTML='⏸ Pause'; }
-        else if(speechSynthesis.speaking){ speechSynthesis.pause(); btn.innerHTML='🔊 Resume'; }
-        else{ speechSynthesis.cancel(); ttsReset(); toggleSpeakFor(bubble, btn); }
+        if(speechSynthesis.paused){
+          speechSynthesis.resume(); btn.innerHTML='⏸ Pause';
+        }else if(speechSynthesis.speaking){
+          speechSynthesis.pause(); btn.innerHTML='🔊 Resume';
+        }else{
+          speechSynthesis.cancel(); ttsReset(); toggleSpeakFor(bubble, btn);
+        }
         return;
       }
-      if(speechSynthesis.speaking || speechSynthesis.paused){ speechSynthesis.cancel(); ttsReset(); }
+      if(speechSynthesis.speaking || speechSynthesis.paused){
+        speechSynthesis.cancel(); ttsReset();
+      }
       const u = new SpeechSynthesisUtterance(text);
       tts.utter=u; tts.bubble=bubble; tts.btn=btn;
       btn.innerHTML='⏸ Pause';
@@ -430,6 +380,7 @@
       } else { bubble.appendChild(document.createTextNode(text||'')); }
       row.appendChild(bubble);
 
+      // === Action bar (assistant only): Copy | Speak | Share ===
       if(role==='assistant'){
         const actions = document.createElement('div');
         actions.className = 'msg-actions';
@@ -478,8 +429,13 @@
         welcome.style.display='none';
       }
     }
+    welcome.querySelectorAll('.pill').forEach(p=>{
+      p.addEventListener('click', ()=>{
+        promptEl.value = p.dataset.prompt || '';
+        promptEl.focus();
+      });
+    });
 
-    /* Share */
     function openShareModal(convId){ pendingShareConvId=convId; shareOverlay.classList.add('open'); shareOverlay.setAttribute('aria-hidden','false'); shareLinkInput.value=''; shareLinkInput.placeholder='Generating…'; setTimeout(()=>createShareBtn.focus(),10); }
     function closeShareModal(){ shareOverlay.classList.remove('open'); shareOverlay.setAttribute('aria-hidden','true'); pendingShareConvId=null; }
     document.getElementById('shareCloseBtn').addEventListener('click', closeShareModal);
@@ -498,32 +454,39 @@
       }catch{ showToast('Copy failed. Select and copy manually.'); }
     });
 
-    /* Title helpers (auto-title from user prompt) */
+    /* ---- LOCAL TITLE UPDATE HELPERS ---- */
     function setConvTitleLocal(id, title){
       convTitleCache[id] = title;
       const node = convListEl.querySelector(`.conv[data-id="${id}"] .conv-title`);
       if (node) node.textContent = title;
-      if (currentConvId === id) document.title = `${title} — GPTs Help`;
+      if (currentConvId === id) {
+        document.title = `${title} — GPTs Help`;
+      }
     }
+
     function shouldAutoTitleFor(convId){
       if (!convId) return true;
       if (pendingAutoTitle.has(convId)) return true;
       const t = (convTitleCache[convId]||'').trim().toLowerCase();
       return t === 'new chat' || t === 'untitled' || t === '';
     }
-    async function maybeAutoTitleFromUser(convId, userPrompt){
+
+    async function maybeAutoTitle(convId, sourceText, prefix = ""){
       if (!convId) return;
       if (!shouldAutoTitleFor(convId)) return;
-      const autoTitle = makeTitleFrom(userPrompt || "");
-      if (!autoTitle || autoTitle.toLowerCase() === (convTitleCache[convId]||'').trim().toLowerCase()) return;
+      const autoTitle = makeTitleFrom(sourceText, prefix);
+      if (!autoTitle || autoTitle.toLowerCase() === (convTitleCache[convId]||'').trim().toLowerCase()) {
+        return;
+      }
       try{
         await api.renameConv(convId, autoTitle);
         setConvTitleLocal(convId, autoTitle);
-        pendingAutoTitle.delete(convId);
-      }catch(e){ console.warn('Auto-title rename failed', e); }
+        pendingAutoTitle.delete(convId); // only once
+      }catch(e){
+        console.warn('Auto-title rename failed', e);
+      }
     }
 
-    /* Conversations list (desktop) */
     async function loadConversations(selectId=null){
       const list = await api.listConvs();
       convListEl.innerHTML='';
@@ -597,7 +560,7 @@
       e.preventDefault(); if(readOnly) return;
       const text=(promptEl.value||'').trim(); if(!text) return;
 
-      // verify gate
+      // block if unverified
       try{
         const me = await api.me();
         if(me?.status==='ok' && me.user?.email && !me.user?.verified){
@@ -612,16 +575,15 @@
         if(currentConvId) payload.conversationId=currentConvId;
         const res=await api.chat(payload);
 
-        const wasNew = !currentConvId && res.conversationId;
-        if(wasNew){
+        if(!currentConvId && res.conversationId){
           currentConvId=res.conversationId;
           convTitleCache[currentConvId] = 'New chat';
           pendingAutoTitle.add(currentConvId);
           await loadConversations(currentConvId);
         }
 
-        // Auto-title from the USER PROMPT
-        await maybeAutoTitleFromUser(currentConvId, text);
+        // 🚫 do NOT auto-title from the user prompt
+        // ✅ auto-title from the first assistant reply only (below)
 
         if(res.__status === 403 && (res.status==='verify_required' || res.message?.toLowerCase().includes('verify'))){
           renderVerifyMessage();
@@ -631,6 +593,8 @@
           renderMessage('assistant', res.message || 'Sorry, something went wrong. Please try again.');
         } else {
           renderMessage('assistant', typeof res?.response === 'string' ? res.response : '');
+          // ✅ auto-title once based on the assistant’s first reply
+          await maybeAutoTitle(currentConvId, res?.response || '');
         }
         scrollToBottom();
       }catch{
@@ -658,6 +622,7 @@
       if(!okTypes.includes(file.type)){ alert('Please choose a PNG, JPG, or WEBP image.'); photoFile.value=''; return; }
       if(file.size>6*1024*1024){ alert('Image is larger than 6MB.'); photoFile.value=''; return; }
 
+      // 🔕 No popup: just show the photo message
       const objUrl=URL.createObjectURL(file);
       renderImageMessage('📷 Photo uploaded', objUrl); scrollToBottom();
 
@@ -687,6 +652,7 @@
         } else {
           const out = (typeof res?.response === 'string') ? res.response : 'No response text returned.';
           renderMessage('assistant', out);
+          await maybeAutoTitle(currentConvId, 'Photo: ' + out); // one-time title from assistant’s reply
         }
         scrollToBottom();
       }catch{
@@ -722,24 +688,10 @@
     umUpgrade.addEventListener('click', ()=>{ location.href='/index.html#pricing'; });
     umLogout.addEventListener('click', async ()=>{ try{ await api.logout(); }catch{} location.replace('/index.html'); });
 
-    /* Drawer behavior (mobile menu) */
-    function openDrawer(){ document.body.classList.add('drawer-open'); }
-    function closeDrawer(){ document.body.classList.remove('drawer-open'); }
-    hamburger.addEventListener('click', openDrawer);
-    drawerBackdrop.addEventListener('click', closeDrawer);
-    document.addEventListener('keydown', (e)=>{ if(e.key==='Escape') closeDrawer(); });
-    // Close drawer when a conversation is chosen
-    document.addEventListener('click', (e)=>{
-      if(window.innerWidth >= 900) return;
-      if(e.target.closest('.conv')) closeDrawer();
-    });
-
-    /* Shared link (read-only) */
+    /* Read-only shared links */
     async function enterReadOnlyView(token){
       readOnly = true;
       document.querySelector('.sidebar').style.display='none';
-      closeDrawer();
-      document.querySelector('.mobile-topbar').style.display='none';
       composerEl.style.display='none';
       roBanner.classList.add('show');
       updateComposerPad();
@@ -753,7 +705,6 @@
       }catch{ renderMessage('assistant','Could not load shared conversation.'); }
     }
 
-    /* Identity helpers */
     function nameFromEmail(email){
       const local = (email||'').split('@')[0];
       const pretty = local.replace(/[._-]+/g,' ').trim().split(' ').map(s=>s ? s[0].toUpperCase()+s.slice(1) : '').join(' ');
@@ -768,7 +719,10 @@
       const val = (a + b).toUpperCase();
       return val || 'U';
     }
-    function planLabelize(plan){ const p=(plan||'FREE').toString().toUpperCase(); return p[0]+p.slice(1).toLowerCase(); }
+    function planLabelize(plan){
+      const p=(plan||'FREE').toString().toUpperCase();
+      return p[0]+p.slice(1).toLowerCase();
+    }
     function setUserUI(email, plan){
       const displayName = email ? nameFromEmail(email) : 'User';
       const initials = initialsFrom(email || displayName);
@@ -831,11 +785,5 @@
       document.getElementById('prompt').focus();
     })();
   </script>
-
-  <noscript>
-    <div style="max-width:860px;margin:1rem auto;padding:1rem;border:1px solid #2a2a2a;border-radius:8px;background:#121216;color:#eee">
-      GPTs Help needs JavaScript enabled to run. Please enable JavaScript in your browser settings.
-    </div>
-  </noscript>
 </body>
 </html>
