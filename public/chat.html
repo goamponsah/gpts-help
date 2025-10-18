@@ -31,6 +31,8 @@
     a{color:#9aa3b2}
 
     .app{height:calc(var(--vh));display:grid;grid-template-columns:var(--sidebar-w) 1fr;}
+    /* make single column in read-only mode */
+    .app.ro{ grid-template-columns:1fr !important; }
     /* --- MOBILE / TABLET LAYOUT --- */
     @media (max-width:1100px){
       .app{ grid-template-columns:1fr }
@@ -172,7 +174,7 @@
   <!-- Drawer backdrop -->
   <div class="side-dim" id="sideDim" aria-hidden="true"></div>
 
-  <div class="app">
+  <div class="app" id="appRoot">
     <!-- Sidebar (drawer on mobile) -->
     <aside class="sidebar" id="sidebar">
       <div class="side-top">
@@ -290,6 +292,7 @@
       logout:()=>fetch('/api/logout',{method:'POST',credentials:'include'})
     };
 
+    const appRoot = document.getElementById('appRoot');
     const messagesEl = document.getElementById('messages');
     const convListEl = document.getElementById('convList');
     const promptEl = document.getElementById('prompt');
@@ -316,6 +319,7 @@
     const umLogout   = document.getElementById('umLogout');
 
     const shareOverlay = document.getElementById('shareOverlay');
+    const shareCloseBtn = document.getElementById('shareCloseBtn');
     const shareLinkInput = document.getElementById('shareLinkInput');
     const createShareBtn = document.getElementById('createShareBtn');
     const toastEl = document.getElementById('toast');
@@ -323,6 +327,7 @@
     let currentConvId = null;
     let pendingShareConvId = null;
     let readOnly = false;
+    let shareReady = false;
 
     const convTitleCache = {};
     const pendingAutoTitle = new Set();
@@ -450,9 +455,54 @@
       }
     }
 
-    function openShareModal(convId){ pendingShareConvId=convId; shareOverlay.classList.add('open'); shareOverlay.setAttribute('aria-hidden','false'); shareLinkInput.value=''; shareLinkInput.placeholder='Generating…'; }
-    function closeShareModal(){ shareOverlay.classList.remove('open'); shareOverlay.setAttribute('aria-hidden','true'); pendingShareConvId=null; }
+    function openShareModal(convId){
+      pendingShareConvId=convId;
+      shareReady = false;
+      shareOverlay.classList.add('open');
+      shareOverlay.setAttribute('aria-hidden','false');
+      shareLinkInput.value='';
+      shareLinkInput.placeholder='Generating…';
+      createShareBtn.disabled=false;
+      createShareBtn.textContent='Create link';
+    }
+    function closeShareModal(){
+      shareOverlay.classList.remove('open');
+      shareOverlay.setAttribute('aria-hidden','true');
+      pendingShareConvId=null;
+      shareReady=false;
+    }
     document.getElementById('shareOverlay').addEventListener('click',(e)=>{ if(e.target.id==='shareOverlay') closeShareModal(); });
+    shareCloseBtn.addEventListener('click', closeShareModal);
+
+    // Create / Copy link button
+    createShareBtn.addEventListener('click', async (e)=>{
+      e.preventDefault();
+      if (shareReady) {
+        try{
+          await navigator.clipboard.writeText(shareLinkInput.value);
+          showToast('Link copied');
+          closeShareModal();
+        }catch{}
+        return;
+      }
+      if (!pendingShareConvId) return;
+      createShareBtn.disabled = true;
+      createShareBtn.textContent = 'Generating…';
+      try{
+        const r = await api.shareCreate(pendingShareConvId);
+        if (!r || !r.token) throw new Error('no token');
+        const url = `${location.origin}/chat.html?share=${encodeURIComponent(r.token)}`;
+        shareLinkInput.value = url;
+        shareLinkInput.placeholder = '';
+        shareReady = true;
+        createShareBtn.textContent = 'Copy link';
+      }catch{
+        shareLinkInput.placeholder = 'Could not generate link';
+        createShareBtn.textContent = 'Create link';
+      }finally{
+        createShareBtn.disabled = false;
+      }
+    });
 
     /* ---- LOCAL TITLE UPDATE HELPERS ---- */
     function setConvTitleLocal(id, title){
@@ -566,6 +616,7 @@
       try{
         const payload={ message:text, gptType:'math' };
         if(currentConvId) payload.conversationId=currentConvId;
+        const wasNew = !currentConvId;
         const res=await api.chat(payload);
 
         if(!currentConvId && res.conversationId){
@@ -583,7 +634,10 @@
           renderMessage('assistant', res.message || 'Sorry, something went wrong. Please try again.');
         } else {
           renderMessage('assistant', typeof res?.response === 'string' ? res.response : '');
-          await maybeAutoTitle(currentConvId, res?.response || '');
+          // Auto-title from the FIRST USER PROMPT
+          if (wasNew || pendingAutoTitle.has(currentConvId)) {
+            await maybeAutoTitle(currentConvId, text);
+          }
         }
         scrollToBottom();
       }catch{
@@ -640,7 +694,8 @@
         } else {
           const out = (typeof res?.response === 'string') ? res.response : 'No response text returned.';
           renderMessage('assistant', out);
-          await maybeAutoTitle(currentConvId, 'Photo: ' + out);
+          // For photo-only starts, still attempt a reasonable title
+          await maybeAutoTitle(currentConvId, 'Photo solve');
         }
         scrollToBottom();
       }catch{
@@ -680,6 +735,7 @@
     /* Read-only shared links */
     async function enterReadOnlyView(token){
       readOnly = true;
+      appRoot.classList.add('ro');           /* make 1-column canvas */
       document.querySelector('.sidebar').style.display='none';
       document.getElementById('mbar').style.display='none';
       document.getElementById('sideDim').style.display='none';
