@@ -28,16 +28,14 @@ const {
   RESEND_API_KEY,
   RESEND_FROM,
 
-  // Paystack (Subscriptions via PLAN codes; price is controlled in Dashboard)
+  // Paystack (one-time charge, price set in Railway)
   PAYSTACK_PUBLIC_KEY,
   PAYSTACK_SECRET_KEY,
-  PLAN_CODE_PLUS_MONTHLY,   // e.g. PLN_xxxxx
-  PLAN_CODE_PRO_ANNUAL,     // e.g. PLN_yyyyy
 
-  // Currency: force GHS (per your requirement)
+  // Currency: force GHS
   PAYSTACK_CURRENCY,
 
-  // Railway UI price tags (for Pricing page display only)
+  // Railway price tags (GHS, whole numbers — no decimals)
   PRICE_PLUS_GHS,
   PRICE_PRO_GHS
 } = process.env;
@@ -50,7 +48,6 @@ if (!PAYSTACK_SECRET_KEY) console.warn("[WARN] PAYSTACK_SECRET_KEY missing");
 
 const OPENAI_DEFAULT_MODEL = OPENAI_MODEL || "gpt-4o-mini";
 
-// CORS
 if (FRONTEND_ORIGIN) {
   app.use(cors({ origin: FRONTEND_ORIGIN, credentials: true }));
 } else {
@@ -277,10 +274,6 @@ app.get("/api/public-config", (req,res)=>{
     pricing: {
       plus: Number(PRICE_PLUS_GHS || 0),
       pro:  Number(PRICE_PRO_GHS  || 0)
-    },
-    plans: {
-      hasPlus: !!PLAN_CODE_PLUS_MONTHLY,
-      hasPro:  !!PLAN_CODE_PRO_ANNUAL
     }
   });
 });
@@ -737,13 +730,11 @@ app.post("/api/feedback", async (req,res)=>{
   }catch(e){ console.error("feedback error",e); res.status(500).json({error:'feedback failed'}); }
 });
 
-/* ===================== Paystack (Plans via plan codes) ===================== */
+/* ===================== Paystack (Amount from Railway) ===================== */
 (function logPaystackStartup(){
   const info = {
     has_public_key: !!PAYSTACK_PUBLIC_KEY,
     has_secret_key: !!PAYSTACK_SECRET_KEY,
-    has_plus_plan: !!PLAN_CODE_PLUS_MONTHLY,
-    has_pro_plan:  !!PLAN_CODE_PRO_ANNUAL,
     currency: (PAYSTACK_CURRENCY || "GHS"),
     price_plus_ghs: PRICE_PLUS_GHS || "unset",
     price_pro_ghs:  PRICE_PRO_GHS  || "unset"
@@ -754,8 +745,14 @@ app.post("/api/feedback", async (req,res)=>{
 function getSuccessCallbackUrl(){
   return "https://gptshelp.online/payment-success";
 }
+function toPesewas(ghsValue){
+  // Expect whole numbers from Railway; still coerce safely.
+  const n = Number(String(ghsValue || "").trim());
+  if (!Number.isFinite(n) || n <= 0) return 0;
+  return Math.round(n * 100); // pesewas
+}
 
-// Initialize Paystack checkout (subscription/auth for plan code)
+// Initialize Paystack for one-time charge using Railway prices
 app.post("/api/paystack/init", async (req, res) => {
   try {
     const s = readSession(req);
@@ -763,24 +760,29 @@ app.post("/api/paystack/init", async (req, res) => {
 
     const { plan } = req.body || {};
     const label = String(plan || "").toUpperCase();
-    let planCode = null;
-    if (label === "PLUS") planCode = PLAN_CODE_PLUS_MONTHLY;
-    if (label === "PRO")  planCode = PLAN_CODE_PRO_ANNUAL;
+    const amountMap = {
+      PLUS: toPesewas(PRICE_PLUS_GHS),
+      PRO:  toPesewas(PRICE_PRO_GHS)
+    };
+    const amount = amountMap[label] || 0;
 
-    if (!planCode) {
-      return res.status(400).json({ status: "error", message: "Missing plan configuration" });
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ status: "error", message: "Price not configured for this plan" });
     }
 
     const payload = {
       email: s.email,
-      plan: planCode,                         // price comes from Paystack Dashboard
+      amount,                       // pesewas
+      currency: "GHS",
       callback_url: getSuccessCallbackUrl(),
-      currency: "GHS",                        // force GHS
-      metadata: { plan_label: label, site: "gptshelp.online" }
+      metadata: {
+        plan_label: label,
+        site: "gptshelp.online"
+      }
     };
 
     console.log("[PAYSTACK][INIT] request ->", JSON.stringify({
-      plan: planCode, callback_url: payload.callback_url, metadata: payload.metadata
+      amount, currency: "GHS", callback_url: payload.callback_url, metadata: payload.metadata
     }));
 
     const initRes = await fetch("https://api.paystack.co/transaction/initialize", {
@@ -837,7 +839,7 @@ app.get("/payment-success", async (req, res) => {
   }
 });
 
-// Verify & upgrade plan
+// Verify & upgrade plan using metadata.plan_label
 app.post("/api/paystack/verify", async (req,res)=>{
   try{
     const { reference } = req.body || {};
@@ -861,15 +863,10 @@ app.post("/api/paystack/verify", async (req,res)=>{
     }
 
     const paidEmail = data?.customer?.email || null;
-    const planCode = data.plan || data?.subscription?.plan || data?.authorization?.plan || null;
+    const label = (data?.metadata?.plan_label || "").toString().toUpperCase();
+    let newPlan = (label === "PLUS" || label === "PRO") ? label : null;
 
-    let newPlan = null;
-    if (paidEmail && planCode) {
-      if (PLAN_CODE_PLUS_MONTHLY && planCode === PLAN_CODE_PLUS_MONTHLY) newPlan = "PLUS";
-      if (PLAN_CODE_PRO_ANNUAL  && planCode === PLAN_CODE_PRO_ANNUAL ) newPlan = "PRO";
-    }
-
-    if(newPlan){
+    if(newPlan && paidEmail){
       await pool.query(`update users set plan=$2, updated_at=now() where email=$1`,[paidEmail,newPlan]);
       const s = readSession(req);
       if (s?.email && s.email === paidEmail) {
